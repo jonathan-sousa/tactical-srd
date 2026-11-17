@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="StoryDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/story_def.gd" id="1_etlnp"]
+[ext_resource type="Script" path="res://data/defs/story_step.gd" id="2_1fs8j"]
+[ext_resource type="Resource" path="res://data/dialogues/intro.tres" id="3_13xi4"]
+[ext_resource type="Resource" path="res://data/encounters/goblin_ambush.tres" id="4_tbdtp"]
+[ext_resource type="Resource" path="res://data/dialogues/victory.tres" id="5_s0krt"]
+
+[sub_resource type="Resource" id="Resource_h6434"]
+script = ExtResource("2_1fs8j")
+id = &"intro"
+dialogue = ExtResource("3_13xi4")
+next_step = &"goblin_ambush"
+
+[sub_resource type="Resource" id="Resource_4gfab"]
+script = ExtResource("2_1fs8j")
+id = &"goblin_ambush"
+kind = 1
+encounter = ExtResource("4_tbdtp")
+next_step = &"victory"
+
+[sub_resource type="Resource" id="Resource_0bxf1"]
+script = ExtResource("2_1fs8j")
+id = &"victory"
+dialogue = ExtResource("5_s0krt")
+
+[resource]
+script = ExtResource("1_etlnp")
+first_step = &"intro"
+steps = Array[ExtResource("2_1fs8j")]([SubResource("Resource_h6434"), SubResource("Resource_4gfab"), SubResource("Resource_0bxf1")])

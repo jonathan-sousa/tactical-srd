@@ -8,6 +8,8 @@ extends Resource
 ## Identifiant stable, utilisé par la sauvegarde et le registre de données.
 @export var id: StringName
 @export var display_name: String
+## Image du pion. Vide jusqu'aux placeholders du J3.
+@export var sprite: Texture2D
 
 # Note Godot : @export_group ne fait que regrouper les champs dans l'inspecteur.
 @export_group("Caractéristiques")

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="DialogueDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_qy03l"]
+[ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_ovsm7"]
+
+[sub_resource type="Resource" id="Resource_2kjju"]
+script = ExtResource("1_qy03l")
+speaker = "Narrateur"
+text = "Le gobelin s'effondre parmi les caisses éventrées."
+
+[sub_resource type="Resource" id="Resource_nbs0v"]
+script = ExtResource("1_qy03l")
+speaker = "Guerrier"
+text = "Il n'était pas seul. Les autres ne doivent pas être loin."
+
+[sub_resource type="Resource" id="Resource_x2qko"]
+script = ExtResource("1_qy03l")
+speaker = "Narrateur"
+text = "Sur la crête, une fumée s'élève. La route de Pierrefeu sera plus longue que prévu."
+
+[resource]
+script = ExtResource("2_ovsm7")
+id = &"victory"
+lines = Array[ExtResource("1_qy03l")]([SubResource("Resource_2kjju"), SubResource("Resource_nbs0v"), SubResource("Resource_x2qko")])
