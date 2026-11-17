@@ -60,3 +60,23 @@ static func goblin() -> CharacterDef:
 	def.initiative_bonus = 2
 	def.weapons = [scimitar()]
 	return def
+
+
+## Rencontre construite dans le code : grille, obstacles, départs.
+static func encounter(
+	grid_size: Vector2i,
+	player_start: Vector2i,
+	enemy_cells: Array[Vector2i],
+	blocked: Array[Vector2i] = [],
+) -> EncounterDef:
+	var def := EncounterDef.new()
+	def.id = &"test_encounter"
+	def.grid_size = grid_size
+	def.player_start = player_start
+	def.blocked_cells = blocked
+	for cell in enemy_cells:
+		var placement := EnemyPlacement.new()
+		placement.character = goblin()
+		placement.cell = cell
+		def.enemies.append(placement)
+	return def
