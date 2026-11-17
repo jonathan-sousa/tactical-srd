@@ -8,7 +8,7 @@ extends GdUnitTestSuite
 
 
 func test_project_name() -> void:
-	assert_str(ProjectSettings.get_setting("application/config/name")).is_equal("Projet Phenix")
+	assert_str(ProjectSettings.get_setting("application/config/name")).is_equal("Projet Phénix")
 
 
 func test_base_resolution_is_1280x720() -> void:
