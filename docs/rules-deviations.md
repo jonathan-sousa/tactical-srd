@@ -12,3 +12,7 @@ Toute simplification volontaire des règles est consignée ici, avec la règle o
 | Gobelin guerrier, Nimble Escape et Redirect Attack | Action bonus (Disengage ou Hide) et réaction (échanger sa place avec un allié ciblé). | Pas d'action bonus ni de réaction en v1. | J2 |
 | Gobelin guerrier, Arc court | Attaque à distance +4, 1d6+2 perforant. | Pas d'attaque à distance en v1 : seul le cimeterre est équipé. | J2 |
 | Points de vie du Gobelin | HP 10 (3d6). | Valeur fixe de 10, pas de jet. | J2 |
+| Coupe de coin | Le SRD n'interdit pas de longer un obstacle en diagonale. | Règle de grille du brief : une diagonale n'est possible que si les deux cases qu'elle longe sont libres (obstacles et combattants). | J3 |
+| Traverser un allié | On peut traverser l'espace d'un allié (terrain difficile). | Toute case occupée bloque le passage. Sans effet en v1 (un seul combattant par camp). | J3 |
+| Attaque d'opportunité | Quitter l'allonge d'un ennemi déclenche une réaction. | Pas de réaction en v1 : on peut s'éloigner librement. | J3 |
+| Personnage à 0 PV | Le personnage tombe inconscient et fait des jets contre la mort. | Défaite immédiate (brief). | J3 |
