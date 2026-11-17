@@ -17,7 +17,8 @@ La v1 enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (Gu
 
 ## Lancer le jeu
 
-- Depuis l'éditeur : touche **F5**.
+- Depuis l'éditeur : touche **F5** (écran titre provisoire jusqu'au J4).
+- Combat seul : ouvrir `scenes/combat/combat.tscn` puis touche **F6**. Clic sur une case bleue pour se déplacer, clic sur un ennemi adjacent pour attaquer, **Espace** pour finir le tour.
 - En ligne de commande : `godot --path .`
 
 ## Lancer les tests
