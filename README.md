@@ -64,6 +64,10 @@ scripts/       outils en ligne de commande
 
 ## Licence et attribution
 
-Les règles proviennent du System Reference Document 5.2.1, publié sous licence Creative Commons CC-BY-4.0. La mention d'attribution officielle sera recopiée ici et dans l'écran Crédits au jalon J6.
+Les règles proviennent du System Reference Document 5.2.1, publié sous licence Creative Commons CC-BY-4.0. Mention d'attribution officielle, recopiée telle quelle depuis le SRD :
+
+> This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
+
+Elle sera aussi affichée dans l'écran Crédits (J6).
 
 gdUnit4 est distribué sous licence MIT (voir `addons/gdUnit4/LICENSE`).

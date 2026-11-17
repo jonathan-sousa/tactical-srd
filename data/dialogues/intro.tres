@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="DialogueDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_s32o4"]
+[ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_tiqlg"]
+
+[sub_resource type="Resource" id="Resource_stx1u"]
+script = ExtResource("1_s32o4")
+speaker = "Narrateur"
+text = "La caravane devait atteindre Pierrefeu avant la nuit. Elle n'y arrivera pas."
+
+[sub_resource type="Resource" id="Resource_1osuu"]
+script = ExtResource("1_s32o4")
+speaker = "Narrateur"
+text = "Au détour du col, les chariots gisent renversés, leurs bâches lacérées."
+
+[sub_resource type="Resource" id="Resource_axwlu"]
+script = ExtResource("1_s32o4")
+speaker = "Guerrier"
+text = "Des traces de pas… petites, nombreuses. Et toutes fraîches."
+
+[sub_resource type="Resource" id="Resource_4p1oo"]
+script = ExtResource("1_s32o4")
+speaker = "Gobelin"
+text = "Hé, la grande carcasse ! Pose ton épée et vide ta bourse, on sera peut-être gentils."
+
+[sub_resource type="Resource" id="Resource_n8x1o"]
+script = ExtResource("1_s32o4")
+speaker = "Guerrier"
+text = "J'ai une meilleure idée."
+
+[resource]
+script = ExtResource("2_tiqlg")
+id = &"intro"
+lines = Array[ExtResource("1_s32o4")]([SubResource("Resource_stx1u"), SubResource("Resource_1osuu"), SubResource("Resource_axwlu"), SubResource("Resource_4p1oo"), SubResource("Resource_n8x1o")])

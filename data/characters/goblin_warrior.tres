@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CharacterDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/character_def.gd" id="1_p0yey"]
+[ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="2_3wrra"]
+[ext_resource type="Resource" path="res://data/weapons/scimitar.tres" id="3_ulwa0"]
+
+[resource]
+script = ExtResource("1_p0yey")
+id = &"goblin_warrior"
+display_name = "Gobelin guerrier"
+strength = 8
+dexterity = 15
+wisdom = 8
+charisma = 8
+max_hp = 10
+armor_class = 15
+initiative_bonus = 2
+weapons = Array[ExtResource("2_3wrra")]([ExtResource("3_ulwa0")])
