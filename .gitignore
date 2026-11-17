@@ -1,0 +1,18 @@
+# Cache et imports générés par Godot 4 (recréés à l'ouverture du projet)
+.godot/
+/android/
+
+# Rapports générés par gdUnit4
+reports/
+
+# Exécutables exportés
+build/
+
+# Fichiers temporaires (dont l'écriture atomique de la sauvegarde)
+*.tmp
+
+# Système et éditeurs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
