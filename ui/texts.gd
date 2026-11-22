@@ -41,6 +41,17 @@ const FULLSCREEN := "Plein écran"
 const SAVE_CORRUPT := "Sauvegarde illisible : impossible de reprendre la partie."
 const SAVE_UNKNOWN_VERSION := "Sauvegarde créée par une autre version du jeu : impossible de la charger."
 const STORY_COMPLETED := "Histoire terminée. Lancez une nouvelle partie pour la rejouer."
+const CREDITS_RULES := "Règles"
+const CREDITS_ENGINE := "Moteur"
+const CREDITS_ASSETS := "Graphismes et police"
+const CREDITS_ASSETS_BODY := "Plateau, pions et interface dessinés par le code du jeu. Police par défaut de Godot Engine (voir les licences ci-dessous)."
+const CREDITS_TOOLS := "Outils"
+const CREDITS_TOOLS_BODY := "Tests automatisés avec gdUnit4 (licence MIT), non inclus dans le jeu exporté."
+const CREDITS_THIRD_PARTY := "Composants tiers de Godot Engine"
+const CREDITS_LICENSES := "Textes des licences"
+## Mention d'attribution officielle, recopiée mot pour mot depuis le SRD
+## 5.2.1. Ne pas la traduire ni la reformuler (exigence de la licence).
+const SRD_ATTRIBUTION := "This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode."
 const DIALOGUE_HINT := "Clic ou Entrée pour continuer"
 
 const DAMAGE_TYPES: Dictionary[DamageType.Type, String] = {
