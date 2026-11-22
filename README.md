@@ -17,7 +17,7 @@ La v1 enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (Gu
 
 ## Lancer le jeu
 
-- Depuis l'éditeur : touche **F5** (écran titre provisoire jusqu'au J4).
+- Depuis l'éditeur : touche **F5**. Écran titre, menu, intro, combat, puis outro (ou écran de défaite). **Échap** ouvre le menu pause pendant le dialogue et le combat.
 - Combat seul : ouvrir `scenes/combat/combat.tscn` puis touche **F6**. Clic sur une case bleue pour se déplacer, clic sur un ennemi adjacent pour attaquer, **Espace** pour finir le tour.
 - En ligne de commande : `godot --path .`
 
@@ -55,6 +55,13 @@ tests/         gdUnit4, en miroir de rules/ et autoload/
 docs/          écarts de règles, notes d'architecture
 scripts/       outils en ligne de commande
 ```
+
+## Enchaînement des écrans
+
+- `SceneRouter` (autoload) est le seul point d'entrée pour changer de scène, avec un fondu au noir.
+- `GameState` (autoload) suit l'étape courante de `data/story.tres` et les PV du Guerrier. Une étape terminée (dialogue lu, combat gagné ou perdu) indique quoi afficher ensuite.
+- Une défaite sans étape de défaite définie mène à l'écran de défaite : « Réessayer le combat » relance l'étape à l'identique.
+- Quitter un combat en cours le fait recommencer au prochain « Continuer ».
 
 ## Conventions
 

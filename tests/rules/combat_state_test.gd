@@ -179,3 +179,12 @@ func test_player_loses_at_zero_hit_points() -> void:
 	var events := _run(AttackAction.new(_goblin, _fighter), FixedDice.new([15, 3]))
 	assert_int((events.back() as CombatEndedEvent).winner).is_equal(Combatant.Side.ENEMY)
 	assert_bool(_fighter.is_down()).is_true()
+
+
+func test_player_can_start_with_remaining_hit_points() -> void:
+	var cells: Array[Vector2i] = [Vector2i(5, 0)]
+	var state := CombatState.create(Fixtures.encounter(Vector2i(12, 8), Vector2i(0, 0), cells), Fixtures.fighter(), 7)
+	assert_int(state.combatants[0].hp).is_equal(7)
+	# Jamais au-delà du maximum.
+	var healed := CombatState.create(Fixtures.encounter(Vector2i(12, 8), Vector2i(0, 0), cells), Fixtures.fighter(), 99)
+	assert_int(healed.combatants[0].hp).is_equal(12)

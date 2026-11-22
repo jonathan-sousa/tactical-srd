@@ -16,6 +16,28 @@ const REPLAY := "Rejouer"
 const ENEMY_TURN := "Tour de l'adversaire…"
 const NOTHING_LEFT := "Plus de déplacement ni d'action : terminez le tour (Espace)."
 
+# --- Écrans et menus ------------------------------------------------------------
+
+const PRESS_ANY_KEY := "Appuyez sur une touche"
+const NEW_GAME := "Nouvelle partie"
+const CONTINUE := "Continuer"
+const OPTIONS := "Options"
+const CREDITS := "Crédits"
+const QUIT := "Quitter"
+const COMING_SOON := "Bientôt disponible."
+const NO_SAVE := "Aucune partie à continuer."
+const NEW_GAME_CONFIRM_TITLE := "Nouvelle partie"
+const NEW_GAME_CONFIRM := "Commencer une nouvelle partie ?\nLa progression actuelle sera perdue."
+const CANCEL := "Annuler"
+const PAUSE := "Pause"
+const RESUME := "Reprendre"
+const BACK_TO_MENU := "Retour au menu"
+const BACK := "Retour"
+const DEFEAT_MESSAGE := "Le Guerrier s'effondre. La route de Pierrefeu s'arrête ici… pour cette fois."
+const RETRY_COMBAT := "Réessayer le combat"
+const MAIN_MENU := "Menu principal"
+const DIALOGUE_HINT := "Clic ou Entrée pour continuer"
+
 const DAMAGE_TYPES: Dictionary[DamageType.Type, String] = {
 	DamageType.Type.ACID: "d'acide",
 	DamageType.Type.BLUDGEONING: "contondants",
