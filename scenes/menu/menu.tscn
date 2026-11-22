@@ -74,6 +74,20 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 
+[node name="MessageLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -110.0
+offset_bottom = -70.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 0.6, 0.5, 1)
+horizontal_alignment = 1
+
 [node name="ConfirmDialog" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true
 size = Vector2i(460, 160)

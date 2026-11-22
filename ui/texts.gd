@@ -36,6 +36,11 @@ const BACK := "Retour"
 const DEFEAT_MESSAGE := "Le Guerrier s'effondre. La route de Pierrefeu s'arrête ici… pour cette fois."
 const RETRY_COMBAT := "Réessayer le combat"
 const MAIN_MENU := "Menu principal"
+const MASTER_VOLUME := "Volume général"
+const FULLSCREEN := "Plein écran"
+const SAVE_CORRUPT := "Sauvegarde illisible : impossible de reprendre la partie."
+const SAVE_UNKNOWN_VERSION := "Sauvegarde créée par une autre version du jeu : impossible de la charger."
+const STORY_COMPLETED := "Histoire terminée. Lancez une nouvelle partie pour la rejouer."
 const DIALOGUE_HINT := "Clic ou Entrée pour continuer"
 
 const DAMAGE_TYPES: Dictionary[DamageType.Type, String] = {
