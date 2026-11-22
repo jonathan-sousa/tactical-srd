@@ -36,6 +36,10 @@ func setup(p_registry: DataRegistry) -> void:
 	story = registry.story
 	for error in registry.errors():
 		push_error("Données : %s" % error)
+	# Garde-fou : dans un jeu exporté, un registre vide passerait sinon
+	# inaperçu jusqu'au premier combat.
+	if player_definition() == null:
+		push_error("Données : fiche du joueur « %s » introuvable." % PLAYER_ID)
 
 
 func player_definition() -> CharacterDef:

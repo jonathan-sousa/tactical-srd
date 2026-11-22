@@ -138,3 +138,26 @@ func test_pause_menu_opens_options_and_escape_comes_back() -> void:
 	assert_bool(options_center.visible).is_false()
 	assert_bool(pause.visible).is_true()
 	pause.call("close")
+
+
+func test_credits_show_srd_attribution_verbatim_and_godot_license() -> void:
+	var runner := scene_runner("res://scenes/credits/credits.tscn")
+	await runner.simulate_frames(2)
+	var text := (runner.scene().get_node("%CreditsBody") as RichTextLabel).get_parsed_text()
+	assert_str(text).contains(Texts.SRD_ATTRIBUTION)
+	assert_str(text).contains("https://www.dndbeyond.com/srd")
+	assert_str(text).contains(Engine.get_license_text())
+	assert_str(text).contains("FreeType")
+
+
+func test_srd_attribution_matches_readme() -> void:
+	# La mention doit être identique dans le jeu et dans le README.
+	var readme := FileAccess.get_file_as_string("res://README.md")
+	assert_str(readme).contains(Texts.SRD_ATTRIBUTION)
+
+
+func test_menu_enables_options_and_credits() -> void:
+	var runner := scene_runner("res://scenes/menu/menu.tscn")
+	await runner.simulate_frames(2)
+	assert_bool((runner.scene().get_node("%OptionsButton") as Button).disabled).is_false()
+	assert_bool((runner.scene().get_node("%CreditsButton") as Button).disabled).is_false()
