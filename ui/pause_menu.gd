@@ -9,6 +9,9 @@ extends CanvasLayer
 @onready var _resume_button: Button = %ResumeButton
 @onready var _options_button: Button = %PauseOptionsButton
 @onready var _menu_button: Button = %BackToMenuButton
+@onready var _panel: PanelContainer = %Panel
+@onready var _options_center: CenterContainer = %OptionsCenter
+@onready var _options_panel: PanelContainer = %PauseOptionsPanel
 
 
 func _ready() -> void:
@@ -21,9 +24,7 @@ func _ready() -> void:
 	_resume_button.pressed.connect(close)
 	_options_button.pressed.connect(_on_options_pressed)
 	_menu_button.pressed.connect(_on_menu_pressed)
-	# Les options arrivent au J5.
-	_options_button.disabled = true
-	_options_button.tooltip_text = Texts.COMING_SOON
+	_options_panel.closed.connect(_close_options)
 
 
 func is_open() -> bool:
@@ -41,6 +42,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func open() -> void:
 	visible = true
+	_panel.visible = true
+	_options_center.visible = false
 	get_tree().paused = true
 	_resume_button.grab_focus()
 
@@ -51,7 +54,17 @@ func close() -> void:
 
 
 func _on_options_pressed() -> void:
-	pass
+	_panel.visible = false
+	_options_center.visible = true
+	_options_panel.sync_from_settings()
+
+
+## Retour des options vers les boutons de la pause (Échap y compris : le
+## panneau d'options, plus profond dans l'arbre, reçoit la touche en premier).
+func _close_options() -> void:
+	_options_center.visible = false
+	_panel.visible = true
+	_options_button.grab_focus()
 
 
 ## Quitter un combat en cours le fera recommencer au prochain Continuer :

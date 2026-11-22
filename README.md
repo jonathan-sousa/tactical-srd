@@ -63,6 +63,13 @@ scripts/       outils en ligne de commande
 - Une défaite sans étape de défaite définie mène à l'écran de défaite : « Réessayer le combat » relance l'étape à l'identique.
 - Quitter un combat en cours le fait recommencer au prochain « Continuer ».
 
+## Sauvegarde et options
+
+- Sauvegarde automatique à chaque étape franchie, dans `user://save_1.json` (sous Windows : `%APPDATA%\Godot\app_userdata\Projet Phénix\`). Pas de sauvegarde en plein combat.
+- Écriture atomique (fichier `.tmp` puis renommage) et champ `version` avec migrations. Un fichier illisible ou d'une version inconnue affiche un message et grise « Continuer ».
+- Seul du JSON validé champ par champ est lu depuis `user://`, jamais une Resource.
+- Les options (volume général, plein écran) sont dans `user://settings.cfg`, indépendamment de la sauvegarde.
+
 ## Conventions
 
 - GDScript typé partout : l'avertissement `untyped_declaration` est réglé en erreur.

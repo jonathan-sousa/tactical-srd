@@ -1,0 +1,51 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/options_panel.gd" id="1_options"]
+
+[node name="OptionsPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(520, 0)
+offset_right = 520.0
+offset_bottom = 260.0
+script = ExtResource("1_options")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="OptionsTitle" type="Label" parent="Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+horizontal_alignment = 1
+
+[node name="VolumeRow" type="HBoxContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="VolumeLabel" type="Label" parent="Content/VolumeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+
+[node name="VolumeSlider" type="HSlider" parent="Content/VolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+step = 5.0
+value = 100.0
+
+[node name="VolumeValue" type="Label" parent="Content/VolumeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+horizontal_alignment = 2
+
+[node name="FullscreenCheck" type="CheckButton" parent="Content"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="OptionsBackButton" type="Button" parent="Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
