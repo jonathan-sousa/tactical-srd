@@ -4,15 +4,17 @@
 ## moteur (rules/), puis rejoue les événements renvoyés : journal, animations,
 ## rafraîchissement des vues. Il ne calcule jamais une règle lui-même.
 ##
-## La scène se lance seule (F6 dans l'éditeur) avec la rencontre et le
+## Dans l'histoire, la rencontre vient de l'étape courante (GameState). La
+## scène se lance aussi seule (F6 dans l'éditeur) avec la rencontre et le
 ## personnage indiqués dans l'inspecteur.
 extends Node
 
-## Émis quand le combat se termine. Le J4 s'en servira pour enchaîner sur la
-## suite de l'histoire.
+## Émis quand le combat se termine.
 signal combat_finished(winner: Combatant.Side)
 
 const ENEMY_ACTION_DELAY := 0.45
+## Pause avant de quitter le combat, le temps de lire la dernière ligne.
+const END_DELAY := 1.5
 const LOG_TURN_COLOR := Color(1.0, 0.85, 0.3)
 const LOG_MUTED_COLOR := Color(0.6, 0.6, 0.6)
 const LOG_DOWN_COLOR := Color(1.0, 0.45, 0.4)
@@ -30,6 +32,8 @@ var _tokens: Dictionary[Combatant, TokenView] = {}
 ## Vrai pendant qu'une action se joue : les clics sont ignorés.
 var _busy := false
 var _pulse: Tween
+## Vrai quand le combat fait partie de l'histoire (et non lancé seul).
+var _story_mode := false
 
 # Note Godot : `%Nom` retrouve un nœud marqué « nom unique » dans la scène,
 # sans dépendre de son chemin exact. @onready attend que la scène soit prête.
@@ -46,14 +50,24 @@ var _pulse: Tween
 
 
 func _ready() -> void:
-	var registry := DataRegistry.load_from()
-	var encounter := registry.encounter(encounter_id)
-	var player_definition := registry.character(player_id)
+	var encounter: EncounterDef
+	var player_definition: CharacterDef
+	var player_hp := -1
+	var step := GameState.current_step()
+	if step != null and step.kind == StoryStep.Kind.ENCOUNTER:
+		_story_mode = true
+		encounter = step.encounter
+		player_definition = GameState.player_definition()
+		player_hp = GameState.player_hp
+	else:
+		var registry := GameState.registry
+		encounter = registry.encounter(encounter_id)
+		player_definition = registry.character(player_id)
 	if encounter == null or player_definition == null:
 		push_error("Combat : rencontre « %s » ou personnage « %s » introuvable." % [encounter_id, player_id])
 		return
 
-	state = CombatState.create(encounter, player_definition)
+	state = CombatState.create(encounter, player_definition, player_hp)
 	_player = state.combatants[0]
 	_board.setup(encounter)
 	for combatant in state.combatants:
@@ -68,7 +82,7 @@ func _ready() -> void:
 	_end_turn_button.text = "%s (Espace)" % Texts.END_TURN
 	_end_turn_button.pressed.connect(_on_end_turn_pressed)
 	_replay_button.text = Texts.REPLAY
-	_replay_button.pressed.connect(func() -> void: get_tree().reload_current_scene())
+	_replay_button.pressed.connect(_on_replay_pressed)
 	_result_panel.hide()
 
 	_start_combat()
@@ -276,6 +290,9 @@ func _set_pulse(enabled: bool) -> void:
 
 
 func _show_result() -> void:
+	if _story_mode:
+		await _leave_combat()
+		return
 	_set_pulse(false)
 	var nothing: Dictionary[Vector2i, int] = {}
 	_board.reachable = nothing
@@ -283,3 +300,17 @@ func _show_result() -> void:
 	_result_label.text = Texts.VICTORY if state.winner == Combatant.Side.PLAYER else Texts.DEFEAT
 	_result_panel.show()
 	_replay_button.grab_focus()
+
+
+## Dans l'histoire : victoire → étape suivante, défaite → écran de défaite.
+func _leave_combat() -> void:
+	_set_pulse(false)
+	await get_tree().create_timer(END_DELAY).timeout
+	if state.winner == Combatant.Side.PLAYER:
+		GameState.finish_step(GameState.Outcome.VICTORY, _player.hp)
+	else:
+		GameState.finish_step(GameState.Outcome.DEFEAT)
+
+
+func _on_replay_pressed() -> void:
+	SceneRouter.go_to(SceneRouter.COMBAT)

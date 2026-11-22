@@ -5,17 +5,7 @@
 [ext_resource type="Script" path="res://scenes/combat/initiative_bar.gd" id="3_init"]
 [ext_resource type="Script" path="res://scenes/combat/character_panel.gd" id="4_panel"]
 [ext_resource type="Script" path="res://scenes/combat/combat_log.gd" id="5_log"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
-bg_color = Color(0.12, 0.11, 0.13, 0.95)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
-content_margin_left = 16.0
-content_margin_top = 12.0
-content_margin_right = 16.0
-content_margin_bottom = 12.0
+[ext_resource type="PackedScene" path="res://ui/pause_menu.tscn" id="6_pause"]
 
 [node name="Combat" type="Node"]
 script = ExtResource("1_ctrl")
@@ -75,7 +65,6 @@ offset_left = 832.0
 offset_top = 24.0
 offset_right = 1256.0
 offset_bottom = 696.0
-theme_override_styles/panel = SubResource("StyleBox_panel")
 
 [node name="Content" type="VBoxContainer" parent="Hud/Root/SidePanel"]
 layout_mode = 2
@@ -128,7 +117,6 @@ offset_left = 256.0
 offset_top = 260.0
 offset_right = 576.0
 offset_bottom = 460.0
-theme_override_styles/panel = SubResource("StyleBox_panel")
 
 [node name="Content" type="VBoxContainer" parent="Hud/Root/ResultPanel"]
 layout_mode = 2
@@ -145,3 +133,5 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
+
+[node name="PauseMenu" parent="." instance=ExtResource("6_pause")]

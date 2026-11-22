@@ -27,11 +27,16 @@ var winner: Combatant.Side = Combatant.Side.PLAYER
 var _active_index: int = -1
 
 
-static func create(p_encounter: EncounterDef, player: CharacterDef) -> CombatState:
+## `player_hp` : PV du joueur au début du combat (ceux qui lui restent dans
+## l'histoire). Par défaut, ses PV maximum.
+static func create(p_encounter: EncounterDef, player: CharacterDef, player_hp: int = -1) -> CombatState:
 	var state := CombatState.new()
 	state.encounter = p_encounter
 	state.pathfinder = GridPathfinder.new(p_encounter.grid_size, p_encounter.blocked_cells)
-	state.combatants.append(Combatant.new(player, Combatant.Side.PLAYER, p_encounter.player_start))
+	var hero := Combatant.new(player, Combatant.Side.PLAYER, p_encounter.player_start)
+	if player_hp >= 0:
+		hero.hp = mini(player_hp, player.max_hp)
+	state.combatants.append(hero)
 	for placement in p_encounter.enemies:
 		state.combatants.append(Combatant.new(placement.character, Combatant.Side.ENEMY, placement.cell))
 	return state
