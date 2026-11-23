@@ -96,6 +96,22 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 
+[node name="ReactionLabel" type="Label" parent="Hud/Root/SidePanel/Content/CharacterPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="EffectsLabel" type="Label" parent="Hud/Root/SidePanel/Content/CharacterPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="ActionBar" type="GridContainer" parent="Hud/Root/SidePanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 2
+
 [node name="EndTurnButton" type="Button" parent="Hud/Root/SidePanel/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
@@ -132,6 +148,41 @@ horizontal_alignment = 1
 [node name="ReplayButton" type="Button" parent="Hud/Root/ResultPanel/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+
+[node name="ReactionPanel" type="PanelContainer" parent="Hud/Root"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 216.0
+offset_top = 280.0
+offset_right = 616.0
+offset_bottom = 440.0
+
+[node name="Content" type="VBoxContainer" parent="Hud/Root/ReactionPanel"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="ReactionQuestionLabel" type="Label" parent="Hud/Root/ReactionPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Hud/Root/ReactionPanel/Content"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="ReactionYesButton" type="Button" parent="Hud/Root/ReactionPanel/Content/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 44)
+layout_mode = 2
+
+[node name="ReactionNoButton" type="Button" parent="Hud/Root/ReactionPanel/Content/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 44)
 layout_mode = 2
 
 [node name="PauseMenu" parent="." instance=ExtResource("6_pause")]

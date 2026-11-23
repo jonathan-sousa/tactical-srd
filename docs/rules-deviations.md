@@ -14,5 +14,6 @@ Toute simplification volontaire des règles est consignée ici, avec la règle o
 | Points de vie du Gobelin | HP 10 (3d6). | Valeur fixe de 10, pas de jet. | J2 |
 | Coupe de coin | Le SRD n'interdit pas de longer un obstacle en diagonale. | Règle de grille du brief : une diagonale n'est possible que si les deux cases qu'elle longe sont libres (obstacles et combattants). | J3 |
 | Traverser un allié | On peut traverser l'espace d'un allié (terrain difficile). | Toute case occupée bloque le passage. Sans effet en v1 (un seul combattant par camp). | J3 |
-| Attaque d'opportunité | Quitter l'allonge d'un ennemi déclenche une réaction. | Pas de réaction en v1 : on peut s'éloigner librement. | J3 |
 | Personnage à 0 PV | Le personnage tombe inconscient et fait des jets contre la mort. | Défaite immédiate (brief). | J3 |
+| Ligne de vue | Le SRD ne définit pas la ligne de vue sur une grille. | Segment entre les centres des deux cases : bloqué s'il traverse l'intérieur d'un obstacle, pas s'il en frôle un coin. Les combattants ne bloquent pas la vue. | S1 |
+| Attaque d'opportunité à mains nues | « make one melee attack with a weapon or an Unarmed Strike ». | L'attaque d'opportunité se fait toujours avec l'arme de corps à corps du combattant. | S1 |

@@ -6,13 +6,11 @@ var target: Combatant
 var weapon: WeaponDef
 
 
-## Sans arme précisée, on prend la première de la fiche.
+## Sans arme précisée, on prend l'arme de corps à corps du combattant.
 func _init(p_actor: Combatant, p_target: Combatant, p_weapon: WeaponDef = null) -> void:
 	super(p_actor)
 	target = p_target
-	weapon = p_weapon
-	if weapon == null and not p_actor.definition.weapons.is_empty():
-		weapon = p_actor.definition.weapons[0]
+	weapon = p_weapon if p_weapon != null else p_actor.melee_weapon()
 
 
 func _validate(state: CombatState) -> StringName:
@@ -31,7 +29,23 @@ func _validate(state: CombatState) -> StringName:
 
 func _execute(state: CombatState, dice: Dice) -> Array[CombatEvent]:
 	state.action_used = true
-	var result := AttackResolver.resolve(actor, target, weapon, dice)
+	return AttackAction.strike(state, actor, target, weapon, dice)
+
+
+## Une attaque complète : avantage ou désavantage, jet, dégâts, chute de la
+## cible, fin du combat. Partagée avec l'attaque d'opportunité.
+static func strike(
+	state: CombatState,
+	attacker: Combatant,
+	target: Combatant,
+	weapon: WeaponDef,
+	dice: Dice,
+	is_opportunity: bool = false,
+) -> Array[CombatEvent]:
+	var advantage := AdvantageResolver.for_attack(state, attacker, target, weapon)
+	var result := AttackResolver.resolve(attacker, target, weapon, dice, advantage.mode)
+	result.advantage = advantage
+	result.is_opportunity = is_opportunity
 	var events: Array[CombatEvent] = [AttackRolledEvent.new(result)]
 	if not result.is_hit:
 		return events

@@ -10,15 +10,22 @@ const FEET_PER_SQUARE := 5
 
 var encounter: EncounterDef
 var pathfinder: GridPathfinder
+var line_of_sight: LineOfSight
 ## Ordre de création : le joueur, puis les ennemis de la rencontre.
 var combatants: Array[Combatant] = []
 var initiative: Array[InitiativeEntry] = []
+## Effets temporaires en cours sur les combattants (voir Effect).
+var effects: Array[Effect] = []
 
 var round: int = 0
 ## Déplacement restant du combattant actif, en cases.
 var movement_left: int = 0
 ## Action du tour déjà utilisée ?
 var action_used: bool = false
+
+## Fenêtre de réaction ouverte, ou `null`. Tant qu'elle est ouverte, le
+## déplacement en cours est suspendu (voir ReactionWindow).
+var reaction_window: ReactionWindow = null
 
 var is_over: bool = false
 ## Camp vainqueur, valable seulement quand `is_over` est vrai.
@@ -33,6 +40,7 @@ static func create(p_encounter: EncounterDef, player: CharacterDef, player_hp: i
 	var state := CombatState.new()
 	state.encounter = p_encounter
 	state.pathfinder = GridPathfinder.new(p_encounter.grid_size, p_encounter.blocked_cells)
+	state.line_of_sight = LineOfSight.new(p_encounter.blocked_cells)
 	var hero := Combatant.new(player, Combatant.Side.PLAYER, p_encounter.player_start)
 	if player_hp >= 0:
 		hero.hp = mini(player_hp, player.max_hp)
@@ -93,10 +101,19 @@ func reachable_cells() -> Dictionary[Vector2i, int]:
 
 
 ## Allonge de l'arme en cases : 5 ft = cases adjacentes, diagonales comprises.
-@warning_ignore("integer_division")
 func is_within_reach(attacker: Combatant, target: Combatant, weapon: WeaponDef) -> bool:
+	return is_cell_within_reach(attacker, target.position, weapon)
+
+
+@warning_ignore("integer_division")
+func is_cell_within_reach(attacker: Combatant, cell: Vector2i, weapon: WeaponDef) -> bool:
 	var reach := maxi(weapon.reach_feet / FEET_PER_SQUARE, 1)
-	return GridPathfinder.chebyshev(attacker.position, target.position) <= reach
+	return GridPathfinder.chebyshev(attacker.position, cell) <= reach
+
+
+## `observer` voit-il `target` ? Il faut une ligne de vue dégagée.
+func can_see(observer: Combatant, target: Combatant) -> bool:
+	return line_of_sight.is_clear(observer.position, target.position)
 
 
 func living_enemies_of(combatant: Combatant) -> Array[Combatant]:
@@ -110,6 +127,7 @@ func living_enemies_of(combatant: Combatant) -> Array[Combatant]:
 ## Passe au prochain combattant debout ; nouveau round quand on revient au
 ## début de l'initiative.
 func advance_turn() -> Array[CombatEvent]:
+	var events := _expire_effects(active(), Effect.Expiry.END_OF_SOURCE_TURN)
 	for i in initiative.size():
 		_active_index += 1
 		if _active_index >= initiative.size():
@@ -118,7 +136,104 @@ func advance_turn() -> Array[CombatEvent]:
 		if not active().is_down():
 			break
 	_reset_turn_budget()
-	return [TurnStartedEvent.new(active(), round)]
+	# La réaction revient au début du tour de son propriétaire.
+	active().reaction_available = true
+	events.append(TurnStartedEvent.new(active(), round))
+	events.append_array(_expire_effects(active(), Effect.Expiry.START_OF_SOURCE_TURN))
+	return events
+
+
+## Déplace `mover` case par case le long de `path`, en décomptant son
+## déplacement. Avant chaque pas qui le ferait sortir de l'allonge d'un
+## ennemi capable de réagir, le déplacement s'arrête et une fenêtre de
+## réaction s'ouvre (voir ReactionWindow). `already_asked` : combattants
+## déjà sollicités pour le premier pas, quand un déplacement reprend.
+func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatant] = []) -> Array[CombatEvent]:
+	var events: Array[CombatEvent] = []
+	var from := mover.position
+	var walked: Array[Vector2i] = []
+	for i in path.size():
+		var skip: Array[Combatant] = []
+		if i == 0:
+			skip = already_asked
+		var reactor := _opportunity_reactor(mover, path[i], skip)
+		if reactor != null:
+			if not walked.is_empty():
+				events.append(MovedEvent.new(mover, from, walked))
+			var asked := skip.duplicate()
+			asked.append(reactor)
+			reaction_window = ReactionWindow.new(reactor, mover, path.slice(i), asked)
+			events.append(ReactionTriggeredEvent.new(reactor, mover))
+			return events
+		mover.position = path[i]
+		movement_left -= 1
+		walked.append(path[i])
+	if not walked.is_empty():
+		events.append(MovedEvent.new(mover, from, walked))
+	return events
+
+
+## Premier ennemi qui peut faire une attaque d'opportunité si `mover` va
+## sur `next` (SRD « Opportunity Attacks ») : il le voit, il a encore sa
+## réaction, et ce pas fait sortir `mover` de son allonge. Aucun si `mover`
+## s'est désengagé.
+func _opportunity_reactor(mover: Combatant, next: Vector2i, skip: Array[Combatant]) -> Combatant:
+	if has_effect(mover, Effect.DISENGAGED):
+		return null
+	for other in combatants:
+		if other.side == mover.side or other.is_down() or not other.reaction_available or skip.has(other):
+			continue
+		var weapon := other.melee_weapon()
+		if weapon == null:
+			continue
+		if is_cell_within_reach(other, mover.position, weapon) 				and not is_cell_within_reach(other, next, weapon) 				and can_see(other, mover):
+			return other
+	return null
+
+
+func has_effect(combatant: Combatant, id: StringName) -> bool:
+	for effect in effects:
+		if effect.target == combatant and effect.id == id:
+			return true
+	return false
+
+
+## Ajoute un effet. Un effet du même nom sur la même cible est remplacé :
+## rejouer Esquiver repousse simplement sa fin.
+func add_effect(effect: Effect) -> void:
+	remove_effect(effect.target, effect.id)
+	effects.append(effect)
+
+
+## Retire un effet. Renvoie vrai s'il était présent.
+func remove_effect(combatant: Combatant, id: StringName) -> bool:
+	for i in effects.size():
+		if effects[i].target == combatant and effects[i].id == id:
+			effects.remove_at(i)
+			return true
+	return false
+
+
+## Effets en cours sur ce combattant, dans l'ordre où ils ont commencé.
+func effects_on(combatant: Combatant) -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for effect in effects:
+		if effect.target == combatant:
+			ids.append(effect.id)
+	return ids
+
+
+## Retire les effets dont `source` fixe la fin à ce moment-là.
+func _expire_effects(source: Combatant, expiry: Effect.Expiry) -> Array[CombatEvent]:
+	var events: Array[CombatEvent] = []
+	var kept: Array[Effect] = []
+	for effect in effects:
+		if effect.source == source and effect.expiry == expiry:
+			events.append(EffectEndedEvent.new(effect.target, effect.id))
+		else:
+			kept.append(effect)
+	effects = kept
+	return events
 
 
 ## Termine le combat si un camp n'a plus personne debout.

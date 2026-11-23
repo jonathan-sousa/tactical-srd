@@ -15,6 +15,7 @@ func test_full_combats_always_end(seed_value: int, test_parameters := [[1], [2],
 		for action in EnemyAI.plan_turn(state, state.active()):
 			assert_str(action.validate(state)).is_empty()
 			action.execute(state, dice)
+			_resolve_reactions(state, dice)
 			if state.is_over:
 				break
 
@@ -38,8 +39,15 @@ func _play(seed_value: int) -> Array[int]:
 	while not state.is_over and state.round <= MAX_ROUNDS:
 		for action in EnemyAI.plan_turn(state, state.active()):
 			action.execute(state, dice)
+			_resolve_reactions(state, dice)
 			hp_trace.append(state.combatants[0].hp)
 			hp_trace.append(state.combatants[1].hp)
 			if state.is_over:
 				break
 	return hp_trace
+
+
+## Les deux camps sont joués par l'IA, réactions comprises.
+func _resolve_reactions(state: CombatState, dice: Dice) -> void:
+	while state.reaction_window != null:
+		EnemyAI.react(state).execute(state, dice)

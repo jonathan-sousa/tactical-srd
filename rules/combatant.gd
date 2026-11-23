@@ -1,7 +1,8 @@
 ## Un combattant pendant un combat : sa fiche (immuable) et son état courant.
 ##
 ## La fiche (`CharacterDef`) est partagée et jamais modifiée ; tout ce qui
-## change en combat (PV, position, conditions) vit ici.
+## change en combat (PV, position, réaction) vit ici. Les effets temporaires
+## sont rangés dans CombatState (voir Effect).
 class_name Combatant
 extends RefCounted
 
@@ -11,8 +12,8 @@ var definition: CharacterDef
 var side: Combatant.Side
 var hp: int
 var position: Vector2i
-## Vide en v1, prévu pour les conditions (à terre, empoigné…).
-var conditions: Array[StringName] = []
+## Réaction encore disponible ? Une seule entre deux de ses tours (SRD).
+var reaction_available: bool = true
 
 
 func _init(p_definition: CharacterDef, p_side: Combatant.Side, p_position: Vector2i = Vector2i.ZERO) -> void:
@@ -47,3 +48,10 @@ func take_damage(amount: int) -> int:
 	var lost := mini(amount, hp)
 	hp -= lost
 	return lost
+
+
+## Arme utilisée au corps à corps, pour attaquer comme pour les attaques
+## d'opportunité : la première de la fiche. `null` sans arme.
+func melee_weapon() -> WeaponDef:
+	return null if definition.weapons.is_empty() else definition.weapons[0]
+

@@ -1,5 +1,6 @@
 ## Déplacement vers une case, par le plus court chemin, dans la limite du
 ## déplacement restant. Peut être fractionné avant et après l'attaque.
+## Quitter l'allonge d'un ennemi peut provoquer une attaque d'opportunité.
 class_name MoveAction
 extends Action
 
@@ -22,9 +23,7 @@ func _validate(state: CombatState) -> StringName:
 	return &""
 
 
+## Le déplacement se fait case par case : il peut s'arrêter en chemin sur
+## une fenêtre de réaction (attaque d'opportunité), puis reprendre.
 func _execute(state: CombatState, _dice: Dice) -> Array[CombatEvent]:
-	var from := actor.position
-	var path := state.find_path(actor, destination)
-	actor.position = destination
-	state.movement_left -= path.size()
-	return [MovedEvent.new(actor, from, path)]
+	return state.walk(actor, state.find_path(actor, destination))

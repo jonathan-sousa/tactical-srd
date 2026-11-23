@@ -11,6 +11,11 @@ extends Node
 
 ## Émis quand le combat se termine.
 signal combat_finished(winner: Combatant.Side)
+## Émis quand le joueur répond à la question « Attaque d'opportunité ? ».
+signal reaction_answered(accepted: bool)
+
+## Touches des actions de la barre, dans l'ordre de StandardAction.ALL.
+const ACTION_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3]
 
 const LOG_TURN_COLOR := Color(1.0, 0.85, 0.3)
 const LOG_MUTED_COLOR := Color(0.6, 0.6, 0.6)
@@ -54,6 +59,14 @@ var _event_handlers: Dictionary[Script, Callable] = {}
 @onready var _result_panel: PanelContainer = %ResultPanel
 @onready var _result_label: Label = %ResultLabel
 @onready var _replay_button: Button = %ReplayButton
+@onready var _action_bar: GridContainer = %ActionBar
+@onready var _reaction_panel: PanelContainer = %ReactionPanel
+@onready var _reaction_question: Label = %ReactionQuestionLabel
+@onready var _reaction_yes: Button = %ReactionYesButton
+@onready var _reaction_no: Button = %ReactionNoButton
+
+## Boutons de la barre d'actions, par code d'action.
+var _action_buttons: Dictionary[StringName, Button] = {}
 
 
 func _ready() -> void:
@@ -97,6 +110,14 @@ func _ready() -> void:
 	_replay_button.text = Texts.REPLAY
 	_replay_button.pressed.connect(_on_replay_pressed)
 	_result_panel.hide()
+	_build_action_bar()
+	_reaction_yes.text = "%s (O)" % Texts.YES
+	_reaction_no.text = "%s (N)" % Texts.NO
+	_reaction_yes.shortcut = _key_shortcut(KEY_O)
+	_reaction_no.shortcut = _key_shortcut(KEY_N)
+	_reaction_yes.pressed.connect(func() -> void: reaction_answered.emit(true))
+	_reaction_no.pressed.connect(func() -> void: reaction_answered.emit(false))
+	_reaction_panel.hide()
 
 	_start_combat()
 
@@ -136,11 +157,40 @@ func _play_enemy_turn() -> void:
 			push_warning("IA : action refusée (%s)." % action.validate(state))
 			continue
 		await _play(action.execute(state, dice))
+		await _resolve_reactions()
 		if state.is_over:
 			break
 	_busy = false
 	_hint_label.text = ""
 	await _continue()
+
+
+## Tant qu'une fenêtre de réaction est ouverte : le joueur choisit s'il est
+## sollicité, l'IA sinon. La réaction peut en ouvrir une autre (un second
+## ennemi plus loin sur le chemin), d'où la boucle.
+func _resolve_reactions() -> void:
+	while state.reaction_window != null and not state.is_over:
+		var window := state.reaction_window
+		var reaction: Action
+		if window.reactor == _player:
+			var accepted := await _ask_reaction(window.mover)
+			reaction = OpportunityAttackAction.new(_player) if accepted else DeclineReactionAction.new(_player)
+		else:
+			await _wait(enemy_action_delay)
+			reaction = EnemyAI.react(state)
+		await _play(reaction.execute(state, dice))
+
+
+## Affiche la question et attend la réponse du joueur.
+func _ask_reaction(mover: Combatant) -> bool:
+	_reaction_question.text = Texts.reaction_prompt(mover)
+	_reaction_panel.show()
+	_reaction_yes.grab_focus()
+	# Note GDScript : `await` sur un signal attend son émission et renvoie
+	# ses arguments (ici le booléen de la réponse).
+	var accepted: bool = await reaction_answered
+	_reaction_panel.hide()
+	return accepted
 
 
 ## Le joueur tente une action : refusée avec sa raison, ou jouée.
@@ -154,6 +204,7 @@ func _perform(action: Action) -> void:
 	_hint_label.text = ""
 	_refresh()
 	await _play(action.execute(state, dice))
+	await _resolve_reactions()
 	_busy = false
 	await _continue()
 
@@ -187,6 +238,10 @@ func _register_event_handlers() -> void:
 		DamageDealtEvent: _on_damage_dealt,
 		CombatantDownedEvent: _on_combatant_downed,
 		CombatEndedEvent: _on_combat_ended,
+		ActionTakenEvent: _on_action_taken,
+		EffectEndedEvent: _on_effect_ended,
+		ReactionTriggeredEvent: _on_reaction_triggered,
+		ReactionDeclinedEvent: _on_reaction_declined,
 	}
 
 
@@ -226,6 +281,24 @@ func _on_damage_dealt(event: DamageDealtEvent) -> void:
 func _on_combatant_downed(event: CombatantDownedEvent) -> void:
 	_log.add_line(Texts.downed_line(event.combatant), LOG_DOWN_COLOR)
 	await _tokens[event.combatant].fall()
+
+
+func _on_action_taken(event: ActionTakenEvent) -> void:
+	_log.add_line(Texts.action_line(event))
+	_refresh()
+
+
+func _on_effect_ended(event: EffectEndedEvent) -> void:
+	_log.add_line(Texts.effect_ended_line(event), LOG_MUTED_COLOR)
+	_refresh()
+
+
+func _on_reaction_triggered(event: ReactionTriggeredEvent) -> void:
+	_log.add_line(Texts.reaction_triggered_line(event), LOG_MUTED_COLOR)
+
+
+func _on_reaction_declined(event: ReactionDeclinedEvent) -> void:
+	_log.add_line(Texts.reaction_declined_line(event), LOG_MUTED_COLOR)
 
 
 func _on_combat_ended(event: CombatEndedEvent) -> void:
@@ -279,6 +352,39 @@ func _attack_hint(attack: AttackAction) -> String:
 	return Texts.attack_hint(attack.target, attack.weapon, _player.attack_bonus(attack.weapon), expression)
 
 
+## Un bouton par action sans jet de dés, avec sa touche (1, 2, 3).
+func _build_action_bar() -> void:
+	for i in StandardAction.ALL.size():
+		var kind := StandardAction.ALL[i]
+		var button := Button.new()
+		button.text = "%s (%d)" % [Texts.action_name(kind), i + 1]
+		button.focus_mode = Control.FOCUS_NONE
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size = Vector2(0, 40)
+		# Le texte ne fixe pas la largeur : trop long, il est coupé par « … ».
+		button.clip_text = true
+		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		button.shortcut = _key_shortcut(ACTION_KEYS[i])
+		button.pressed.connect(_on_standard_action_pressed.bind(kind))
+		_action_bar.add_child(button)
+		_action_buttons[kind] = button
+
+
+# Note Godot : un Shortcut associé à un bouton le déclenche quand la touche
+# est pressée, même sans focus, tant que le bouton est actif et visible.
+static func _key_shortcut(key: Key) -> Shortcut:
+	var event := InputEventKey.new()
+	event.keycode = key
+	var shortcut := Shortcut.new()
+	shortcut.events = [event]
+	return shortcut
+
+
+func _on_standard_action_pressed(kind: StringName) -> void:
+	if _is_player_turn():
+		_perform(StandardAction.new(_player, kind))
+
+
 func _on_end_turn_pressed() -> void:
 	if _is_player_turn():
 		_perform(EndTurnAction.new(_player))
@@ -302,6 +408,15 @@ func _refresh() -> void:
 			if AttackAction.new(_player, enemy).validate(state).is_empty():
 				attackable.append(enemy.position)
 	_board.attackable = attackable
+
+	# Barre d'actions : grisée si l'action est impossible, avec la raison.
+	for kind: StringName in _action_buttons:
+		var button := _action_buttons[kind]
+		var reason := StandardAction.new(_player, kind).validate(state)
+		button.disabled = not player_turn or not reason.is_empty()
+		button.tooltip_text = Texts.ACTION_DESCRIPTIONS[kind]
+		if player_turn and not reason.is_empty():
+			button.tooltip_text += "\n" + Texts.reason(reason)
 
 	# Bouton « Fin de tour » grisé hors du tour du joueur, avec la raison.
 	var end_turn_reason := EndTurnAction.new(_player).validate(state)
