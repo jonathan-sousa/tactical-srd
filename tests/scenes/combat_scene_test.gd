@@ -51,6 +51,10 @@ func _fixed_dice(values: Array) -> Dice:
 	return FixedDice.new(typed)
 
 
+func _reaction_panel() -> Control:
+	return _scene.get_node("%ReactionPanel")
+
+
 func _state() -> CombatState:
 	return _scene.get("state")
 
@@ -69,6 +73,8 @@ func _settle() -> void:
 	for _frame: int in 300:
 		await _runner.simulate_frames(1, 50)
 		if not _scene.get("_busy") and (_state().is_over or _scene.call("_is_player_turn")):
+			return
+		if _reaction_panel().visible:
 			return
 	fail("Le combat ne rend jamais la main.")
 
@@ -182,3 +188,66 @@ func test_every_engine_event_has_a_display() -> void:
 			.override_failure_message("Événement sans affichage : %s" % info["class"]) \
 			.is_true()
 	assert_int(checked).is_greater(0)
+
+
+func test_action_bar_key_makes_the_fighter_dodge() -> void:
+	await _start(FIGHTER_FIRST)
+	_runner.simulate_key_pressed(KEY_3)
+	await _settle()
+	assert_bool(_state().has_effect(_fighter(), Effect.DODGING)).is_true()
+	assert_bool(_state().action_used).is_true()
+	var buttons: Dictionary = _scene.get("_action_buttons")
+	for kind: StringName in buttons:
+		assert_bool((buttons[kind] as Button).disabled).is_true()
+
+
+func test_goblin_reacts_when_the_fighter_walks_away() -> void:
+	# 1 naturel : l'attaque d'opportunité du Gobelin rate.
+	await _start(FIGHTER_FIRST + [1])
+	_put_goblin_next_to_fighter()
+	var away := _fighter().position + Vector2i(-1, 0)
+	_scene.call("_on_cell_clicked", away)
+	await _settle()
+	assert_that(_fighter().position).is_equal(away)
+	assert_bool(_goblin().reaction_available).is_false()
+	assert_bool(_reaction_panel().visible).is_false()
+
+
+## Le tour du Gobelin est mis en attente (long délai), puis on le fait
+## s'éloigner du Guerrier directement dans le moteur, pour tester la question
+## posée au joueur sans dépendre des choix de l'IA.
+func _goblin_walks_away_from_fighter(dice: Array) -> void:
+	await _start(GOBLIN_FIRST + dice, 100.0)
+	await _runner.simulate_frames(2)
+	_put_goblin_next_to_fighter()
+	# (3,5) : libre, et le premier pas sort déjà de l'allonge du Guerrier en (1,3).
+	var away := _goblin().position + Vector2i(1, 2)
+	MoveAction.new(_goblin(), away).execute(_state(), _scene.get("dice"))
+	assert_object(_state().reaction_window).is_not_null()
+	_scene.call("_resolve_reactions")
+	await _runner.simulate_frames(2)
+
+
+func test_player_is_asked_and_accepts_the_opportunity_attack() -> void:
+	# 15 + 5 = 20 contre CA 15, touché ; 2d6+3 avec 1 et 1 : 5 dégâts.
+	await _goblin_walks_away_from_fighter([15, 1, 1])
+	assert_bool(_reaction_panel().visible).is_true()
+	var question: Label = _scene.get_node("%ReactionQuestionLabel")
+	assert_str(question.text).is_equal(Texts.reaction_prompt(_goblin()))
+
+	_runner.simulate_key_pressed(KEY_O)
+	await _runner.simulate_frames(40, 50)
+	assert_bool(_reaction_panel().visible).is_false()
+	assert_int(_goblin().hp).is_equal(5)
+	assert_bool(_fighter().reaction_available).is_false()
+	assert_object(_state().reaction_window).is_null()
+
+
+func test_player_can_decline_the_opportunity_attack() -> void:
+	await _goblin_walks_away_from_fighter([])
+	_runner.simulate_key_pressed(KEY_N)
+	await _runner.simulate_frames(40, 50)
+	assert_bool(_reaction_panel().visible).is_false()
+	assert_int(_goblin().hp).is_equal(10)
+	assert_bool(_fighter().reaction_available).is_true()
+	assert_object(_state().reaction_window).is_null()

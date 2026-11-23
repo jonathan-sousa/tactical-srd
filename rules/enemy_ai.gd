@@ -45,6 +45,12 @@ static func plan_turn(state: CombatState, actor: Combatant) -> Array[Action]:
 	return plan
 
 
+## Réaction de l'IA quand une fenêtre de réaction lui est ouverte : elle
+## saisit toujours l'occasion d'une attaque d'opportunité.
+static func react(state: CombatState) -> Action:
+	return OpportunityAttackAction.new(state.reaction_window.reactor)
+
+
 ## Ennemi debout le plus proche à vol d'oiseau (en cases).
 static func _closest_enemy(state: CombatState, actor: Combatant) -> Combatant:
 	var closest: Combatant = null

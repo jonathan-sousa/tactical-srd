@@ -12,6 +12,12 @@ var attack_bonus: int
 var attack_total: int
 var target_armor_class: int
 
+## Avantage ou désavantage appliqué, avec ses raisons. `null` si l'attaque
+## a été résolue directement par AttackResolver (tests).
+var advantage: AdvantageResult
+## Attaque d'opportunité (réaction) plutôt qu'action Attaque.
+var is_opportunity: bool = false
+
 var is_hit: bool = false
 var is_critical: bool = false
 

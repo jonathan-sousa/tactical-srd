@@ -8,7 +8,7 @@ func test_starts_with_max_hp() -> void:
 	assert_int(fighter.hp).is_equal(12)
 	assert_that(fighter.position).is_equal(Vector2i(2, 3))
 	assert_bool(fighter.is_down()).is_false()
-	assert_array(fighter.conditions).is_empty()
+	assert_bool(fighter.reaction_available).is_true()
 
 
 func test_armor_class_comes_from_definition() -> void:

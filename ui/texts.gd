@@ -11,6 +11,11 @@ const ARMOR_CLASS := "CA"
 const MOVEMENT := "Déplacement"
 const ACTION_AVAILABLE := "Action : disponible"
 const ACTION_USED := "Action : utilisée"
+const REACTION_AVAILABLE := "Réaction : disponible"
+const REACTION_USED := "Réaction : utilisée"
+const EFFECTS := "Effets"
+const YES := "Oui"
+const NO := "Non"
 const VICTORY := "Victoire"
 const DEFEAT := "Défaite"
 const REPLAY := "Rejouer"
@@ -82,6 +87,44 @@ const REASONS: Dictionary[StringName, String] = {
 	Action.TARGET_DOWN: "La cible est déjà à terre.",
 	Action.TARGET_OUT_OF_REACH: "Hors de portée : placez-vous sur une case adjacente.",
 	Action.NO_WEAPON: "Aucune arme équipée.",
+	Action.REACTION_PENDING: "Une réaction est en attente.",
+	Action.NO_REACTION_PENDING: "Aucune réaction possible pour l'instant.",
+	Action.NOT_YOUR_REACTION: "Ce n'est pas à vous de réagir.",
+}
+
+## Noms des actions sans jet de dés, tels que le SRD français les nomme.
+const ACTION_NAMES: Dictionary[StringName, String] = {
+	StandardAction.DASH: "Foncer",
+	StandardAction.DISENGAGE: "Se désengager",
+	StandardAction.DODGE: "Esquiver",
+}
+
+const ACTION_DESCRIPTIONS: Dictionary[StringName, String] = {
+	StandardAction.DASH: "Déplacement supplémentaire égal à votre vitesse, pour ce tour.",
+	StandardAction.DISENGAGE: "Vos déplacements ne provoquent plus d'attaque d'opportunité jusqu'à la fin du tour.",
+	StandardAction.DODGE: "Jusqu'au début de votre prochain tour, les attaques contre vous ont le désavantage si vous voyez l'attaquant.",
+}
+
+## Journal : « Guerrier fonce. »
+const ACTION_LOG: Dictionary[StringName, String] = {
+	StandardAction.DASH: "%s fonce : son déplacement double pour ce tour.",
+	StandardAction.DISENGAGE: "%s se désengage : pas d'attaque d'opportunité contre lui ce tour-ci.",
+	StandardAction.DODGE: "%s esquive : les attaques contre lui auront le désavantage.",
+}
+
+const EFFECT_NAMES: Dictionary[StringName, String] = {
+	Effect.DODGING: "Esquive",
+	Effect.DISENGAGED: "Désengagé",
+}
+
+const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
+	Effect.DODGING: "%s n'esquive plus.",
+	Effect.DISENGAGED: "%s n'est plus désengagé.",
+}
+
+## Raisons d'avantage ou de désavantage, affichées après le jet.
+const ADVANTAGE_REASONS: Dictionary[StringName, String] = {
+	AdvantageResolver.TARGET_DODGING: "la cible esquive",
 }
 
 
@@ -91,6 +134,27 @@ static func reason(code: StringName) -> String:
 
 static func damage_type(type: DamageType.Type) -> String:
 	return DAMAGE_TYPES[type]
+
+
+static func action_name(kind: StringName) -> String:
+	return ACTION_NAMES[kind]
+
+
+static func effect_name(id: StringName) -> String:
+	return EFFECT_NAMES.get(id, str(id))
+
+
+## Liste des effets d'un combattant : « Effets : Esquive, Désengagé ».
+static func effects_line(ids: Array[StringName]) -> String:
+	var names: PackedStringArray = []
+	for id in ids:
+		names.append(effect_name(id))
+	return "%s : %s" % [EFFECTS, ", ".join(names)]
+
+
+## Question posée au joueur quand un ennemi quitte son allonge.
+static func reaction_prompt(mover: Combatant) -> String:
+	return "%s quitte votre allonge.\nAttaque d'opportunité ?" % mover.definition.display_name
 
 
 static func squares(count: int) -> String:
@@ -133,8 +197,10 @@ static func attack_line(result: AttackResult) -> String:
 	if result.d20.rolls.size() > 1:
 		roll = "%d [%s]" % [result.d20.natural, ", ".join(result.d20.rolls.map(str))]
 
-	var line := "%s attaque : %s %s = %d contre %s %d" % [
+	var verb := "attaque d'opportunité" if result.is_opportunity else "attaque"
+	var line := "%s %s : %s %s = %d contre %s %d" % [
 		result.attacker.definition.display_name,
+		verb,
 		roll,
 		signed(result.attack_bonus),
 		result.attack_total,
@@ -142,17 +208,56 @@ static func attack_line(result: AttackResult) -> String:
 		result.target_armor_class,
 	]
 	if result.d20.is_natural_1():
-		return line + ", 1 naturel, raté"
-	if not result.is_hit:
-		return line + ", raté"
+		line += ", 1 naturel, raté"
+	elif not result.is_hit:
+		line += ", raté"
+	else:
+		var outcome := "20 naturel, coup critique" if result.is_critical else "touché"
+		line += ", %s, %d dégâts %s (%s)" % [
+			outcome,
+			result.damage,
+			damage_type(result.damage_type),
+			_damage_detail(result.damage_roll),
+		]
+	return line + _advantage_detail(result.advantage)
 
-	var outcome := "20 naturel, coup critique" if result.is_critical else "touché"
-	return line + ", %s, %d dégâts %s (%s)" % [
-		outcome,
-		result.damage,
-		damage_type(result.damage_type),
-		_damage_detail(result.damage_roll),
-	]
+
+# « (désavantage : la cible esquive) », vide sans avantage ni désavantage.
+static func _advantage_detail(advantage: AdvantageResult) -> String:
+	if advantage == null:
+		return ""
+	var parts: PackedStringArray = []
+	if not advantage.advantages.is_empty():
+		parts.append("avantage : %s" % _reasons(advantage.advantages))
+	if not advantage.disadvantages.is_empty():
+		parts.append("désavantage : %s" % _reasons(advantage.disadvantages))
+	if parts.is_empty():
+		return ""
+	var cancelled := " ; ils s'annulent" if parts.size() == 2 else ""
+	return " (%s%s)" % [" ; ".join(parts), cancelled]
+
+
+static func _reasons(codes: Array[StringName]) -> String:
+	var texts: PackedStringArray = []
+	for code in codes:
+		texts.append(ADVANTAGE_REASONS.get(code, str(code)))
+	return ", ".join(texts)
+
+
+static func action_line(event: ActionTakenEvent) -> String:
+	return ACTION_LOG[event.action] % event.combatant.definition.display_name
+
+
+static func effect_ended_line(event: EffectEndedEvent) -> String:
+	return EFFECT_ENDED_LOG[event.effect_id] % event.combatant.definition.display_name
+
+
+static func reaction_triggered_line(event: ReactionTriggeredEvent) -> String:
+	return "%s quitte l'allonge de %s." % [event.mover.definition.display_name, event.reactor.definition.display_name]
+
+
+static func reaction_declined_line(event: ReactionDeclinedEvent) -> String:
+	return "%s laisse passer %s." % [event.reactor.definition.display_name, event.mover.definition.display_name]
 
 
 static func downed_line(combatant: Combatant) -> String:
