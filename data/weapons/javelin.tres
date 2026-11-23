@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="1_javel"]
+
+[resource]
+script = ExtResource("1_javel")
+id = &"javelin"
+display_name = "Javelot"
+damage_dice = "1d6"
+damage_type = 7
+range_normal_feet = 30
+range_long_feet = 120
+properties = Array[StringName]([&"thrown"])
+mastery = &"slow"

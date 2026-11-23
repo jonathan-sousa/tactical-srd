@@ -1,4 +1,5 @@
-## Action Attaque : une attaque au corps à corps avec l'arme de l'attaquant.
+## Action Attaque : une attaque avec l'arme choisie, au corps à corps ou à
+## distance selon l'arme et la distance (voir CombatState.attack_kind).
 class_name AttackAction
 extends Action
 
@@ -16,43 +17,22 @@ func _init(p_actor: Combatant, p_target: Combatant, p_weapon: WeaponDef = null) 
 func _validate(state: CombatState) -> StringName:
 	if state.action_used:
 		return ACTION_ALREADY_USED
-	if weapon == null:
+	if weapon == null or not actor.definition.weapons.has(weapon):
 		return NO_WEAPON
+	if actor.quantity(weapon) <= 0:
+		return NO_AMMUNITION
 	if target.side == actor.side:
 		return TARGET_NOT_ENEMY
 	if target.is_down():
 		return TARGET_DOWN
-	if not state.is_within_reach(actor, target, weapon):
-		return TARGET_OUT_OF_REACH
+	if state.attack_kind(actor, target, weapon) == CombatState.AttackKind.NONE:
+		return TARGET_OUT_OF_RANGE if weapon.has_range() else TARGET_OUT_OF_REACH
+	# Un obstacle entre les deux est un abri total : on ne peut pas viser.
+	if not state.can_see(actor, target):
+		return TARGET_NOT_VISIBLE
 	return &""
 
 
 func _execute(state: CombatState, dice: Dice) -> Array[CombatEvent]:
 	state.action_used = true
-	return AttackAction.strike(state, actor, target, weapon, dice)
-
-
-## Une attaque complète : avantage ou désavantage, jet, dégâts, chute de la
-## cible, fin du combat. Partagée avec l'attaque d'opportunité.
-static func strike(
-	state: CombatState,
-	attacker: Combatant,
-	target: Combatant,
-	weapon: WeaponDef,
-	dice: Dice,
-	is_opportunity: bool = false,
-) -> Array[CombatEvent]:
-	var advantage := AdvantageResolver.for_attack(state, attacker, target, weapon)
-	var result := AttackResolver.resolve(attacker, target, weapon, dice, advantage.mode)
-	result.advantage = advantage
-	result.is_opportunity = is_opportunity
-	var events: Array[CombatEvent] = [AttackRolledEvent.new(result)]
-	if not result.is_hit:
-		return events
-
-	target.take_damage(result.damage)
-	events.append(DamageDealtEvent.new(target, result.damage, result.damage_type, target.hp))
-	if target.is_down():
-		events.append(CombatantDownedEvent.new(target))
-		events.append_array(state.check_end())
-	return events
+	return AttackSequence.begin(state, actor, target, weapon, dice)

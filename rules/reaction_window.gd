@@ -6,7 +6,7 @@
 ## possibles. Une fois la réaction décidée, le déplacement reprend sur
 ## `remaining_path`.
 class_name ReactionWindow
-extends RefCounted
+extends PendingDecision
 
 var reactor: Combatant
 var mover: Combatant
@@ -19,6 +19,7 @@ var asked: Array[Combatant] = []
 
 func _init(p_reactor: Combatant, p_mover: Combatant, p_remaining_path: Array[Vector2i], p_asked: Array[Combatant]) -> void:
 	reactor = p_reactor
+	decider = p_reactor
 	mover = p_mover
 	remaining_path = p_remaining_path
 	asked = p_asked

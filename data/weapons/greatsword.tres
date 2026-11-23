@@ -6,5 +6,8 @@
 script = ExtResource("1_prfa6")
 id = &"greatsword"
 display_name = "Épée à deux mains"
+short_name = "Épée"
 damage_dice = "2d6"
 damage_type = 11
+properties = Array[StringName]([&"heavy", &"two_handed"])
+mastery = &"graze"

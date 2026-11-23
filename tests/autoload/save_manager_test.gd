@@ -34,11 +34,11 @@ func _write_raw(text: String) -> void:
 
 func _valid_save(overrides: Dictionary = {}) -> Dictionary:
 	var save := {
-		"version": 1,
+		"version": 2,
 		"saved_at": "2026-11-17T09:30:00Z",
 		"story_step": "goblin_ambush",
 		"story_completed": false,
-		"player": {"def_id": "fighter_lvl1", "hp_current": 9},
+		"player": {"def_id": "fighter_lvl1", "hp_current": 9, "second_wind_uses": 1, "heroic_inspiration": false},
 	}
 	save.merge(overrides, true)
 	return save
@@ -85,6 +85,9 @@ func test_fields_are_validated_one_by_one(save: Dictionary, test_parameters := [
 	[{"version": 1, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": 2.5}}],
 	[{"version": 1, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": -4}}],
 	[{"version": 1, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": 0}}],
+	[{"version": 2, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": 12, "heroic_inspiration": true}}],
+	[{"version": 2, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": 12, "second_wind_uses": -1, "heroic_inspiration": true}}],
+	[{"version": 2, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": 12, "second_wind_uses": 2, "heroic_inspiration": "oui"}}],
 	[{"version": 1, "story_step": "intro", "story_completed": "oui", "player": {"def_id": "fighter_lvl1", "hp_current": 12}}],
 ]) -> void:
 	_write_raw(JSON.stringify(save))
@@ -139,6 +142,8 @@ func test_snapshot_and_restore_a_game() -> void:
 	game.new_game()
 	game.complete_step(GameStateScript.Outcome.DONE)
 	game.player_hp = 8
+	game.player_second_wind_uses = 1
+	game.player_heroic_inspiration = false
 	_saves.write(SaveManagerScript.snapshot(game))
 	_saves.reload()
 
@@ -147,6 +152,31 @@ func test_snapshot_and_restore_a_game() -> void:
 	assert_bool(_saves.restore_into(restored)).is_true()
 	assert_str(restored.current_step_id).is_equal("goblin_ambush")
 	assert_int(restored.player_hp).is_equal(8)
+	assert_int(restored.player_second_wind_uses).is_equal(1)
+	assert_bool(restored.player_heroic_inspiration).is_false()
+
+
+func test_version_1_save_is_migrated_with_full_resources() -> void:
+	_write_raw(JSON.stringify({
+		"version": 1,
+		"saved_at": "2026-11-17T09:30:00Z",
+		"story_step": "goblin_ambush",
+		"story_completed": false,
+		"player": {"def_id": "fighter_lvl1", "hp_current": 9},
+	}))
+	assert_int(_saves.reload()).is_equal(SaveManagerScript.Status.OK)
+	assert_int(_saves.data["version"]).is_equal(2)
+	assert_int(_saves.data["player"]["second_wind_uses"]).is_equal(2)
+	assert_bool(_saves.data["player"]["heroic_inspiration"]).is_true()
+
+
+func test_restored_resources_never_exceed_the_character_sheet() -> void:
+	_saves.write(_valid_save({"player": {"def_id": "fighter_lvl1", "hp_current": 9, "second_wind_uses": 9, "heroic_inspiration": true}}))
+	_saves.reload()
+	var game: Node = auto_free(GameStateScript.new())
+	game.setup(DataRegistry.load_from())
+	assert_bool(_saves.restore_into(game)).is_true()
+	assert_int(game.player_second_wind_uses).is_equal(2)
 
 
 func test_save_pointing_to_unknown_step_cannot_be_restored() -> void:

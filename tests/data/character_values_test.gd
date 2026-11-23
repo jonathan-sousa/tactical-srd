@@ -24,6 +24,26 @@ func test_fighter_matches_srd() -> void:
 	assert_int(fighter.proficiency_bonus).is_equal(2)
 
 
+func test_fighter_has_every_level_1_feature() -> void:
+	var fighter := _registry.character(&"fighter_lvl1")
+	assert_str(fighter.species).is_equal("Humain")
+	assert_str(fighter.background).is_equal("Soldat")
+	assert_int(fighter.level).is_equal(1)
+	# Fighting Style, Second Wind (2 utilisations), Weapon Mastery (3 armes).
+	assert_str(fighter.fighting_style).is_equal(CharacterDef.GREAT_WEAPON_FIGHTING)
+	assert_int(fighter.second_wind_uses).is_equal(2)
+	assert_array(fighter.weapon_masteries).contains_exactly_in_any_order([&"greatsword", &"flail", &"javelin"])
+	# Soldat : Savage Attacker. Humain : Inspiration héroïque.
+	assert_array(fighter.feats).contains_exactly([CharacterDef.SAVAGE_ATTACKER])
+	assert_bool(fighter.heroic_inspiration).is_true()
+	# Équipement de départ A : épée à deux mains, fléau, 8 javelots.
+	var weapon_ids: Array[StringName] = []
+	for weapon in fighter.weapons:
+		weapon_ids.append(weapon.id)
+	assert_array(weapon_ids).contains_exactly([&"greatsword", &"flail", &"javelin"])
+	assert_int(fighter.weapon_quantities[&"javelin"]).is_equal(8)
+
+
 func test_goblin_matches_srd() -> void:
 	var goblin := _registry.character(&"goblin_warrior")
 	assert_array([goblin.strength, goblin.dexterity, goblin.constitution]).contains_exactly(8, 15, 10)
@@ -42,6 +62,22 @@ func test_weapons_match_srd() -> void:
 	assert_int(greatsword.damage_type).is_equal(DamageType.Type.SLASHING)
 	assert_int(greatsword.ability).is_equal(Abilities.Ability.STRENGTH)
 	assert_int(greatsword.reach_feet).is_equal(5)
+	assert_array(greatsword.properties).contains_exactly_in_any_order([WeaponDef.HEAVY, WeaponDef.TWO_HANDED])
+	assert_str(greatsword.mastery).is_equal(WeaponDef.GRAZE)
+
+	var flail := _registry.weapon(&"flail")
+	assert_str(flail.damage_dice).is_equal("1d8")
+	assert_int(flail.damage_type).is_equal(DamageType.Type.BLUDGEONING)
+	assert_str(flail.mastery).is_equal(WeaponDef.SAP)
+
+	var javelin := _registry.weapon(&"javelin")
+	assert_str(javelin.damage_dice).is_equal("1d6")
+	assert_int(javelin.damage_type).is_equal(DamageType.Type.PIERCING)
+	assert_int(javelin.kind).is_equal(WeaponDef.Kind.MELEE)
+	assert_array(javelin.properties).contains_exactly([WeaponDef.THROWN])
+	assert_int(javelin.range_normal_feet).is_equal(30)
+	assert_int(javelin.range_long_feet).is_equal(120)
+	assert_str(javelin.mastery).is_equal(WeaponDef.SLOW)
 
 	var scimitar := _registry.weapon(&"scimitar")
 	assert_str(scimitar.damage_dice).is_equal("1d6")
@@ -61,7 +97,7 @@ func test_attack_bonuses_match_stat_blocks() -> void:
 
 
 func test_every_weapon_has_valid_damage_dice() -> void:
-	for id: StringName in [&"greatsword", &"scimitar"]:
+	for id: StringName in [&"greatsword", &"flail", &"javelin", &"scimitar"]:
 		assert_object(DiceExpression.parse(_registry.weapon(id).damage_dice)) \
 			.override_failure_message("Dés invalides pour %s" % id) \
 			.is_not_null()

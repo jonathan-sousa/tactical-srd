@@ -14,6 +14,14 @@ var hp: int
 var position: Vector2i
 ## Réaction encore disponible ? Une seule entre deux de ses tours (SRD).
 var reaction_available: bool = true
+## Utilisations de Second Wind restantes.
+var second_wind_uses: int
+## Inspiration héroïque disponible ?
+var heroic_inspiration: bool
+## Exemplaires restants des armes qui s'épuisent (javelots), par id.
+var quantities: Dictionary[StringName, int] = {}
+## Numéro du dernier tour où Savage Attacker a servi (une fois par tour).
+var savage_attacker_turn: int = -1
 
 
 func _init(p_definition: CharacterDef, p_side: Combatant.Side, p_position: Vector2i = Vector2i.ZERO) -> void:
@@ -21,6 +29,9 @@ func _init(p_definition: CharacterDef, p_side: Combatant.Side, p_position: Vecto
 	side = p_side
 	position = p_position
 	hp = p_definition.max_hp
+	second_wind_uses = p_definition.second_wind_uses
+	heroic_inspiration = p_definition.heroic_inspiration
+	quantities.assign(p_definition.weapon_quantities)
 
 
 func is_down() -> bool:
@@ -50,8 +61,25 @@ func take_damage(amount: int) -> int:
 	return lost
 
 
-## Arme utilisée au corps à corps, pour attaquer comme pour les attaques
-## d'opportunité : la première de la fiche. `null` sans arme.
+## Rend des PV sans dépasser le maximum. Renvoie les PV réellement rendus.
+func heal(amount: int) -> int:
+	assert(amount >= 0, "Des soins ne peuvent pas être négatifs.")
+	var gained := mini(amount, definition.max_hp - hp)
+	hp += gained
+	return gained
+
+
+## Exemplaires restants de cette arme (1 pour une arme qui ne s'épuise pas).
+func quantity(weapon: WeaponDef) -> int:
+	return quantities.get(weapon.id, 1)
+
+
+## Arme de corps à corps par défaut, pour attaquer comme pour les attaques
+## d'opportunité : la première arme de corps à corps de la fiche. `null`
+## sans arme de corps à corps.
 func melee_weapon() -> WeaponDef:
-	return null if definition.weapons.is_empty() else definition.weapons[0]
+	for weapon in definition.weapons:
+		if weapon.kind == WeaponDef.Kind.MELEE and quantity(weapon) > 0:
+			return weapon
+	return null
 

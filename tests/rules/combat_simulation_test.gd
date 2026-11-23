@@ -49,5 +49,5 @@ func _play(seed_value: int) -> Array[int]:
 
 ## Les deux camps sont joués par l'IA, réactions comprises.
 func _resolve_reactions(state: CombatState, dice: Dice) -> void:
-	while state.reaction_window != null:
-		EnemyAI.react(state).execute(state, dice)
+	while state.pending != null:
+		EnemyAI.decide(state).execute(state, dice)

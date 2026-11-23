@@ -15,18 +15,21 @@ extends Node
 
 enum Status { NONE, OK, CORRUPT, UNKNOWN_VERSION }
 
-const CURRENT_VERSION := 1
+const CURRENT_VERSION := 2
 const DEFAULT_PATH := "user://save_1.json"
 
-## Fonctions de migration, indexées par la version qu'elles mettent à jour :
-## MIGRATIONS[1] transformerait une sauvegarde v1 en v2. Vide tant qu'il
-## n'existe qu'une version.
-const MIGRATIONS: Dictionary[int, Callable] = {}
+## En v1, seul le Guerrier niveau 1 existait, avec 2 utilisations de Second
+## Wind et l'Inspiration héroïque : une sauvegarde v1 les reçoit intactes.
+const V1_SECOND_WIND_USES := 2
 
 var path := DEFAULT_PATH
 var status: Status = Status.NONE
 ## Contenu validé (et migré) de la sauvegarde quand `status` vaut OK.
 var data: Dictionary = {}
+
+## Fonctions de migration, indexées par la version qu'elles mettent à jour :
+## _migrations[1] transforme une sauvegarde v1 en v2.
+var _migrations: Dictionary[int, Callable] = {1: _migrate_v1_to_v2}
 
 
 func _ready() -> void:
@@ -84,7 +87,7 @@ func reload() -> Status:
 		status = Status.CORRUPT
 		return status
 	var version := int(raw["version"])
-	if version > CURRENT_VERSION or (version < CURRENT_VERSION and not MIGRATIONS.has(version)):
+	if version > CURRENT_VERSION or (version < CURRENT_VERSION and not _migrations.has(version)):
 		status = Status.UNKNOWN_VERSION
 		return status
 
@@ -102,9 +105,21 @@ func reload() -> Status:
 func _migrate(raw: Dictionary, version: int) -> Dictionary:
 	var current := raw
 	while version < CURRENT_VERSION:
-		current = MIGRATIONS[version].call(current)
+		current = _migrations[version].call(current)
 		version += 1
 	return current
+
+
+## v2 : ressources du Guerrier (Second Wind, Inspiration héroïque).
+func _migrate_v1_to_v2(raw: Dictionary) -> Dictionary:
+	var migrated := raw.duplicate(true)
+	var player: Variant = migrated.get("player")
+	if typeof(player) == TYPE_DICTIONARY:
+		var player_dict: Dictionary = player
+		player_dict["second_wind_uses"] = V1_SECOND_WIND_USES
+		player_dict["heroic_inspiration"] = true
+	migrated["version"] = 2
+	return migrated
 
 
 ## Renvoie une copie propre et typée, ou un dictionnaire vide si un champ
@@ -125,13 +140,24 @@ func _validate(raw: Dictionary) -> Dictionary:
 	# Un Guerrier sauvegardé est toujours debout : on sauvegarde entre deux étapes.
 	if not _is_whole_number(hp) or int(hp) < 1:
 		return {}
+	var uses: Variant = player_dict.get("second_wind_uses")
+	if not _is_whole_number(uses) or int(uses) < 0:
+		return {}
+	var inspiration: Variant = player_dict.get("heroic_inspiration")
+	if typeof(inspiration) != TYPE_BOOL:
+		return {}
 	var saved_at: Variant = raw.get("saved_at", "")
 	return {
 		"version": CURRENT_VERSION,
 		"saved_at": saved_at if typeof(saved_at) == TYPE_STRING else "",
 		"story_step": raw["story_step"],
 		"story_completed": completed,
-		"player": {"def_id": player_dict["def_id"], "hp_current": int(hp)},
+		"player": {
+			"def_id": player_dict["def_id"],
+			"hp_current": int(hp),
+			"second_wind_uses": int(uses),
+			"heroic_inspiration": inspiration,
+		},
 	}
 
 
@@ -150,7 +176,14 @@ func restore_into(game: Node) -> bool:
 		return false
 	var player: Dictionary = data["player"]
 	var known_player: bool = game.registry.character(StringName(player["def_id"])) != null
-	if not known_player or not game.restore(StringName(data["story_step"]), player["hp_current"], data["story_completed"]):
+	var restored: bool = known_player and game.restore(
+		StringName(data["story_step"]),
+		player["hp_current"],
+		data["story_completed"],
+		player["second_wind_uses"],
+		player["heroic_inspiration"],
+	)
+	if not restored:
 		status = Status.CORRUPT
 		return false
 	return true
@@ -166,7 +199,12 @@ static func snapshot(game: Node) -> Dictionary:
 		"saved_at": Time.get_datetime_string_from_system(true) + "Z",
 		"story_step": str(game.current_step_id),
 		"story_completed": game.story_completed,
-		"player": {"def_id": str(game.PLAYER_ID), "hp_current": game.player_hp},
+		"player": {
+			"def_id": str(game.PLAYER_ID),
+			"hp_current": game.player_hp,
+			"second_wind_uses": game.player_second_wind_uses,
+			"heroic_inspiration": game.player_heroic_inspiration,
+		},
 	}
 
 

@@ -7,6 +7,13 @@ class_name CombatState
 extends RefCounted
 
 const FEET_PER_SQUARE := 5
+## Le Ralentissement (maîtrise Slow) retire 10 ft de vitesse, soit 2 cases.
+const SLOW_SQUARES := 2
+
+## Nature d'une attaque selon l'arme et la distance : au corps à corps (dans
+## l'allonge), à distance (tir ou lancer, dans la portée longue), ou
+## impossible.
+enum AttackKind { NONE, MELEE, RANGED }
 
 var encounter: EncounterDef
 var pathfinder: GridPathfinder
@@ -18,14 +25,19 @@ var initiative: Array[InitiativeEntry] = []
 var effects: Array[Effect] = []
 
 var round: int = 0
+## Nombre de tours commencés depuis le début du combat, tous combattants
+## confondus. Sert aux règles « une fois par tour ».
+var turn_count: int = 0
 ## Déplacement restant du combattant actif, en cases.
 var movement_left: int = 0
 ## Action du tour déjà utilisée ?
 var action_used: bool = false
+## Action bonus du tour déjà utilisée ?
+var bonus_action_used: bool = false
 
-## Fenêtre de réaction ouverte, ou `null`. Tant qu'elle est ouverte, le
-## déplacement en cours est suspendu (voir ReactionWindow).
-var reaction_window: ReactionWindow = null
+## Décision en attente (réaction, relance…), ou `null`. Tant qu'elle est
+## ouverte, seule une réponse est possible (voir PendingDecision).
+var pending: PendingDecision = null
 
 var is_over: bool = false
 ## Camp vainqueur, valable seulement quand `is_over` est vrai.
@@ -55,6 +67,7 @@ func start(dice: Dice) -> Array[CombatEvent]:
 	initiative = Initiative.roll_order(combatants, dice)
 	round = 1
 	_active_index = 0
+	turn_count = 1
 	_reset_turn_budget()
 	return [InitiativeRolledEvent.new(initiative), TurnStartedEvent.new(active(), round)]
 
@@ -68,9 +81,13 @@ func active() -> Combatant:
 
 # Division entière voulue (30 ft / 5 = 6 cases) : on fait taire
 # l'avertissement de Godot qui signale toute division entre deux int.
+## Vitesse en cases, Ralentissement compris.
 @warning_ignore("integer_division")
 func speed_in_squares(combatant: Combatant) -> int:
-	return combatant.definition.speed_feet / FEET_PER_SQUARE
+	var squares := combatant.definition.speed_feet / FEET_PER_SQUARE
+	if has_effect(combatant, Effect.SLOWED):
+		squares -= SLOW_SQUARES
+	return maxi(squares, 0)
 
 
 ## Combattant debout sur cette case, ou `null`.
@@ -116,6 +133,32 @@ func can_see(observer: Combatant, target: Combatant) -> bool:
 	return line_of_sight.is_clear(observer.position, target.position)
 
 
+## Distance en pieds entre deux combattants (5 ft par case, diagonales
+## comprises).
+func distance_feet(a: Combatant, b: Combatant) -> int:
+	return GridPathfinder.chebyshev(a.position, b.position) * FEET_PER_SQUARE
+
+
+## Attaque au corps à corps si la cible est dans l'allonge d'une arme de
+## corps à corps ; sinon attaque à distance si l'arme se tire ou se lance et
+## que la cible est dans sa portée longue.
+func attack_kind(attacker: Combatant, target: Combatant, weapon: WeaponDef) -> AttackKind:
+	if weapon.kind == WeaponDef.Kind.MELEE and is_within_reach(attacker, target, weapon):
+		return AttackKind.MELEE
+	if weapon.has_range() and distance_feet(attacker, target) <= weapon.range_long_feet:
+		return AttackKind.RANGED
+	return AttackKind.NONE
+
+
+## Ennemis debout au contact de `combatant` (à 5 ft) qui le voient.
+func hostiles_next_to(combatant: Combatant) -> Array[Combatant]:
+	var hostiles: Array[Combatant] = []
+	for enemy in living_enemies_of(combatant):
+		if GridPathfinder.chebyshev(enemy.position, combatant.position) <= 1 and can_see(enemy, combatant):
+			hostiles.append(enemy)
+	return hostiles
+
+
 func living_enemies_of(combatant: Combatant) -> Array[Combatant]:
 	var enemies: Array[Combatant] = []
 	for other in combatants:
@@ -135,12 +178,23 @@ func advance_turn() -> Array[CombatEvent]:
 			round += 1
 		if not active().is_down():
 			break
+	turn_count += 1
 	_reset_turn_budget()
 	# La réaction revient au début du tour de son propriétaire.
 	active().reaction_available = true
 	events.append(TurnStartedEvent.new(active(), round))
 	events.append_array(_expire_effects(active(), Effect.Expiry.START_OF_SOURCE_TURN))
 	return events
+
+
+## Applique un effet et prévient la présentation. Le Ralentissement réduit
+## aussitôt le déplacement restant si la cible joue en ce moment.
+func apply_effect(effect: Effect) -> Array[CombatEvent]:
+	var was_slowed := has_effect(effect.target, Effect.SLOWED)
+	add_effect(effect)
+	if effect.id == Effect.SLOWED and not was_slowed and effect.target == active():
+		movement_left = maxi(movement_left - SLOW_SQUARES, 0)
+	return [EffectAppliedEvent.new(effect.target, effect.id)]
 
 
 ## Déplace `mover` case par case le long de `path`, en décomptant son
@@ -162,7 +216,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 				events.append(MovedEvent.new(mover, from, walked))
 			var asked := skip.duplicate()
 			asked.append(reactor)
-			reaction_window = ReactionWindow.new(reactor, mover, path.slice(i), asked)
+			pending = ReactionWindow.new(reactor, mover, path.slice(i), asked)
 			events.append(ReactionTriggeredEvent.new(reactor, mover))
 			return events
 		mover.position = path[i]
@@ -171,6 +225,14 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 	if not walked.is_empty():
 		events.append(MovedEvent.new(mover, from, walked))
 	return events
+
+
+## Reprend le déplacement suspendu par `window` une fois la réaction jouée,
+## si celui qui se déplaçait tient encore debout.
+func resume_movement(window: ReactionWindow) -> Array[CombatEvent]:
+	if window == null or window.mover.is_down() or is_over:
+		return []
+	return walk(window.mover, window.remaining_path, window.asked)
 
 
 ## Premier ennemi qui peut faire une attaque d'opportunité si `mover` va
@@ -260,3 +322,4 @@ func check_end() -> Array[CombatEvent]:
 func _reset_turn_budget() -> void:
 	movement_left = speed_in_squares(active())
 	action_used = false
+	bonus_action_used = false

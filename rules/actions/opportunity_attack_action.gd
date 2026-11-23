@@ -6,8 +6,8 @@ class_name OpportunityAttackAction
 extends Action
 
 
-func is_reaction() -> bool:
-	return true
+func answers() -> Script:
+	return ReactionWindow
 
 
 func _validate(_state: CombatState) -> StringName:
@@ -17,10 +17,7 @@ func _validate(_state: CombatState) -> StringName:
 
 
 func _execute(state: CombatState, dice: Dice) -> Array[CombatEvent]:
-	var window := state.reaction_window
-	state.reaction_window = null
+	var window := state.pending as ReactionWindow
+	state.pending = null
 	actor.reaction_available = false
-	var events := AttackAction.strike(state, actor, window.mover, actor.melee_weapon(), dice, true)
-	if not window.mover.is_down() and not state.is_over:
-		events.append_array(state.walk(window.mover, window.remaining_path, window.asked))
-	return events
+	return AttackSequence.begin(state, actor, window.mover, actor.melee_weapon(), dice, true, window)

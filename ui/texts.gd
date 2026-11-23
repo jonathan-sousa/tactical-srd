@@ -13,6 +13,10 @@ const ACTION_AVAILABLE := "Action : disponible"
 const ACTION_USED := "Action : utilisée"
 const REACTION_AVAILABLE := "Réaction : disponible"
 const REACTION_USED := "Réaction : utilisée"
+const BONUS_ACTION_AVAILABLE := "Action bonus : disponible"
+const BONUS_ACTION_USED := "Action bonus : utilisée"
+const SECOND_WIND := "Second souffle"
+const HEROIC_INSPIRATION := "Inspiration héroïque"
 const EFFECTS := "Effets"
 const YES := "Oui"
 const NO := "Non"
@@ -87,22 +91,33 @@ const REASONS: Dictionary[StringName, String] = {
 	Action.TARGET_DOWN: "La cible est déjà à terre.",
 	Action.TARGET_OUT_OF_REACH: "Hors de portée : placez-vous sur une case adjacente.",
 	Action.NO_WEAPON: "Aucune arme équipée.",
-	Action.REACTION_PENDING: "Une réaction est en attente.",
-	Action.NO_REACTION_PENDING: "Aucune réaction possible pour l'instant.",
-	Action.NOT_YOUR_REACTION: "Ce n'est pas à vous de réagir.",
+	Action.TARGET_OUT_OF_RANGE: "Hors de portée de l'arme.",
+	Action.TARGET_NOT_VISIBLE: "Cible hors de vue : un obstacle la protège entièrement.",
+	Action.NO_AMMUNITION: "Plus aucun exemplaire de cette arme.",
+	Action.BONUS_ACTION_ALREADY_USED: "Action bonus déjà utilisée ce tour-ci.",
+	Action.NO_USES_LEFT: "Plus aucune utilisation.",
+	Action.FEATURE_UNAVAILABLE: "Capacité indisponible.",
+	Action.DECISION_PENDING: "Une décision est en attente.",
+	Action.NO_DECISION_PENDING: "Aucune décision en attente.",
+	Action.NOT_YOUR_DECISION: "Ce n'est pas à vous de décider.",
 }
+
+## Identifiant de Second Wind dans la barre d'actions.
+const SECOND_WIND_ID := &"second_wind"
 
 ## Noms des actions sans jet de dés, tels que le SRD français les nomme.
 const ACTION_NAMES: Dictionary[StringName, String] = {
 	StandardAction.DASH: "Foncer",
 	StandardAction.DISENGAGE: "Se désengager",
 	StandardAction.DODGE: "Esquiver",
+	SECOND_WIND_ID: SECOND_WIND,
 }
 
 const ACTION_DESCRIPTIONS: Dictionary[StringName, String] = {
 	StandardAction.DASH: "Déplacement supplémentaire égal à votre vitesse, pour ce tour.",
 	StandardAction.DISENGAGE: "Vos déplacements ne provoquent plus d'attaque d'opportunité jusqu'à la fin du tour.",
 	StandardAction.DODGE: "Jusqu'au début de votre prochain tour, les attaques contre vous ont le désavantage si vous voyez l'attaquant.",
+	SECOND_WIND_ID: "Action bonus : regagnez 1d10 + 1 PV. Deux utilisations par partie.",
 }
 
 ## Journal : « Guerrier fonce. »
@@ -115,16 +130,49 @@ const ACTION_LOG: Dictionary[StringName, String] = {
 const EFFECT_NAMES: Dictionary[StringName, String] = {
 	Effect.DODGING: "Esquive",
 	Effect.DISENGAGED: "Désengagé",
+	Effect.SAPPED: "Sapé",
+	Effect.SLOWED: "Ralenti",
+}
+
+const EFFECT_APPLIED_LOG: Dictionary[StringName, String] = {
+	Effect.DODGING: "%s esquive.",
+	Effect.DISENGAGED: "%s se désengage.",
+	Effect.SAPPED: "%s est sapé (Sap) : désavantage à sa prochaine attaque.",
+	Effect.SLOWED: "%s est ralenti (Slow) : 10 ft (2 cases) de vitesse en moins.",
 }
 
 const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
 	Effect.DODGING: "%s n'esquive plus.",
 	Effect.DISENGAGED: "%s n'est plus désengagé.",
+	Effect.SAPPED: "%s n'est plus sapé.",
+	Effect.SLOWED: "%s n'est plus ralenti.",
+}
+
+## Maîtrises d'arme, nommées comme dans le SRD 5.2.1 (en anglais).
+const MASTERY_DESCRIPTIONS: Dictionary[StringName, String] = {
+	WeaponDef.GRAZE: "Graze : en cas d'échec, inflige quand même votre modificateur de caractéristique.",
+	WeaponDef.SAP: "Sap : la cible touchée a le désavantage à sa prochaine attaque.",
+	WeaponDef.SLOW: "Slow : la cible touchée perd 10 ft de vitesse jusqu'à votre prochain tour.",
+	WeaponDef.NICK: "Nick : l'attaque supplémentaire de l'arme Légère fait partie de l'action Attaque.",
+	WeaponDef.VEX: "Vex : avantage à votre prochaine attaque contre la cible touchée.",
+}
+
+const PROPERTY_NAMES: Dictionary[StringName, String] = {
+	WeaponDef.FINESSE: "Finesse",
+	WeaponDef.HEAVY: "Lourde",
+	WeaponDef.LIGHT: "Légère",
+	WeaponDef.THROWN: "Lancer",
+	WeaponDef.TWO_HANDED: "Deux mains",
+	WeaponDef.VERSATILE: "Polyvalente",
+	WeaponDef.AMMUNITION: "Munitions",
 }
 
 ## Raisons d'avantage ou de désavantage, affichées après le jet.
 const ADVANTAGE_REASONS: Dictionary[StringName, String] = {
 	AdvantageResolver.TARGET_DODGING: "la cible esquive",
+	AdvantageResolver.ATTACKER_SAPPED: "attaquant sapé",
+	AdvantageResolver.LONG_RANGE: "longue portée",
+	AdvantageResolver.HOSTILE_NEARBY: "ennemi au contact",
 }
 
 
@@ -157,6 +205,60 @@ static func reaction_prompt(mover: Combatant) -> String:
 	return "%s quitte votre allonge.\nAttaque d'opportunité ?" % mover.definition.display_name
 
 
+## Question posée au joueur après une attaque ratée.
+static func inspiration_prompt(result: AttackResult) -> String:
+	return "Attaque ratée : %d contre %s %d.\nRelancer le d20 grâce à l'%s ?" % [
+		result.attack_total, ARMOR_CLASS, result.target_armor_class, HEROIC_INSPIRATION.to_lower(),
+	]
+
+
+## « Action bonus : disponible ».
+static func bonus_action_line(used: bool) -> String:
+	return BONUS_ACTION_USED if used else BONUS_ACTION_AVAILABLE
+
+
+## « Second souffle : 2 / 2 · Inspiration héroïque : oui ».
+static func resources_line(combatant: Combatant) -> String:
+	var parts: PackedStringArray = []
+	if combatant.definition.second_wind_uses > 0:
+		parts.append("%s : %d / %d" % [SECOND_WIND, combatant.second_wind_uses, combatant.definition.second_wind_uses])
+	if combatant.definition.heroic_inspiration:
+		parts.append("%s : %s" % ["Inspiration", "oui" if combatant.heroic_inspiration else "non"])
+	return " · ".join(parts)
+
+
+## Texte d'un bouton d'arme : « Javelot ×8 ».
+static func weapon_button(combatant: Combatant, weapon: WeaponDef) -> String:
+	var name := weapon.short_name if not weapon.short_name.is_empty() else weapon.display_name
+	if combatant.quantities.has(weapon.id):
+		return "%s ×%d" % [name, combatant.quantity(weapon)]
+	return name
+
+
+## Fiche d'une arme pour l'infobulle : bonus, dégâts, portée, propriétés,
+## maîtrise.
+@warning_ignore("integer_division")
+static func weapon_tooltip(combatant: Combatant, weapon: WeaponDef) -> String:
+	var expression := DiceExpression.parse(weapon.damage_dice).with_modifier(combatant.damage_modifier(weapon))
+	var lines: PackedStringArray = [
+		"%s : %s au toucher, %s dégâts %s" % [weapon.display_name, signed(combatant.attack_bonus(weapon)), expression, damage_type(weapon.damage_type)],
+	]
+	if weapon.has_range():
+		lines.append("Portée %d / %d ft (%s / %s)" % [
+			weapon.range_normal_feet, weapon.range_long_feet,
+			squares(weapon.range_normal_feet / CombatState.FEET_PER_SQUARE),
+			squares(weapon.range_long_feet / CombatState.FEET_PER_SQUARE),
+		])
+	var properties: PackedStringArray = []
+	for property in weapon.properties:
+		properties.append(PROPERTY_NAMES.get(property, str(property)))
+	if not properties.is_empty():
+		lines.append("Propriétés : %s" % ", ".join(properties))
+	if combatant.definition.masters(weapon):
+		lines.append(MASTERY_DESCRIPTIONS.get(weapon.mastery, str(weapon.mastery)))
+	return "\n".join(lines)
+
+
 static func squares(count: int) -> String:
 	return "%d case%s" % [count, "" if count <= 1 else "s"]
 
@@ -168,8 +270,8 @@ static func move_hint(square_count: int) -> String:
 
 ## Aide au survol d'un ennemi : « Attaquer Gobelin guerrier : Épée à deux
 ## mains, + 5 2d6+3 ».
-static func attack_hint(target: Combatant, weapon: WeaponDef, attack_bonus: int, damage: DiceExpression) -> String:
-	return "Attaquer %s : %s, %s %s" % [target.definition.display_name, weapon.display_name, signed(attack_bonus), damage]
+static func attack_hint(target: Combatant, weapon: WeaponDef, attack_bonus: int, damage: DiceExpression, advantage: AdvantageResult = null) -> String:
+	return "Attaquer %s : %s, %s %s%s" % [target.definition.display_name, weapon.display_name, signed(attack_bonus), damage, _advantage_detail(advantage)]
 
 
 # --- Journal de combat ---------------------------------------------------------
@@ -197,10 +299,15 @@ static func attack_line(result: AttackResult) -> String:
 	if result.d20.rolls.size() > 1:
 		roll = "%d [%s]" % [result.d20.natural, ", ".join(result.d20.rolls.map(str))]
 
-	var verb := "attaque d'opportunité" if result.is_opportunity else "attaque"
-	var line := "%s %s : %s %s = %d contre %s %d" % [
+	var verb := "attaque"
+	if result.is_opportunity:
+		verb = "attaque d'opportunité"
+	elif result.is_ranged:
+		verb = "lance" if result.weapon.has_property(WeaponDef.THROWN) else "tire"
+	var line := "%s %s (%s) : %s %s = %d contre %s %d" % [
 		result.attacker.definition.display_name,
 		verb,
+		result.weapon.display_name,
 		roll,
 		signed(result.attack_bonus),
 		result.attack_total,
@@ -213,11 +320,14 @@ static func attack_line(result: AttackResult) -> String:
 		line += ", raté"
 	else:
 		var outcome := "20 naturel, coup critique" if result.is_critical else "touché"
+		var detail := _damage_detail(result.damage_roll)
+		if result.discarded_damage_roll != null:
+			detail += " ; meilleur de deux jets, l'autre faisait %d" % result.discarded_damage_roll.total
 		line += ", %s, %d dégâts %s (%s)" % [
 			outcome,
 			result.damage,
 			damage_type(result.damage_type),
-			_damage_detail(result.damage_roll),
+			detail,
 		]
 	return line + _advantage_detail(result.advantage)
 
@@ -248,6 +358,28 @@ static func action_line(event: ActionTakenEvent) -> String:
 	return ACTION_LOG[event.action] % event.combatant.definition.display_name
 
 
+static func effect_applied_line(event: EffectAppliedEvent) -> String:
+	return EFFECT_APPLIED_LOG[event.effect_id] % event.combatant.definition.display_name
+
+
+## Ligne du journal pour des dégâts sans jet propre (Graze). Les dégâts
+## d'une attaque qui touche sont déjà sur la ligne de l'attaque.
+static func graze_line(event: DamageDealtEvent) -> String:
+	return "Graze : %s subit quand même %d dégâts %s." % [event.target.definition.display_name, event.amount, damage_type(event.damage_type)]
+
+
+static func healed_line(event: HealedEvent) -> String:
+	return "%s reprend son souffle : +%d PV (%s), %d PV." % [
+		event.combatant.definition.display_name, event.amount, _damage_detail(event.roll), event.hp_after,
+	]
+
+
+static func inspiration_used_line(event: InspirationUsedEvent) -> String:
+	return "%s dépense son %s : le %d devient %d." % [
+		event.combatant.definition.display_name, HEROIC_INSPIRATION.to_lower(), event.old_value, event.new_value,
+	]
+
+
 static func effect_ended_line(event: EffectEndedEvent) -> String:
 	return EFFECT_ENDED_LOG[event.effect_id] % event.combatant.definition.display_name
 
@@ -268,11 +400,14 @@ static func end_line(winner: Combatant.Side) -> String:
 	return "%s !" % (VICTORY if winner == Combatant.Side.PLAYER else DEFEAT)
 
 
-# « 2d6+3 : 4 + 2 + 3 »
+# « 2d6+3 : 4 + 2 + 3 », et « 1→3 » pour un dé relevé par Great Weapon
+# Fighting.
 static func _damage_detail(roll: DiceRoll) -> String:
 	var terms: PackedStringArray = []
-	for value in roll.rolls:
-		terms.append(str(value))
+	for i in roll.rolls.size():
+		var value := roll.rolls[i]
+		var natural := roll.natural_rolls[i]
+		terms.append(str(value) if value == natural else "%d→%d" % [natural, value])
 	var text := "%s : %s" % [roll.expression, " + ".join(terms)]
 	if roll.modifier > 0:
 		text += " + %d" % roll.modifier
