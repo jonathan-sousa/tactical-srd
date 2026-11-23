@@ -1,12 +1,13 @@
-# Intégration continue : à chaque push et pull request, on télécharge Godot,
+# Intégration continue : à chaque push, sur toutes les branches (une PR est
+# donc vérifiée par les push de sa branche), on télécharge Godot,
 # on lance toute la suite gdUnit4, puis on vérifie que le jeu démarre sans
 # erreur ni avertissement (mêmes vérifications qu'AGENTS.md, en local).
 name: Tests
 
 on:
   push:
-    branches: [main]
-  pull_request:
+  # Lancement à la main depuis l'onglet Actions.
+  workflow_dispatch:
 
 env:
   GODOT_VERSION: 4.7.2

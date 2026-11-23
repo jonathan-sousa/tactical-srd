@@ -35,7 +35,7 @@ Le script importe le projet, puis exécute toutes les suites de `tests/`. Le cod
 
 Pour un seul fichier : `scripts/test.sh -a res://tests/project_settings_test.gd`.
 
-Les mêmes vérifications tournent sur GitHub Actions à chaque push sur `main` et à chaque pull request (`.github/workflows/tests.yml`) : toute la suite de tests, puis un démarrage du jeu qui échoue sur la moindre erreur ou le moindre avertissement.
+Les mêmes vérifications tournent sur GitHub Actions à chaque push, sur toutes les branches (`.github/workflows/tests.yml`) : toute la suite de tests, puis un démarrage du jeu qui échoue sur la moindre erreur ou le moindre avertissement.
 
 Depuis l'éditeur : clic droit sur le dossier `tests/` puis **Run Tests**.
 
