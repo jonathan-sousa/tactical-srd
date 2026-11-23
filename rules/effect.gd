@@ -23,12 +23,19 @@ const SAPPED := &"sapped"
 ## Maîtrise Slow : vitesse réduite de 10 ft jusqu'au début du prochain tour
 ## de celui qui l'a touché. Ne se cumule pas.
 const SLOWED := &"slowed"
+## Action Se cacher réussie : condition Invisible tant qu'on reste caché.
+## `value` garde le total du jet de Discrétion, le DD pour le trouver.
+const HIDDEN := &"hidden"
+## Condition À terre (Prone) : ramper ou se relever, attaques affectées.
+const PRONE := &"prone"
 
 enum Expiry {
 	## Au début du prochain tour de `source`.
 	START_OF_SOURCE_TURN,
 	## À la fin du tour en cours de `source`.
 	END_OF_SOURCE_TURN,
+	## Jamais d'elle-même : une règle la retire (trouvé, relevé…).
+	UNTIL_REMOVED,
 }
 
 var id: StringName
@@ -37,10 +44,13 @@ var target: Combatant
 ## Combattant dont le tour fixe la fin de l'effet.
 var source: Combatant
 var expiry: Expiry
+## Valeur propre à l'effet (DD d'une cachette), 0 sinon.
+var value: int
 
 
-func _init(p_id: StringName, p_target: Combatant, p_source: Combatant, p_expiry: Expiry) -> void:
+func _init(p_id: StringName, p_target: Combatant, p_source: Combatant, p_expiry: Expiry, p_value: int = 0) -> void:
 	id = p_id
 	target = p_target
 	source = p_source
 	expiry = p_expiry
+	value = p_value

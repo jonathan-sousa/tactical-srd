@@ -15,6 +15,9 @@ func _init(p_actor: Combatant, p_destination: Vector2i) -> void:
 func _validate(state: CombatState) -> StringName:
 	if destination == actor.position:
 		return SAME_CELL
+	# À terre : il faut d'abord se relever (ramper n'est pas proposé).
+	if state.has_effect(actor, Effect.PRONE):
+		return PRONE
 	var path := state.find_path(actor, destination)
 	if path.is_empty():
 		return CELL_UNREACHABLE

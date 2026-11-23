@@ -39,6 +39,21 @@ static func javelin() -> WeaponDef:
 	return weapon
 
 
+static func shortbow() -> WeaponDef:
+	var weapon := WeaponDef.new()
+	weapon.id = &"shortbow"
+	weapon.display_name = "Arc court"
+	weapon.kind = WeaponDef.Kind.RANGED
+	weapon.damage_dice = "1d6"
+	weapon.damage_type = DamageType.Type.PIERCING
+	weapon.ability = Abilities.Ability.DEXTERITY
+	weapon.range_normal_feet = 80
+	weapon.range_long_feet = 320
+	weapon.properties = [WeaponDef.AMMUNITION, WeaponDef.TWO_HANDED]
+	weapon.mastery = WeaponDef.VEX
+	return weapon
+
+
 static func scimitar() -> WeaponDef:
 	var weapon := WeaponDef.new()
 	weapon.id = &"scimitar"
@@ -86,6 +101,18 @@ static func goblin() -> CharacterDef:
 	def.proficiency_bonus = 2
 	def.initiative_bonus = 2
 	def.weapons = [scimitar()]
+	def.is_monster = true
+	return def
+
+
+## Gobelin guerrier complet, conforme à data/characters/goblin_warrior.tres :
+## arc court, Discrétion +6, Nimble Escape, +1d4 dégâts avec l'avantage.
+static func full_goblin() -> CharacterDef:
+	var def := goblin()
+	def.weapons = [scimitar(), shortbow()]
+	def.skill_bonuses = {CharacterDef.STEALTH: 6}
+	def.traits = [CharacterDef.NIMBLE_ESCAPE]
+	def.advantage_damage_dice = "1d4"
 	return def
 
 
@@ -103,6 +130,7 @@ static func full_fighter() -> CharacterDef:
 	def.weapon_masteries = [&"greatsword", &"flail", &"javelin"]
 	def.second_wind_uses = 2
 	def.heroic_inspiration = true
+	def.skill_bonuses = {CharacterDef.PERCEPTION: 3}
 	return def
 
 
@@ -112,6 +140,7 @@ static func encounter(
 	player_start: Vector2i,
 	enemy_cells: Array[Vector2i],
 	blocked: Array[Vector2i] = [],
+	enemy: CharacterDef = null,
 ) -> EncounterDef:
 	var def := EncounterDef.new()
 	def.id = &"test_encounter"
@@ -120,7 +149,7 @@ static func encounter(
 	def.blocked_cells = blocked
 	for cell in enemy_cells:
 		var placement := EnemyPlacement.new()
-		placement.character = goblin()
+		placement.character = enemy if enemy != null else goblin()
 		placement.cell = cell
 		def.enemies.append(placement)
 	return def

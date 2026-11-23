@@ -8,9 +8,13 @@ extends GdUnitTestSuite
 
 const FixedDice := preload("res://tests/helpers/fixed_dice.gd")
 const COMBAT_SCENE := "res://scenes/combat/combat.tscn"
-## Initiative : le premier d20 est celui du Guerrier, le second celui du Gobelin.
-const FIGHTER_FIRST: Array[int] = [20, 1]
-const GOBLIN_FIRST: Array[int] = [1, 20]
+## Embuscade : le Gobelin tente d'abord de se cacher (1 + 6 = 7, raté, pas
+## de surprise). Puis l'initiative : le d20 du Guerrier, puis celui du Gobelin.
+const FIGHTER_FIRST: Array[int] = [1, 20, 1]
+const GOBLIN_FIRST: Array[int] = [1, 1, 20]
+## Embuscade réussie (12 + 6 = 18) : Guerrier surpris (20 et 20), Gobelin
+## caché (1 et 1). Le Guerrier commence quand même.
+const AMBUSHED_FIGHTER_FIRST: Array[int] = [12, 20, 20, 1, 1]
 
 var _runner: GdUnitSceneRunner
 var _scene: Node
@@ -84,7 +88,16 @@ func _settle() -> void:
 func _put_goblin_next_to_fighter() -> void:
 	var cell := _fighter().position + Vector2i(1, 0)
 	assert_object(_state().combatant_at(cell)).is_null()
+	_place_goblin(cell)
+
+
+## Déplace le Gobelin dans le moteur et son pion avec lui : les clics visent
+## les pions affichés.
+func _place_goblin(cell: Vector2i) -> void:
 	_goblin().position = cell
+	var token: TokenView = _scene.get("_tokens")[_goblin()]
+	token.cell = cell
+	token.position = (_scene.get_node("%Board") as BoardView).cell_center(cell)
 
 
 func test_combat_scene_starts() -> void:
@@ -95,8 +108,8 @@ func test_combat_scene_starts() -> void:
 
 
 func test_player_moves_then_ends_turn_and_goblin_plays() -> void:
-	# 1 naturel pour une éventuelle attaque du Gobelin : un raté sans dégâts.
-	await _start(FIGHTER_FIRST + [1])
+	# Des 1 naturels pour le Gobelin : il rate sa cachette et son tir.
+	await _start(FIGHTER_FIRST + [1, 1, 1])
 	var reachable := _state().reachable_cells()
 	var destination := _fighter().position + Vector2i(1, 0)
 	assert_bool(reachable.has(destination)).is_true()
@@ -164,7 +177,7 @@ func test_story_victory_reports_remaining_hp_without_result_panel() -> void:
 
 
 func test_pause_freezes_the_enemy_turn() -> void:
-	await _start(GOBLIN_FIRST + [1], 0.5)
+	await _start(GOBLIN_FIRST + [1, 1, 1], 0.5)
 	await _runner.simulate_frames(2)
 	var goblin_start := _goblin().position
 	assert_object(_state().active()).is_same(_goblin())
@@ -292,7 +305,7 @@ func test_missed_attack_offers_heroic_inspiration() -> void:
 func test_choosing_the_javelin_throws_it_at_range() -> void:
 	# 15 + 5 : touché à 25 ft ; 1d6 à 1 et 1 (Savage Attacker) : 4 dégâts.
 	await _start(FIGHTER_FIRST + [15, 1, 1])
-	_goblin().position = _fighter().position + Vector2i(5, 1)
+	_place_goblin(_fighter().position + Vector2i(5, 1))
 	var javelin: WeaponDef = _fighter().definition.weapons[2]
 	_scene.call("_on_weapon_pressed", javelin)
 	_scene.call("_on_cell_clicked", _goblin().position)
@@ -300,3 +313,40 @@ func test_choosing_the_javelin_throws_it_at_range() -> void:
 	assert_int(_fighter().quantity(javelin)).is_equal(7)
 	assert_int(_goblin().hp).is_equal(6)
 	assert_bool(_state().has_effect(_goblin(), Effect.SLOWED)).is_true()
+
+
+func test_ambush_shows_the_hidden_goblin_as_a_ghost_until_found() -> void:
+	await _start(AMBUSHED_FIGHTER_FIRST + [20])
+	var token: TokenView = _scene.get("_tokens")[_goblin()]
+	assert_bool(_state().is_hidden(_goblin())).is_true()
+	assert_bool(token.is_ghost).is_true()
+	# Chercher (touche 5) : 20 + 3 = 23, au-dessus de sa Discrétion (18).
+	_runner.simulate_key_pressed(KEY_5)
+	await _settle()
+	assert_bool(_state().is_hidden(_goblin())).is_false()
+	assert_bool(token.is_ghost).is_false()
+
+
+func test_clicking_the_ghost_attacks_blindly() -> void:
+	# Désavantage : 10 et 10, 15 contre CA 15 : touché. 2d6 + 3 deux fois
+	# (Savage Attacker), tout à 6 : 15 dégâts, le Gobelin meurt.
+	await _start(AMBUSHED_FIGHTER_FIRST + [10, 10, 6, 6, 6, 6])
+	var cell := _fighter().position + Vector2i(1, 0)
+	_place_goblin(cell)
+	_scene.call("_on_cell_clicked", cell)
+	await _settle()
+	assert_bool(_goblin().is_dead).is_true()
+	assert_bool(_state().is_over).is_true()
+
+
+func test_unconscious_player_turn_passes_with_a_death_save() -> void:
+	# Le Gobelin tire sur le Guerrier inconscient et rate (1), puis le
+	# troisième succès (10) stabilise le Guerrier : défaite.
+	await _start(FIGHTER_FIRST + [1, 10])
+	HitPoints.apply_damage(_state(), _fighter(), 12, DamageType.Type.SLASHING)
+	_fighter().death_save_successes = 2
+	_scene.call("_continue")
+	await _settle()
+	assert_bool(_fighter().is_stable).is_true()
+	assert_bool(_state().is_over).is_true()
+	assert_str((_scene.get_node("%ResultLabel") as Label).text).is_equal(Texts.DEFEAT)

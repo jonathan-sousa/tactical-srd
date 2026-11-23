@@ -3,13 +3,17 @@ class_name InitiativeEntry
 extends RefCounted
 
 var combatant: Combatant
+## Dé retenu.
 var d20: int
+## Jet complet, avec ses deux dés en cas d'avantage ou de désavantage.
+var roll: D20Roll
 var bonus: int
 var total: int
 
 
-func _init(p_combatant: Combatant, p_d20: int, p_bonus: int) -> void:
+func _init(p_combatant: Combatant, p_roll: D20Roll, p_bonus: int) -> void:
 	combatant = p_combatant
-	d20 = p_d20
+	roll = p_roll
+	d20 = p_roll.natural
 	bonus = p_bonus
-	total = p_d20 + p_bonus
+	total = d20 + p_bonus

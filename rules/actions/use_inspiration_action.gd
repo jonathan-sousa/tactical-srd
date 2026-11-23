@@ -1,4 +1,5 @@
-## Dépense l'Inspiration héroïque pour relancer le d20 d'une attaque ratée.
+## Dépense l'Inspiration héroïque pour relancer un d20 raté : celui d'une
+## attaque, ou celui d'un jet contre la mort.
 ##
 ## Avec avantage ou désavantage, le SRD ne permet de relancer qu'un des deux
 ## dés : on relance le plus bas, le seul qui peut améliorer le résultat.
@@ -10,10 +11,20 @@ func answers() -> Script:
 	return InspirationWindow
 
 
+# Le jet contre la mort se relance à 0 PV, inconscient.
+func usable_while_incapacitated() -> bool:
+	return true
+
+
 func _execute(state: CombatState, dice: Dice) -> Array[CombatEvent]:
 	var window := state.pending as InspirationWindow
 	state.pending = null
 	actor.heroic_inspiration = false
+	if window.result == null:
+		var natural := dice.roll_die(20)
+		var save_events: Array[CombatEvent] = [InspirationUsedEvent.new(actor, window.death_save, natural)]
+		save_events.append_array(HitPoints.resolve_death_save(state, actor, natural))
+		return save_events
 
 	var old := window.result.d20
 	var new_value := dice.roll_die(20)

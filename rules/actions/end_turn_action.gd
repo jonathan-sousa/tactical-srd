@@ -3,5 +3,9 @@ class_name EndTurnAction
 extends Action
 
 
-func _execute(state: CombatState, _dice: Dice) -> Array[CombatEvent]:
-	return state.advance_turn()
+func usable_while_incapacitated() -> bool:
+	return true
+
+
+func _execute(state: CombatState, dice: Dice) -> Array[CombatEvent]:
+	return state.advance_turn(dice)

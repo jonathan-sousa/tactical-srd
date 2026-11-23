@@ -15,7 +15,7 @@ signal combat_finished(winner: Combatant.Side)
 signal decision_answered(accepted: bool)
 
 ## Touches de la barre d'actions, dans l'ordre des boutons.
-const ACTION_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3, KEY_4]
+const ACTION_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6]
 ## Touches des armes, par position physique (les trois premières lettres de
 ## la rangée du haut : A Z E en AZERTY, Q W E en QWERTY).
 const WEAPON_KEYS: Array[Key] = [KEY_Q, KEY_W, KEY_E]
@@ -115,7 +115,7 @@ func _ready() -> void:
 	_board.setup(encounter)
 	for combatant in state.combatants:
 		var token := TokenView.new()
-		token.setup(combatant, _board.cell_center(combatant.position))
+		token.setup(combatant, combatant.position, _board.cell_center(combatant.position))
 		_tokens_root.add_child(token)
 		_tokens[combatant] = token
 
@@ -156,31 +156,48 @@ func _start_combat() -> void:
 	await _continue()
 
 
-## Après chaque action : fin de combat, tour de l'IA, ou main au joueur.
+## Après chaque action : fin de combat, tour de l'IA, tour d'un joueur
+## inconscient, ou main au joueur.
 func _continue() -> void:
 	_refresh()
 	if state.is_over:
 		_show_result()
 	elif state.active().side == Combatant.Side.ENEMY:
 		await _play_enemy_turn()
+	elif state.active() == _player and _player.is_down():
+		await _play_unconscious_turn()
 
 
+## L'IA choisit une action à la fois, jusqu'à finir son tour.
 func _play_enemy_turn() -> void:
 	_busy = true
 	_refresh()
 	_hint_label.text = Texts.ENEMY_TURN
-	for action in EnemyAI.plan_turn(state, state.active()):
+	var actor := state.active()
+	for i in EnemyAI.MAX_ACTIONS_PER_TURN:
+		if state.is_over or state.active() != actor:
+			break
 		await _wait(enemy_action_delay)
-		if not action.validate(state).is_empty():
-			push_warning("IA : action refusée (%s)." % action.validate(state))
-			continue
+		var action := EnemyAI.next_action(state, actor)
+		var reason := action.validate(state)
+		if not reason.is_empty():
+			push_error("IA : action refusée (%s), fin du tour." % reason)
+			action = EndTurnAction.new(actor)
 		await _play(action.execute(state, dice))
 		await _resolve_decisions()
-		if state.is_over:
-			break
 	_busy = false
 	_hint_label.text = ""
 	await _continue()
+
+
+## Inconscient, le joueur ne peut rien faire : son jet contre la mort a
+## déjà eu lieu au début du tour, qui se termine tout seul.
+func _play_unconscious_turn() -> void:
+	_busy = true
+	_hint_label.text = Texts.UNCONSCIOUS_TURN
+	await _wait(enemy_action_delay)
+	_busy = false
+	await _perform(EndTurnAction.new(_player))
 
 
 ## Tant qu'une décision est en attente : le joueur choisit si elle le
@@ -202,8 +219,10 @@ func _resolve_decisions() -> void:
 ## l'action qui traduit sa réponse.
 func _ask_player(decision: PendingDecision) -> Action:
 	if decision is InspirationWindow:
-		var result := (decision as InspirationWindow).result
-		if await _ask(Texts.inspiration_prompt(result)):
+		var window := decision as InspirationWindow
+		var question := Texts.death_save_inspiration_prompt(window.death_save) if window.result == null \
+			else Texts.inspiration_prompt(window.result)
+		if await _ask(question):
 			return UseInspirationAction.new(_player)
 		return DeclineInspirationAction.new(_player)
 	var mover := (decision as ReactionWindow).mover
@@ -276,6 +295,13 @@ func _register_event_handlers() -> void:
 		EffectAppliedEvent: _on_effect_applied,
 		HealedEvent: _on_healed,
 		InspirationUsedEvent: _on_inspiration_used,
+		HideAttemptedEvent: _on_hide_attempted,
+		RevealedEvent: _on_revealed,
+		SearchedEvent: _on_searched,
+		AttackedEmptyCellEvent: _on_attacked_empty_cell,
+		DeathSaveEvent: _on_death_save,
+		CombatantStabilizedEvent: _on_combatant_stabilized,
+		CombatantDiedEvent: _on_combatant_died,
 	}
 
 
@@ -292,11 +318,17 @@ func _on_turn_started(event: TurnStartedEvent) -> void:
 
 
 func _on_moved(event: MovedEvent) -> void:
+	# Un ennemi caché se déplace sans être vu : son pion reste à sa
+	# dernière position connue.
+	if event.unseen and event.combatant.side != _player.side:
+		return
 	_log.add_line(Texts.move_line(event))
 	var points: Array[Vector2] = []
 	for cell in event.path:
 		points.append(_board.cell_center(cell))
-	await _tokens[event.combatant].move_along(points)
+	var token := _tokens[event.combatant]
+	token.cell = event.path.back()
+	await token.move_along(points)
 
 
 func _on_attack_rolled(event: AttackRolledEvent) -> void:
@@ -332,7 +364,58 @@ func _on_inspiration_used(event: InspirationUsedEvent) -> void:
 
 func _on_combatant_downed(event: CombatantDownedEvent) -> void:
 	_log.add_line(Texts.downed_line(event.combatant), LOG_DOWN_COLOR)
+	_tokens[event.combatant].is_ghost = false
 	await _tokens[event.combatant].fall()
+	_refresh()
+
+
+func _on_combatant_died(event: CombatantDiedEvent) -> void:
+	_log.add_line(Texts.died_line(event), LOG_DOWN_COLOR)
+	_tokens[event.combatant].is_ghost = false
+	await _tokens[event.combatant].die()
+	_refresh()
+
+
+func _on_combatant_stabilized(event: CombatantStabilizedEvent) -> void:
+	_log.add_line(Texts.stabilized_line(event), LOG_MUTED_COLOR)
+	_refresh()
+
+
+func _on_death_save(event: DeathSaveEvent) -> void:
+	var revived := event.revived
+	_log.add_line(Texts.death_save_line(event), LOG_HEAL_COLOR if revived else LOG_DOWN_COLOR)
+	if revived:
+		await _tokens[event.combatant].rise()
+	_tokens[event.combatant].refresh()
+	_refresh()
+
+
+func _on_hide_attempted(event: HideAttemptedEvent) -> void:
+	_log.add_line(Texts.hide_line(event), LOG_MUTED_COLOR)
+	if event.success:
+		_tokens[event.combatant].is_ghost = true
+	_refresh()
+
+
+## Révélé : le pion quitte sa dernière position connue pour sa vraie case.
+func _on_revealed(event: RevealedEvent) -> void:
+	_log.add_line(Texts.revealed_line(event), LOG_TURN_COLOR)
+	var token := _tokens[event.combatant]
+	token.cell = event.cell
+	token.position = _board.cell_center(event.cell)
+	token.is_ghost = false
+	_refresh()
+
+
+func _on_searched(event: SearchedEvent) -> void:
+	_log.add_line(Texts.search_line(event))
+	_refresh()
+
+
+func _on_attacked_empty_cell(event: AttackedEmptyCellEvent) -> void:
+	_log.add_line(Texts.empty_cell_attack_line(event))
+	await _tokens[event.attacker].lunge(_board.cell_center(event.cell))
+	_refresh()
 
 
 func _on_action_taken(event: ActionTakenEvent) -> void:
@@ -368,11 +451,33 @@ func _is_player_turn() -> bool:
 func _on_cell_clicked(cell: Vector2i) -> void:
 	if not _is_player_turn():
 		return
-	var target := state.combatant_at(cell)
-	if target == null:
-		_perform(MoveAction.new(_player, cell))
-	elif target != _player:
-		_perform(AttackAction.new(_player, target, _weapon))
+	var action := _action_for_cell(cell)
+	if action != null:
+		_perform(action)
+
+
+## Ce que fait un clic sur une case, d'après ce que le joueur voit :
+## attaquer l'ennemi affiché, attaquer à l'aveugle la dernière position
+## connue d'un ennemi caché (ou toute case avec Maj), sinon s'y déplacer.
+func _action_for_cell(cell: Vector2i) -> Action:
+	if cell == _player.position:
+		return null
+	var shown := _enemy_token_at(cell)
+	if shown != null and not state.is_hidden_from(shown, _player):
+		return AttackAction.new(_player, shown, _weapon)
+	var hidden_enemy := not state.hidden_enemies_of(_player).is_empty()
+	if shown != null or (hidden_enemy and Input.is_key_pressed(KEY_SHIFT)):
+		return AttackAction.at_cell(_player, cell, _weapon)
+	return MoveAction.new(_player, cell)
+
+
+## Ennemi vivant dont le pion est affiché sur cette case (éventuellement à
+## sa dernière position connue, s'il est caché), ou `null`.
+func _enemy_token_at(cell: Vector2i) -> Combatant:
+	for combatant: Combatant in _tokens:
+		if combatant.side != _player.side and not combatant.is_dead and _tokens[combatant].cell == cell:
+			return combatant
+	return null
 
 
 func _on_cell_hovered(cell: Vector2i) -> void:
@@ -383,20 +488,25 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 	if cell == BoardView.NO_CELL or cell == _player.position:
 		return
 
-	var target := state.combatant_at(cell)
-	if target != null:
-		var attack := AttackAction.new(_player, target, _weapon)
-		var reason := attack.validate(state)
-		_hint_label.text = Texts.reason(reason) if not reason.is_empty() else _attack_hint(attack)
+	var action := _action_for_cell(cell)
+	var reason := action.validate(state)
+	if action is AttackAction:
+		var attack := action as AttackAction
+		if not reason.is_empty():
+			_hint_label.text = Texts.reason(reason)
+		elif attack.is_blind():
+			_hint_label.text = Texts.blind_attack_hint(attack.weapon)
+		else:
+			_hint_label.text = _attack_hint(attack)
 		return
 
-	var move := MoveAction.new(_player, cell)
-	var reason := move.validate(state)
 	if reason.is_empty():
 		_board.path_preview = state.find_path(_player, cell)
 		_hint_label.text = Texts.move_hint(_board.path_preview.size())
 	else:
 		_hint_label.text = Texts.reason(reason)
+	if not state.hidden_enemies_of(_player).is_empty():
+		_hint_label.text += "\n" + Texts.BLIND_ATTACK_SHIFT_HINT
 
 
 ## Aide au survol d'un ennemi : arme, bonus, dégâts, et raisons
@@ -429,13 +539,15 @@ func _build_weapon_bar() -> void:
 		_weapon_buttons[weapon] = button
 
 
-## Barre d'actions : Foncer, Se désengager, Esquiver, puis Second Wind si le
-## personnage l'a. Chaque bouton a sa touche (1 à 4).
+## Barre d'actions : Foncer, Se désengager, Esquiver, Second Wind si le
+## personnage l'a, Chercher et Se relever. Chaque bouton a sa touche (1 à 6).
 func _build_action_bar() -> void:
 	for kind in StandardAction.ALL:
 		_action_factories[kind] = func() -> Action: return StandardAction.new(_player, kind)
 	if _player.definition.second_wind_uses > 0:
 		_action_factories[Texts.SECOND_WIND_ID] = func() -> Action: return SecondWindAction.new(_player)
+	_action_factories[SearchAction.ID] = func() -> Action: return SearchAction.new(_player)
+	_action_factories[StandUpAction.ID] = func() -> Action: return StandUpAction.new(_player)
 	var i := 0
 	for id: StringName in _action_factories:
 		var button := _make_bar_button()
@@ -513,8 +625,10 @@ func _refresh() -> void:
 	var attackable: Array[Vector2i] = []
 	if player_turn:
 		for enemy in state.living_enemies_of(_player):
-			if AttackAction.new(_player, enemy, _weapon).validate(state).is_empty():
-				attackable.append(enemy.position)
+			var cell := _tokens[enemy].cell
+			var action := _action_for_cell(cell)
+			if action is AttackAction and action.validate(state).is_empty():
+				attackable.append(cell)
 	_board.attackable = attackable
 
 	# Barre d'actions : grisée si l'action est impossible, avec la raison.

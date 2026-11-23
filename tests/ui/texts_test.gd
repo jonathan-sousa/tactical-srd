@@ -47,15 +47,19 @@ func test_every_standard_action_and_effect_has_texts() -> void:
 		assert_bool(Texts.ACTION_NAMES.has(kind)).is_true()
 		assert_bool(Texts.ACTION_DESCRIPTIONS.has(kind)).is_true()
 		assert_bool(Texts.ACTION_LOG.has(kind)).is_true()
-	for id: StringName in [Effect.DODGING, Effect.DISENGAGED, Effect.SAPPED, Effect.SLOWED]:
+	for id: StringName in [Effect.DODGING, Effect.DISENGAGED, Effect.SAPPED, Effect.SLOWED, Effect.HIDDEN, Effect.PRONE]:
 		assert_bool(Texts.EFFECT_NAMES.has(id)).is_true()
 		assert_bool(Texts.EFFECT_APPLIED_LOG.has(id)).is_true()
 		assert_bool(Texts.EFFECT_ENDED_LOG.has(id)).is_true()
-	for code: StringName in [
-		AdvantageResolver.TARGET_DODGING, AdvantageResolver.ATTACKER_SAPPED,
-		AdvantageResolver.LONG_RANGE, AdvantageResolver.HOSTILE_NEARBY,
-	]:
-		assert_bool(Texts.ADVANTAGE_REASONS.has(code)).is_true()
+	for constant: String in (AdvantageResolver as Script).get_script_constant_map():
+		var code: StringName = (AdvantageResolver as Script).get_script_constant_map()[constant]
+		assert_bool(Texts.ADVANTAGE_REASONS.has(code)).override_failure_message("Raison d'avantage sans texte : %s" % code).is_true()
+	for constant: String in (CombatantDiedEvent as Script).get_script_constant_map():
+		var cause: StringName = (CombatantDiedEvent as Script).get_script_constant_map()[constant]
+		assert_bool(Texts.DEATH_CAUSES.has(cause)).override_failure_message("Cause de mort sans texte : %s" % cause).is_true()
+	for id: StringName in [SearchAction.ID, StandUpAction.ID, HideAction.ID]:
+		assert_bool(Texts.ACTION_NAMES.has(id)).is_true()
+		assert_bool(Texts.ACTION_DESCRIPTIONS.has(id)).is_true()
 	for mastery: StringName in [WeaponDef.GRAZE, WeaponDef.SAP, WeaponDef.SLOW, WeaponDef.NICK, WeaponDef.VEX]:
 		assert_bool(Texts.MASTERY_DESCRIPTIONS.has(mastery)).is_true()
 
@@ -97,3 +101,47 @@ func test_thrown_javelin_line() -> void:
 func test_every_damage_type_has_a_label() -> void:
 	for type: int in DamageType.Type.values():
 		assert_bool(Texts.DAMAGE_TYPES.has(type)).is_true()
+
+
+func test_goblin_advantage_die_is_shown() -> void:
+	var goblin := Combatant.new(Fixtures.full_goblin(), Combatant.Side.ENEMY)
+	var fighter := Combatant.new(Fixtures.fighter(), Combatant.Side.PLAYER)
+	var result := AttackResolver.resolve(goblin, fighter, Fixtures.scimitar(), FixedDice.new([7, 15, 3, 2]), Dice.RollMode.ADVANTAGE)
+	assert_str(Texts.attack_line(result)).contains("7 dégâts tranchants (1d6+2 : 3 + 2 ; avec l'avantage, 1d4 : 2)")
+
+
+func test_automatic_critical_on_an_unconscious_target_is_explained() -> void:
+	var goblin := Combatant.new(Fixtures.goblin(), Combatant.Side.ENEMY)
+	var fighter := Combatant.new(Fixtures.fighter(), Combatant.Side.PLAYER)
+	var result := AttackResolver.roll_attack(goblin, fighter, Fixtures.scimitar(), FixedDice.new([12]), Dice.RollMode.NORMAL, true)
+	AttackResolver.roll_damage(result, FixedDice.new([1, 1]))
+	assert_str(Texts.attack_line(result)).contains("coup critique (cible inconsciente au contact)")
+
+
+func test_death_save_lines() -> void:
+	var fighter := Combatant.new(Fixtures.fighter(), Combatant.Side.PLAYER)
+	fighter.death_save_successes = 1
+	fighter.death_save_failures = 2
+	assert_str(Texts.death_save_line(DeathSaveEvent.new(fighter, 1))) \
+		.is_equal("Jet contre la mort de Guerrier : 1, 1 naturel, deux échecs (1 réussite, 2 échecs).")
+	assert_str(Texts.death_save_line(DeathSaveEvent.new(fighter, 0, true))) \
+		.is_equal("Guerrier est frappé à 0 PV : deux échecs (coup critique) aux jets contre la mort (1 réussite, 2 échecs).")
+	assert_str(Texts.death_saves_line(fighter)).is_equal("Jets contre la mort : 1 réussite, 2 échecs")
+
+
+func test_hide_line_keeps_the_successful_total_secret() -> void:
+	var goblin := Combatant.new(Fixtures.full_goblin(), Combatant.Side.ENEMY)
+	var hidden := Texts.hide_line(HideAttemptedEvent.new(goblin, 12, 6, true, true))
+	assert_str(hidden).is_equal("Gobelin guerrier se cache (Nimble Escape) : invisible tant qu'on ne l'a pas trouvé.")
+	assert_str(hidden).not_contains("18")
+	assert_str(Texts.hide_line(HideAttemptedEvent.new(goblin, 5, 6, false, false))) \
+		.is_equal("Gobelin guerrier tente de se cacher : Discrétion 5 + 6 = 11 contre DD 15, raté.")
+
+
+func test_initiative_line_explains_surprise() -> void:
+	var goblin := Combatant.new(Fixtures.goblin(), Combatant.Side.ENEMY)
+	var fighter := Combatant.new(Fixtures.fighter(), Combatant.Side.PLAYER)
+	var surprised := InitiativeEntry.new(fighter, D20Roll.new(Dice.RollMode.DISADVANTAGE, [15, 4], 4), 1)
+	var hidden := InitiativeEntry.new(goblin, D20Roll.new(Dice.RollMode.ADVANTAGE, [3, 12], 12), 2)
+	assert_str(Texts.initiative_line([hidden, surprised])) \
+		.is_equal("Initiative : Gobelin guerrier 14 (12 [3, 12 ; caché, avantage] + 2), Guerrier 5 (4 [15, 4 ; surpris, désavantage] + 1).")

@@ -60,3 +60,12 @@ func _reachable_from(start: Vector2i) -> Dictionary[Vector2i, bool]:
 				seen[next] = true
 				queue.append(next)
 	return seen
+
+
+func test_goblin_ambush_starts_hidden_behind_the_rock() -> void:
+	# Embuscade : au départ, le rocher cache le Gobelin du Guerrier, il peut
+	# donc tenter de se cacher (Surprise).
+	var encounter := DataRegistry.load_from().encounter(&"goblin_ambush")
+	assert_bool(encounter.ambush).is_true()
+	var line_of_sight := LineOfSight.new(encounter.blocked_cells)
+	assert_bool(line_of_sight.is_clear(encounter.player_start, encounter.enemies[0].cell)).is_false()

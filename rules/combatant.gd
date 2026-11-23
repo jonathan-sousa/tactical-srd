@@ -23,6 +23,14 @@ var quantities: Dictionary[StringName, int] = {}
 ## Numéro du dernier tour où Savage Attacker a servi (une fois par tour).
 var savage_attacker_turn: int = -1
 
+# À 0 PV (SRD « Dropping to 0 Hit Points ») : un monstre meurt aussitôt, un
+# personnage perd connaissance et fait des jets contre la mort.
+var is_dead: bool = false
+## Stabilisé : à 0 PV, inconscient, mais sans jet contre la mort à faire.
+var is_stable: bool = false
+var death_save_successes: int = 0
+var death_save_failures: int = 0
+
 
 func _init(p_definition: CharacterDef, p_side: Combatant.Side, p_position: Vector2i = Vector2i.ZERO) -> void:
 	definition = p_definition
@@ -34,8 +42,15 @@ func _init(p_definition: CharacterDef, p_side: Combatant.Side, p_position: Vecto
 	quantities.assign(p_definition.weapon_quantities)
 
 
+## Hors de combat : mort, ou à 0 PV et inconscient (condition
+## Unconscious : Incapacitated, à terre, vitesse 0).
 func is_down() -> bool:
-	return hp <= 0
+	return hp <= 0 or is_dead
+
+
+## À 0 PV, vivant et pas stabilisé : jets contre la mort à chaque tour.
+func is_dying() -> bool:
+	return hp <= 0 and not is_dead and not is_stable
 
 
 func armor_class() -> int:
@@ -62,11 +77,23 @@ func take_damage(amount: int) -> int:
 
 
 ## Rend des PV sans dépasser le maximum. Renvoie les PV réellement rendus.
+## Regagner des PV à 0 PV fait reprendre connaissance : les jets contre la
+## mort repartent de zéro. Un mort ne regagne rien.
 func heal(amount: int) -> int:
 	assert(amount >= 0, "Des soins ne peuvent pas être négatifs.")
+	if is_dead:
+		return 0
 	var gained := mini(amount, definition.max_hp - hp)
 	hp += gained
+	if gained > 0:
+		reset_death_saves()
+		is_stable = false
 	return gained
+
+
+func reset_death_saves() -> void:
+	death_save_successes = 0
+	death_save_failures = 0
 
 
 ## Exemplaires restants de cette arme (1 pour une arme qui ne s'épuise pas).

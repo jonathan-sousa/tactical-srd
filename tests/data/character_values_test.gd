@@ -56,6 +56,29 @@ func test_goblin_matches_srd() -> void:
 	assert_int(goblin.proficiency_bonus).is_equal(2)
 
 
+func test_goblin_has_its_full_stat_block() -> void:
+	var goblin := _registry.character(&"goblin_warrior")
+	var weapon_ids: Array[StringName] = []
+	for weapon in goblin.weapons:
+		weapon_ids.append(weapon.id)
+	assert_array(weapon_ids).contains_exactly([&"scimitar", &"shortbow"])
+	# Discrétion +6, Perception passive 9 (10 + SAG − 1).
+	assert_int(goblin.skill_bonus(CharacterDef.STEALTH)).is_equal(6)
+	assert_int(10 + goblin.skill_bonus(CharacterDef.PERCEPTION)).is_equal(9)
+	assert_array(goblin.traits).contains_exactly([CharacterDef.NIMBLE_ESCAPE])
+	assert_str(goblin.advantage_damage_dice).is_equal("1d4")
+	assert_bool(goblin.is_monster).is_true()
+	# Les monstres n'ont pas de maîtrise d'arme.
+	assert_array(goblin.weapon_masteries).is_empty()
+
+
+func test_fighter_is_proficient_in_perception() -> void:
+	var fighter := _registry.character(&"fighter_lvl1")
+	# SAG + 1, maîtrise + 2 (compétence choisie au niveau 1 de Guerrier).
+	assert_int(fighter.skill_bonus(CharacterDef.PERCEPTION)).is_equal(3)
+	assert_bool(fighter.is_monster).is_false()
+
+
 func test_weapons_match_srd() -> void:
 	var greatsword := _registry.weapon(&"greatsword")
 	assert_str(greatsword.damage_dice).is_equal("2d6")
@@ -79,6 +102,16 @@ func test_weapons_match_srd() -> void:
 	assert_int(javelin.range_long_feet).is_equal(120)
 	assert_str(javelin.mastery).is_equal(WeaponDef.SLOW)
 
+	var shortbow := _registry.weapon(&"shortbow")
+	assert_int(shortbow.kind).is_equal(WeaponDef.Kind.RANGED)
+	assert_str(shortbow.damage_dice).is_equal("1d6")
+	assert_int(shortbow.damage_type).is_equal(DamageType.Type.PIERCING)
+	assert_int(shortbow.ability).is_equal(Abilities.Ability.DEXTERITY)
+	assert_int(shortbow.range_normal_feet).is_equal(80)
+	assert_int(shortbow.range_long_feet).is_equal(320)
+	assert_array(shortbow.properties).contains_exactly_in_any_order([WeaponDef.AMMUNITION, WeaponDef.TWO_HANDED])
+	assert_str(shortbow.mastery).is_equal(WeaponDef.VEX)
+
 	var scimitar := _registry.weapon(&"scimitar")
 	assert_str(scimitar.damage_dice).is_equal("1d6")
 	assert_int(scimitar.damage_type).is_equal(DamageType.Type.SLASHING)
@@ -94,10 +127,13 @@ func test_attack_bonuses_match_stat_blocks() -> void:
 	assert_int(fighter.damage_modifier(fighter.definition.weapons[0])).is_equal(3)
 	assert_int(goblin.attack_bonus(goblin.definition.weapons[0])).is_equal(4)
 	assert_int(goblin.damage_modifier(goblin.definition.weapons[0])).is_equal(2)
+	# Arc court +4, 1d6+2.
+	assert_int(goblin.attack_bonus(goblin.definition.weapons[1])).is_equal(4)
+	assert_int(goblin.damage_modifier(goblin.definition.weapons[1])).is_equal(2)
 
 
 func test_every_weapon_has_valid_damage_dice() -> void:
-	for id: StringName in [&"greatsword", &"flail", &"javelin", &"scimitar"]:
+	for id: StringName in [&"greatsword", &"flail", &"javelin", &"scimitar", &"shortbow"]:
 		assert_object(DiceExpression.parse(_registry.weapon(id).damage_dice)) \
 			.override_failure_message("Dés invalides pour %s" % id) \
 			.is_not_null()
