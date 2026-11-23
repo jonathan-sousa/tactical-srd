@@ -5,6 +5,7 @@ class_name Texts
 extends RefCounted
 
 const END_TURN := "Fin de tour"
+const END_TURN_WITH_KEY := "Fin de tour (Espace)"
 const HIT_POINTS := "PV"
 const ARMOR_CLASS := "CA"
 const MOVEMENT := "Déplacement"
@@ -94,6 +95,17 @@ static func damage_type(type: DamageType.Type) -> String:
 
 static func squares(count: int) -> String:
 	return "%d case%s" % [count, "" if count <= 1 else "s"]
+
+
+## Aide au survol d'une case libre : « Déplacement : 3 cases ».
+static func move_hint(square_count: int) -> String:
+	return "%s : %s" % [MOVEMENT, squares(square_count)]
+
+
+## Aide au survol d'un ennemi : « Attaquer Gobelin guerrier : Épée à deux
+## mains, + 5 2d6+3 ».
+static func attack_hint(target: Combatant, weapon: WeaponDef, attack_bonus: int, damage: DiceExpression) -> String:
+	return "Attaquer %s : %s, %s %s" % [target.definition.display_name, weapon.display_name, signed(attack_bonus), damage]
 
 
 # --- Journal de combat ---------------------------------------------------------

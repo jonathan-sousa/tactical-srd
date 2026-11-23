@@ -38,7 +38,7 @@ static func plan_turn(state: CombatState, actor: Combatant) -> Array[Action]:
 	if path.size() <= state.movement_left:
 		plan.append(MoveAction.new(actor, path.back()))
 		plan.append(attack)
-	else:
+	elif state.movement_left > 0:
 		# Trop loin : on avance au maximum le long du chemin.
 		plan.append(MoveAction.new(actor, path[state.movement_left - 1]))
 	plan.append(end_turn)

@@ -16,10 +16,3 @@ extends Resource
 @export var player_start: Vector2i
 @export var enemies: Array[EnemyPlacement] = []
 
-
-func is_inside(cell: Vector2i) -> bool:
-	return cell.x >= 0 and cell.y >= 0 and cell.x < grid_size.x and cell.y < grid_size.y
-
-
-func is_blocked(cell: Vector2i) -> bool:
-	return blocked_cells.has(cell)

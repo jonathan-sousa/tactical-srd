@@ -1,0 +1,53 @@
+# Intégration continue : à chaque push et pull request, on télécharge Godot,
+# on lance toute la suite gdUnit4, puis on vérifie que le jeu démarre sans
+# erreur ni avertissement (mêmes vérifications qu'AGENTS.md, en local).
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache de Godot
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Téléchargement de Godot ${{ env.GODOT_VERSION }}
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot
+          curl -fsSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+
+      - name: Tests gdUnit4
+        run: GODOT_BIN="$HOME/godot/godot" scripts/test.sh
+
+      - name: Démarrage sans erreur ni avertissement
+        run: |
+          "$HOME/godot/godot" --headless --path . --quit-after 30 2>&1 | tee startup.log
+          if grep -E "ERROR|WARNING" startup.log; then
+            echo "::error::Le jeu affiche des erreurs ou des avertissements au démarrage."
+            exit 1
+          fi
+
+      - name: Rapports de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-gdunit4
+          path: reports/
+          if-no-files-found: ignore
