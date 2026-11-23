@@ -13,10 +13,21 @@ func before_test() -> void:
 	_game.setup(DataRegistry.load_from())
 
 
+## Le Guerrier à la fin d'un combat gagné.
+func _survivor(hp: int, second_wind_uses: int = 2, inspiration: bool = true) -> Combatant:
+	var fighter := Combatant.new(_game.player_definition(), Combatant.Side.PLAYER)
+	fighter.hp = hp
+	fighter.second_wind_uses = second_wind_uses
+	fighter.heroic_inspiration = inspiration
+	return fighter
+
+
 func test_new_game_starts_at_first_step_with_full_hp() -> void:
 	_game.new_game()
 	assert_str(_game.current_step_id).is_equal("intro")
 	assert_int(_game.player_hp).is_equal(12)
+	assert_int(_game.player_second_wind_uses).is_equal(2)
+	assert_bool(_game.player_heroic_inspiration).is_true()
 	assert_bool(_game.story_completed).is_false()
 	assert_bool(_game.has_game()).is_true()
 
@@ -44,15 +55,18 @@ func test_defeat_without_defeat_step_shows_defeat_screen_and_stays() -> void:
 func test_victory_keeps_remaining_hp() -> void:
 	_game.new_game()
 	_game.complete_step(GameStateScript.Outcome.DONE)
-	assert_int(_game.complete_step(GameStateScript.Outcome.VICTORY, 7)).is_equal(GameStateScript.Next.STEP)
+	assert_int(_game.complete_step(GameStateScript.Outcome.VICTORY, _survivor(7, 1, false))).is_equal(GameStateScript.Next.STEP)
 	assert_str(_game.current_step_id).is_equal("victory")
 	assert_int(_game.player_hp).is_equal(7)
+	# Pas de repos : les ressources dépensées le restent.
+	assert_int(_game.player_second_wind_uses).is_equal(1)
+	assert_bool(_game.player_heroic_inspiration).is_false()
 
 
 func test_last_step_ends_the_story() -> void:
 	_game.new_game()
 	_game.complete_step(GameStateScript.Outcome.DONE)
-	_game.complete_step(GameStateScript.Outcome.VICTORY, 7)
+	_game.complete_step(GameStateScript.Outcome.VICTORY, _survivor(7))
 	assert_int(_game.complete_step(GameStateScript.Outcome.DONE)).is_equal(GameStateScript.Next.END)
 	assert_bool(_game.story_completed).is_true()
 	assert_str(_game.current_step_id).is_empty()

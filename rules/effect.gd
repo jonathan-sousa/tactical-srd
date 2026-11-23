@@ -17,6 +17,12 @@ const DODGING := &"dodging"
 ## Action Se désengager : ses déplacements ne provoquent pas d'attaque
 ## d'opportunité pour le reste du tour.
 const DISENGAGED := &"disengaged"
+## Maîtrise Sap : désavantage à sa prochaine attaque, avant le début du
+## prochain tour de celui qui l'a touché.
+const SAPPED := &"sapped"
+## Maîtrise Slow : vitesse réduite de 10 ft jusqu'au début du prochain tour
+## de celui qui l'a touché. Ne se cumule pas.
+const SLOWED := &"slowed"
 
 enum Expiry {
 	## Au début du prochain tour de `source`.

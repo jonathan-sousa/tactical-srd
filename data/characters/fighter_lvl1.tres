@@ -3,6 +3,8 @@
 [ext_resource type="Script" path="res://data/defs/character_def.gd" id="1_w10rj"]
 [ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="2_2nt1t"]
 [ext_resource type="Resource" path="res://data/weapons/greatsword.tres" id="3_r0ivs"]
+[ext_resource type="Resource" path="res://data/weapons/flail.tres" id="4_flail"]
+[ext_resource type="Resource" path="res://data/weapons/javelin.tres" id="5_javel"]
 
 [resource]
 script = ExtResource("1_w10rj")
@@ -16,4 +18,14 @@ wisdom = 12
 max_hp = 12
 armor_class = 16
 initiative_bonus = 1
-weapons = Array[ExtResource("2_2nt1t")]([ExtResource("3_r0ivs")])
+weapons = Array[ExtResource("2_2nt1t")]([ExtResource("3_r0ivs"), ExtResource("4_flail"), ExtResource("5_javel")])
+weapon_quantities = Dictionary[StringName, int]({
+&"javelin": 8
+})
+species = "Humain"
+background = "Soldat"
+fighting_style = &"great_weapon_fighting"
+feats = Array[StringName]([&"savage_attacker"])
+weapon_masteries = Array[StringName]([&"greatsword", &"flail", &"javelin"])
+second_wind_uses = 2
+heroic_inspiration = true

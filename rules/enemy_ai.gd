@@ -45,10 +45,16 @@ static func plan_turn(state: CombatState, actor: Combatant) -> Array[Action]:
 	return plan
 
 
-## Réaction de l'IA quand une fenêtre de réaction lui est ouverte : elle
-## saisit toujours l'occasion d'une attaque d'opportunité.
-static func react(state: CombatState) -> Action:
-	return OpportunityAttackAction.new(state.reaction_window.reactor)
+## Réponse de l'IA à une décision en attente : elle saisit toujours
+## l'occasion d'une attaque d'opportunité et relance toujours un jet raté.
+static func decide(state: CombatState) -> Action:
+	var decision := state.pending
+	if decision is ReactionWindow:
+		return OpportunityAttackAction.new(decision.decider)
+	if decision is InspirationWindow:
+		return UseInspirationAction.new(decision.decider)
+	push_error("IA : décision inconnue.")
+	return null
 
 
 ## Ennemi debout le plus proche à vol d'oiseau (en cases).

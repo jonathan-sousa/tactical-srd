@@ -19,9 +19,15 @@ const TARGET_NOT_ENEMY := &"target_not_enemy"
 const TARGET_DOWN := &"target_down"
 const TARGET_OUT_OF_REACH := &"target_out_of_reach"
 const NO_WEAPON := &"no_weapon"
-const REACTION_PENDING := &"reaction_pending"
-const NO_REACTION_PENDING := &"no_reaction_pending"
-const NOT_YOUR_REACTION := &"not_your_reaction"
+const TARGET_OUT_OF_RANGE := &"target_out_of_range"
+const TARGET_NOT_VISIBLE := &"target_not_visible"
+const NO_AMMUNITION := &"no_ammunition"
+const BONUS_ACTION_ALREADY_USED := &"bonus_action_already_used"
+const NO_USES_LEFT := &"no_uses_left"
+const FEATURE_UNAVAILABLE := &"feature_unavailable"
+const DECISION_PENDING := &"decision_pending"
+const NO_DECISION_PENDING := &"no_decision_pending"
+const NOT_YOUR_DECISION := &"not_your_decision"
 
 var actor: Combatant
 
@@ -32,28 +38,31 @@ func _init(p_actor: Combatant) -> void:
 
 ## Renvoie un code de raison si l'action est impossible, une chaîne vide sinon.
 ##
-## Pendant une fenêtre de réaction, seules les actions de réaction du
-## combattant sollicité sont possibles ; en dehors, seules les autres, et
-## seulement pour le combattant dont c'est le tour.
+## Pendant une décision en attente (CombatState.pending), seules les
+## actions qui y répondent sont possibles, et seulement pour le combattant
+## qui doit décider. Sinon, seules les autres, pour le combattant dont
+## c'est le tour.
 func validate(state: CombatState) -> StringName:
 	if state.is_over:
 		return COMBAT_OVER
-	var window := state.reaction_window
-	if window != null:
-		if not is_reaction():
-			return REACTION_PENDING
-		if window.reactor != actor:
-			return NOT_YOUR_REACTION
-	elif is_reaction():
-		return NO_REACTION_PENDING
+	var decision := state.pending
+	var answered := answers()
+	if decision != null:
+		if answered == null or decision.get_script() != answered:
+			return DECISION_PENDING
+		if decision.decider != actor:
+			return NOT_YOUR_DECISION
+	elif answered != null:
+		return NO_DECISION_PENDING
 	elif state.active() != actor:
 		return NOT_YOUR_TURN
 	return _validate(state)
 
 
-## Vrai pour les actions qui répondent à une fenêtre de réaction.
-func is_reaction() -> bool:
-	return false
+## Type de décision en attente (sous-classe de PendingDecision) à laquelle
+## cette action répond, ou `null` pour une action ordinaire.
+func answers() -> Script:
+	return null
 
 
 ## Applique l'action. À n'appeler qu'après un `validate` vide.

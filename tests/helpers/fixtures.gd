@@ -11,6 +11,31 @@ static func greatsword() -> WeaponDef:
 	weapon.damage_dice = "2d6"
 	weapon.damage_type = DamageType.Type.SLASHING
 	weapon.ability = Abilities.Ability.STRENGTH
+	weapon.properties = [WeaponDef.HEAVY, WeaponDef.TWO_HANDED]
+	weapon.mastery = WeaponDef.GRAZE
+	return weapon
+
+
+static func flail() -> WeaponDef:
+	var weapon := WeaponDef.new()
+	weapon.id = &"flail"
+	weapon.display_name = "Fléau"
+	weapon.damage_dice = "1d8"
+	weapon.damage_type = DamageType.Type.BLUDGEONING
+	weapon.mastery = WeaponDef.SAP
+	return weapon
+
+
+static func javelin() -> WeaponDef:
+	var weapon := WeaponDef.new()
+	weapon.id = &"javelin"
+	weapon.display_name = "Javelot"
+	weapon.damage_dice = "1d6"
+	weapon.damage_type = DamageType.Type.PIERCING
+	weapon.range_normal_feet = 30
+	weapon.range_long_feet = 120
+	weapon.properties = [WeaponDef.THROWN]
+	weapon.mastery = WeaponDef.SLOW
 	return weapon
 
 
@@ -21,6 +46,8 @@ static func scimitar() -> WeaponDef:
 	weapon.damage_dice = "1d6"
 	weapon.damage_type = DamageType.Type.SLASHING
 	weapon.ability = Abilities.Ability.DEXTERITY
+	weapon.properties = [WeaponDef.FINESSE, WeaponDef.LIGHT]
+	weapon.mastery = WeaponDef.NICK
 	return weapon
 
 
@@ -59,6 +86,23 @@ static func goblin() -> CharacterDef:
 	def.proficiency_bonus = 2
 	def.initiative_bonus = 2
 	def.weapons = [scimitar()]
+	return def
+
+
+## Guerrier complet du sprint 2, conforme à data/characters/fighter_lvl1.tres :
+## trois armes, Great Weapon Fighting, Savage Attacker, maîtrises, Second
+## Wind et Inspiration héroïque. Les tests retirent ce qu'ils n'utilisent pas.
+static func full_fighter() -> CharacterDef:
+	var def := fighter()
+	def.weapons = [greatsword(), flail(), javelin()]
+	def.weapon_quantities = {&"javelin": 8}
+	def.species = "Humain"
+	def.background = "Soldat"
+	def.fighting_style = CharacterDef.GREAT_WEAPON_FIGHTING
+	def.feats = [CharacterDef.SAVAGE_ATTACKER]
+	def.weapon_masteries = [&"greatsword", &"flail", &"javelin"]
+	def.second_wind_uses = 2
+	def.heroic_inspiration = true
 	return def
 
 

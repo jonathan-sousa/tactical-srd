@@ -118,7 +118,7 @@ func test_only_one_attack_per_turn_but_can_still_move() -> void:
 	# le Gobelin, donc le chemin passe par (4,1).
 	_run(MoveAction.new(_fighter, Vector2i(5, 1)))
 	assert_int(_state.movement_left).is_equal(0)
-	assert_object(_state.reaction_window).is_null()
+	assert_object(_state.pending).is_null()
 
 
 func test_cannot_attack_an_ally_or_itself() -> void:

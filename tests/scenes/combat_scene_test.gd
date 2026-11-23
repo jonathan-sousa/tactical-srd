@@ -52,7 +52,7 @@ func _fixed_dice(values: Array) -> Dice:
 
 
 func _reaction_panel() -> Control:
-	return _scene.get_node("%ReactionPanel")
+	return _scene.get_node("%DecisionPanel")
 
 
 func _state() -> CombatState:
@@ -126,8 +126,9 @@ func test_refused_click_explains_why() -> void:
 
 
 func test_standalone_victory_shows_result_panel() -> void:
-	# Coup critique (20 naturel) puis 4d6 à 6 : 27 dégâts, le Gobelin tombe.
-	await _start(FIGHTER_FIRST + [20, 6, 6, 6, 6])
+	# Coup critique (20 naturel) puis 4d6 à 6, deux fois (Savage Attacker) :
+	# 27 dégâts, le Gobelin tombe.
+	await _start(FIGHTER_FIRST + [20, 6, 6, 6, 6, 6, 6, 6, 6])
 	_put_goblin_next_to_fighter()
 	_scene.call("_on_cell_clicked", _goblin().position)
 	await _settle()
@@ -140,14 +141,19 @@ func test_standalone_victory_shows_result_panel() -> void:
 func test_story_victory_reports_remaining_hp_without_result_panel() -> void:
 	GameState.current_step_id = &"goblin_ambush"
 	GameState.player_hp = 7
+	GameState.player_second_wind_uses = 1
+	GameState.player_heroic_inspiration = false
 	var reported: Array = []
 	_scene = auto_free(load(COMBAT_SCENE).instantiate())
-	_scene.set("dice", _fixed_dice(FIGHTER_FIRST + [20, 6, 6, 6, 6]))
+	_scene.set("dice", _fixed_dice(FIGHTER_FIRST + [20, 6, 6, 6, 6, 6, 6, 6, 6]))
 	_scene.set("end_delay", 0.0)
-	_scene.set("on_story_end", func(outcome: int, hp: int) -> void: reported.append([outcome, hp]))
+	_scene.set("on_story_end", func(outcome: int, survivor: Combatant) -> void: reported.append([outcome, survivor.hp]))
 	_runner = scene_runner(_scene)
 	await _settle()
+	# Les PV et ressources restants de l'histoire sont repris.
 	assert_int(_fighter().hp).is_equal(7)
+	assert_int(_fighter().second_wind_uses).is_equal(1)
+	assert_bool(_fighter().heroic_inspiration).is_false()
 
 	_put_goblin_next_to_fighter()
 	_scene.call("_on_cell_clicked", _goblin().position)
@@ -196,9 +202,11 @@ func test_action_bar_key_makes_the_fighter_dodge() -> void:
 	await _settle()
 	assert_bool(_state().has_effect(_fighter(), Effect.DODGING)).is_true()
 	assert_bool(_state().action_used).is_true()
+	# Les actions sont grisées ; Second souffle (action bonus) reste possible.
 	var buttons: Dictionary = _scene.get("_action_buttons")
-	for kind: StringName in buttons:
+	for kind: StringName in StandardAction.ALL:
 		assert_bool((buttons[kind] as Button).disabled).is_true()
+	assert_bool((buttons[Texts.SECOND_WIND_ID] as Button).disabled).is_false()
 
 
 func test_goblin_reacts_when_the_fighter_walks_away() -> void:
@@ -223,24 +231,25 @@ func _goblin_walks_away_from_fighter(dice: Array) -> void:
 	# (3,5) : libre, et le premier pas sort déjà de l'allonge du Guerrier en (1,3).
 	var away := _goblin().position + Vector2i(1, 2)
 	MoveAction.new(_goblin(), away).execute(_state(), _scene.get("dice"))
-	assert_object(_state().reaction_window).is_not_null()
-	_scene.call("_resolve_reactions")
+	assert_object(_state().pending).is_not_null()
+	_scene.call("_resolve_decisions")
 	await _runner.simulate_frames(2)
 
 
 func test_player_is_asked_and_accepts_the_opportunity_attack() -> void:
-	# 15 + 5 = 20 contre CA 15, touché ; 2d6+3 avec 1 et 1 : 5 dégâts.
-	await _goblin_walks_away_from_fighter([15, 1, 1])
+	# 15 + 5 = 20 contre CA 15, touché ; 2d6+3 avec 1 et 1, relevés à 3 par
+	# Great Weapon Fighting, deux fois (Savage Attacker) : 9 dégâts.
+	await _goblin_walks_away_from_fighter([15, 1, 1, 1, 1])
 	assert_bool(_reaction_panel().visible).is_true()
-	var question: Label = _scene.get_node("%ReactionQuestionLabel")
+	var question: Label = _scene.get_node("%DecisionQuestionLabel")
 	assert_str(question.text).is_equal(Texts.reaction_prompt(_goblin()))
 
 	_runner.simulate_key_pressed(KEY_O)
 	await _runner.simulate_frames(40, 50)
 	assert_bool(_reaction_panel().visible).is_false()
-	assert_int(_goblin().hp).is_equal(5)
+	assert_int(_goblin().hp).is_equal(1)
 	assert_bool(_fighter().reaction_available).is_false()
-	assert_object(_state().reaction_window).is_null()
+	assert_object(_state().pending).is_null()
 
 
 func test_player_can_decline_the_opportunity_attack() -> void:
@@ -250,4 +259,44 @@ func test_player_can_decline_the_opportunity_attack() -> void:
 	assert_bool(_reaction_panel().visible).is_false()
 	assert_int(_goblin().hp).is_equal(10)
 	assert_bool(_fighter().reaction_available).is_true()
-	assert_object(_state().reaction_window).is_null()
+	assert_object(_state().pending).is_null()
+
+
+func test_second_wind_key_heals_the_fighter() -> void:
+	# 1d10 + 1 : 5 + 1 = 6 PV.
+	await _start(FIGHTER_FIRST + [5])
+	_fighter().hp = 4
+	_runner.simulate_key_pressed(KEY_4)
+	await _settle()
+	assert_int(_fighter().hp).is_equal(10)
+	assert_bool(_state().bonus_action_used).is_true()
+	assert_bool(_state().action_used).is_false()
+
+
+func test_missed_attack_offers_heroic_inspiration() -> void:
+	# 2 + 5 = 7 : raté. Relance : 15, touché, 2d6 à 4 et 4 deux fois : 11.
+	await _start(FIGHTER_FIRST + [2, 15, 4, 4, 4, 4])
+	_put_goblin_next_to_fighter()
+	_scene.call("_on_cell_clicked", _goblin().position)
+	await _settle()
+	assert_bool(_reaction_panel().visible).is_true()
+	var question: Label = _scene.get_node("%DecisionQuestionLabel")
+	assert_str(question.text).contains("Relancer")
+
+	_runner.simulate_key_pressed(KEY_O)
+	await _settle()
+	assert_bool(_fighter().heroic_inspiration).is_false()
+	assert_bool(_state().is_over).is_true()
+
+
+func test_choosing_the_javelin_throws_it_at_range() -> void:
+	# 15 + 5 : touché à 25 ft ; 1d6 à 1 et 1 (Savage Attacker) : 4 dégâts.
+	await _start(FIGHTER_FIRST + [15, 1, 1])
+	_goblin().position = _fighter().position + Vector2i(5, 1)
+	var javelin: WeaponDef = _fighter().definition.weapons[2]
+	_scene.call("_on_weapon_pressed", javelin)
+	_scene.call("_on_cell_clicked", _goblin().position)
+	await _settle()
+	assert_int(_fighter().quantity(javelin)).is_equal(7)
+	assert_int(_goblin().hp).is_equal(6)
+	assert_bool(_state().has_effect(_goblin(), Effect.SLOWED)).is_true()

@@ -25,6 +25,10 @@ var story: StoryDef
 var current_step_id: StringName = &""
 var story_completed := false
 var player_hp := 0
+## Ressources du Guerrier qui ne reviennent qu'avec un repos, absent du jeu :
+## elles sont comptées sur toute la partie.
+var player_second_wind_uses := 0
+var player_heroic_inspiration := false
 
 
 func _ready() -> void:
@@ -59,23 +63,30 @@ func current_step() -> StoryStep:
 func new_game() -> void:
 	current_step_id = story.first_step
 	story_completed = false
-	player_hp = player_definition().max_hp
+	var definition := player_definition()
+	player_hp = definition.max_hp
+	player_second_wind_uses = definition.second_wind_uses
+	player_heroic_inspiration = definition.heroic_inspiration
 	progress_changed.emit()
 
 
 ## Reprend une partie sauvegardée. Renvoie faux si l'étape n'existe plus.
-func restore(step_id: StringName, hp: int, completed: bool) -> bool:
+func restore(step_id: StringName, hp: int, completed: bool, second_wind_uses: int, heroic_inspiration: bool) -> bool:
 	if not step_id.is_empty() and story.get_step(step_id) == null:
 		return false
+	var definition := player_definition()
 	current_step_id = step_id
-	player_hp = clampi(hp, 1, player_definition().max_hp)
+	player_hp = clampi(hp, 1, definition.max_hp)
+	player_second_wind_uses = clampi(second_wind_uses, 0, definition.second_wind_uses)
+	player_heroic_inspiration = heroic_inspiration and definition.heroic_inspiration
 	story_completed = completed
 	return true
 
 
 ## L'étape courante est terminée avec ce résultat. Renvoie ce qu'il faut
-## afficher ensuite, sans changer de scène.
-func complete_step(outcome: Outcome, remaining_hp: int = -1) -> Next:
+## afficher ensuite, sans changer de scène. Après une victoire, `survivor`
+## est le Guerrier à la fin du combat : on garde ses PV et ses ressources.
+func complete_step(outcome: Outcome, survivor: Combatant = null) -> Next:
 	var step := current_step()
 	assert(step != null, "Aucune étape en cours.")
 
@@ -87,8 +98,10 @@ func complete_step(outcome: Outcome, remaining_hp: int = -1) -> Next:
 		progress_changed.emit()
 		return Next.STEP
 
-	if outcome == Outcome.VICTORY and remaining_hp > 0:
-		player_hp = remaining_hp
+	if outcome == Outcome.VICTORY and survivor != null and survivor.hp > 0:
+		player_hp = survivor.hp
+		player_second_wind_uses = survivor.second_wind_uses
+		player_heroic_inspiration = survivor.heroic_inspiration
 
 	if step.is_end():
 		current_step_id = &""
@@ -105,8 +118,8 @@ func complete_step(outcome: Outcome, remaining_hp: int = -1) -> Next:
 
 
 ## Termine l'étape puis affiche la suite.
-func finish_step(outcome: Outcome, remaining_hp: int = -1) -> void:
-	enter(complete_step(outcome, remaining_hp))
+func finish_step(outcome: Outcome, survivor: Combatant = null) -> void:
+	enter(complete_step(outcome, survivor))
 
 
 func enter(next: Next) -> void:

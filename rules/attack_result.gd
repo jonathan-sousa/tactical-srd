@@ -17,6 +17,8 @@ var target_armor_class: int
 var advantage: AdvantageResult
 ## Attaque d'opportunité (réaction) plutôt qu'action Attaque.
 var is_opportunity: bool = false
+## Attaque à distance (tir ou lancer) plutôt qu'au corps à corps.
+var is_ranged: bool = false
 
 var is_hit: bool = false
 var is_critical: bool = false
@@ -26,3 +28,9 @@ var damage_roll: DiceRoll
 ## Dégâts à appliquer (jamais négatifs). 0 si l'attaque rate.
 var damage: int = 0
 var damage_type: DamageType.Type
+## Savage Attacker : le jet de dégâts écarté, ou `null`.
+var discarded_damage_roll: DiceRoll
+## Great Weapon Fighting appliqué aux dés de dégâts ?
+var great_weapon_fighting: bool = false
+## Maîtrise Graze : dégâts infligés malgré l'échec (0 sinon).
+var graze_damage: int = 0

@@ -4,13 +4,13 @@ class_name DeclineReactionAction
 extends Action
 
 
-func is_reaction() -> bool:
-	return true
+func answers() -> Script:
+	return ReactionWindow
 
 
 func _execute(state: CombatState, _dice: Dice) -> Array[CombatEvent]:
-	var window := state.reaction_window
-	state.reaction_window = null
+	var window := state.pending as ReactionWindow
+	state.pending = null
 	var events: Array[CombatEvent] = [ReactionDeclinedEvent.new(actor, window.mover)]
-	events.append_array(state.walk(window.mover, window.remaining_path, window.asked))
+	events.append_array(state.resume_movement(window))
 	return events
