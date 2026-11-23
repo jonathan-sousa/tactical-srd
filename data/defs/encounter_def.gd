@@ -14,5 +14,8 @@ extends Resource
 ## Obstacles : cases infranchissables.
 @export var blocked_cells: Array[Vector2i] = []
 @export var player_start: Vector2i
+## Embuscade : au début du combat, chaque ennemi hors de vue du joueur tente
+## de se cacher. S'il y parvient, le joueur est surpris (SRD « Surprise »).
+@export var ambush: bool = false
 @export var enemies: Array[EnemyPlacement] = []
 

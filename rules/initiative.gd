@@ -1,5 +1,6 @@
 ## Ordre d'initiative : d20 + bonus d'initiative de la fiche, du plus haut au
-## plus bas.
+## plus bas. `modes` donne l'avantage (caché, donc Invisible) ou le
+## désavantage (surpris) de certains combattants.
 ##
 ## Égalité : le camp du joueur passe d'abord (choix du brief, voir
 ## docs/rules-deviations.md), puis l'ordre de la liste fournie.
@@ -7,10 +8,15 @@ class_name Initiative
 extends RefCounted
 
 
-static func roll_order(combatants: Array[Combatant], dice: Dice) -> Array[InitiativeEntry]:
+static func roll_order(
+	combatants: Array[Combatant],
+	dice: Dice,
+	modes: Dictionary[Combatant, Dice.RollMode] = {},
+) -> Array[InitiativeEntry]:
 	var entries: Array[InitiativeEntry] = []
 	for combatant in combatants:
-		entries.append(InitiativeEntry.new(combatant, dice.roll_die(20), combatant.definition.initiative_bonus))
+		var roll := dice.roll_d20(modes.get(combatant, Dice.RollMode.NORMAL))
+		entries.append(InitiativeEntry.new(combatant, roll, combatant.definition.initiative_bonus))
 
 	# sort_custom n'est pas un tri stable : on garde la position d'origine
 	# pour départager deux combattants du même camp à égalité.

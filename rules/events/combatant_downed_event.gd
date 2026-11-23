@@ -1,4 +1,5 @@
-## Un combattant est tombé à 0 PV.
+## Un personnage est tombé à 0 PV : il perd connaissance et tombe à terre.
+## Un monstre, lui, meurt (CombatantDiedEvent).
 class_name CombatantDownedEvent
 extends CombatEvent
 

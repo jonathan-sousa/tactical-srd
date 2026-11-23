@@ -17,10 +17,37 @@ const ATTACKER_SAPPED := &"attacker_sapped"
 const LONG_RANGE := &"long_range"
 ## Attaque à distance avec un ennemi au contact qui voit l'attaquant.
 const HOSTILE_NEARBY := &"hostile_nearby"
+## L'attaquant est caché : la cible ne le voit pas (condition Invisible).
+const ATTACKER_HIDDEN := &"attacker_hidden"
+## L'attaquant ne voit pas la cible, cachée : il vise une case à l'aveugle.
+const TARGET_UNSEEN := &"target_unseen"
+## La cible est inconsciente (à 0 PV).
+const TARGET_UNCONSCIOUS := &"target_unconscious"
+## La cible est à terre et l'attaquant à 5 ft (avantage) ou plus loin
+## (désavantage).
+const TARGET_PRONE := &"target_prone"
+const TARGET_PRONE_FAR := &"target_prone_far"
+## L'attaquant est à terre.
+const ATTACKER_PRONE := &"attacker_prone"
 
 
 static func for_attack(state: CombatState, attacker: Combatant, target: Combatant, weapon: WeaponDef) -> AdvantageResult:
 	var result := AdvantageResult.new()
+	if state.is_hidden_from(attacker, target):
+		result.advantages.append(ATTACKER_HIDDEN)
+	if state.is_hidden_from(target, attacker):
+		result.disadvantages.append(TARGET_UNSEEN)
+	if target.is_down():
+		result.advantages.append(TARGET_UNCONSCIOUS)
+	if state.has_effect(target, Effect.PRONE):
+		if state.distance_feet(attacker, target) <= CombatState.FEET_PER_SQUARE:
+			result.advantages.append(TARGET_PRONE)
+		else:
+			result.disadvantages.append(TARGET_PRONE_FAR)
+	if state.has_effect(attacker, Effect.PRONE):
+		result.disadvantages.append(ATTACKER_PRONE)
+	# Esquiver ne protège que si la cible voit l'attaquant, et pas si elle
+	# est neutralisée.
 	if state.has_effect(target, Effect.DODGING) and state.can_see(target, attacker):
 		result.disadvantages.append(TARGET_DODGING)
 	if state.has_effect(attacker, Effect.SAPPED):

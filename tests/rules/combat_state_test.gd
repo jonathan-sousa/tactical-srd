@@ -151,12 +151,12 @@ func test_new_round_after_everyone_played() -> void:
 	assert_int(_state.round).is_equal(2)
 
 
-func test_downed_combatant_is_skipped() -> void:
+func test_dead_combatant_is_skipped() -> void:
 	var cells: Array[Vector2i] = [Vector2i(5, 0), Vector2i(7, 0)]
 	var state := CombatState.create(Fixtures.encounter(Vector2i(12, 8), Vector2i(0, 0), cells), Fixtures.fighter())
 	# Initiative : Guerrier 11, premier Gobelin 9, second Gobelin 7.
 	state.start(FixedDice.new([10, 7, 5]))
-	state.combatants[1].take_damage(10)
+	HitPoints.apply_damage(state, state.combatants[1], 10, DamageType.Type.SLASHING)
 	EndTurnAction.new(state.combatants[0]).execute(state, FixedDice.new([]))
 	assert_object(state.active()).is_same(state.combatants[2])
 
@@ -168,20 +168,22 @@ func test_combat_ends_when_last_enemy_falls() -> void:
 	_goblin.take_damage(9)
 	_run(MoveAction.new(_fighter, Vector2i(4, 0)))
 	var events := _run(AttackAction.new(_fighter, _goblin), FixedDice.new([15, 1, 1]))
-	assert_object(events[2]).is_instanceof(CombatantDownedEvent)
+	# Un monstre meurt dès qu'il tombe à 0 PV.
+	assert_object(events[2]).is_instanceof(CombatantDiedEvent)
 	var ended := events[3] as CombatEndedEvent
 	assert_int(ended.winner).is_equal(Combatant.Side.PLAYER)
 	assert_bool(_state.is_over).is_true()
 	assert_str(EndTurnAction.new(_fighter).validate(_state)).is_equal(Action.COMBAT_OVER)
 
 
-func test_player_loses_at_zero_hit_points() -> void:
+func test_player_at_zero_hit_points_is_dying_and_the_fight_goes_on() -> void:
 	_fighter.take_damage(11)
 	_run(EndTurnAction.new(_fighter))
 	_run(MoveAction.new(_goblin, Vector2i(1, 0)))
 	var events := _run(AttackAction.new(_goblin, _fighter), FixedDice.new([15, 3]))
-	assert_int((events.back() as CombatEndedEvent).winner).is_equal(Combatant.Side.ENEMY)
-	assert_bool(_fighter.is_down()).is_true()
+	assert_object(events.back()).is_instanceof(CombatantDownedEvent)
+	assert_bool(_fighter.is_dying()).is_true()
+	assert_bool(_state.is_over).is_false()
 
 
 func test_player_can_start_with_remaining_hit_points() -> void:

@@ -25,6 +25,8 @@ func refresh(combatant: Combatant, state: CombatState) -> void:
 	_bonus_label.text = Texts.bonus_action_line(is_turn and state.bonus_action_used)
 	_reaction_label.text = Texts.REACTION_AVAILABLE if combatant.reaction_available else Texts.REACTION_USED
 	_resources_label.text = Texts.resources_line(combatant)
+	if combatant.is_dying():
+		_resources_label.text = Texts.death_saves_line(combatant)
 	_resources_label.visible = not _resources_label.text.is_empty()
 	var effects := state.effects_on(combatant)
 	_effects_label.visible = not effects.is_empty()

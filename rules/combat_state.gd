@@ -62,14 +62,37 @@ static func create(p_encounter: EncounterDef, player: CharacterDef, player_hp: i
 	return state
 
 
+## DD de l'action Se cacher (SRD « Hide »).
+const HIDE_DC := 15
+
+
 ## Tire l'initiative et commence le premier tour.
+##
+## Embuscade : avant l'initiative, chaque ennemi hors de vue tente de se
+## cacher. Un combattant caché a l'avantage à l'initiative (condition
+## Invisible) ; un adversaire dont il est caché est surpris et a le
+## désavantage (SRD « Surprise »).
 func start(dice: Dice) -> Array[CombatEvent]:
-	initiative = Initiative.roll_order(combatants, dice)
+	var events: Array[CombatEvent] = []
+	if encounter.ambush:
+		for combatant in combatants:
+			if combatant.side == Combatant.Side.ENEMY and can_hide(combatant):
+				events.append(roll_hide(combatant, dice, false))
+
+	var modes: Dictionary[Combatant, Dice.RollMode] = {}
+	for combatant in combatants:
+		if is_hidden(combatant):
+			modes[combatant] = Dice.RollMode.ADVANTAGE
+		elif not hidden_enemies_of(combatant).is_empty():
+			modes[combatant] = Dice.RollMode.DISADVANTAGE
+	initiative = Initiative.roll_order(combatants, dice, modes)
 	round = 1
 	_active_index = 0
 	turn_count = 1
 	_reset_turn_budget()
-	return [InitiativeRolledEvent.new(initiative), TurnStartedEvent.new(active(), round)]
+	events.append(InitiativeRolledEvent.new(initiative))
+	events.append(TurnStartedEvent.new(active(), round))
+	return events
 
 
 ## Combattant dont c'est le tour.
@@ -81,28 +104,32 @@ func active() -> Combatant:
 
 # Division entière voulue (30 ft / 5 = 6 cases) : on fait taire
 # l'avertissement de Godot qui signale toute division entre deux int.
-## Vitesse en cases, Ralentissement compris.
+## Vitesse en cases, Ralentissement compris. Nulle pour un combattant
+## inconscient (condition Unconscious : « Speed 0 »).
 @warning_ignore("integer_division")
 func speed_in_squares(combatant: Combatant) -> int:
+	if combatant.is_down():
+		return 0
 	var squares := combatant.definition.speed_feet / FEET_PER_SQUARE
 	if has_effect(combatant, Effect.SLOWED):
 		squares -= SLOW_SQUARES
 	return maxi(squares, 0)
 
 
-## Combattant debout sur cette case, ou `null`.
+## Combattant vivant sur cette case (même inconscient ou caché), ou `null`.
+## Un mort ne compte plus : sa case est libre.
 func combatant_at(cell: Vector2i) -> Combatant:
 	for combatant in combatants:
-		if not combatant.is_down() and combatant.position == cell:
+		if not combatant.is_dead and combatant.position == cell:
 			return combatant
 	return null
 
 
-## Cases occupées par les autres combattants debout.
+## Cases occupées par les autres combattants vivants.
 func occupied_cells(except: Combatant) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for combatant in combatants:
-		if combatant != except and not combatant.is_down():
+		if combatant != except and not combatant.is_dead:
 			cells.append(combatant.position)
 	return cells
 
@@ -128,9 +155,19 @@ func is_cell_within_reach(attacker: Combatant, cell: Vector2i, weapon: WeaponDef
 	return GridPathfinder.chebyshev(attacker.position, cell) <= reach
 
 
-## `observer` voit-il `target` ? Il faut une ligne de vue dégagée.
+## `observer` voit-il `target` ? Il doit être conscient, avoir une ligne
+## de vue dégagée, et `target` ne doit pas être caché de lui (condition
+## Invisible).
 func can_see(observer: Combatant, target: Combatant) -> bool:
+	if observer.is_down() or is_hidden_from(target, observer):
+		return false
 	return line_of_sight.is_clear(observer.position, target.position)
+
+
+## Aucun obstacle entre `observer` et cette case ? Sinon la case est
+## derrière un abri total : on ne peut pas la viser.
+func has_line_of_sight_to(observer: Combatant, cell: Vector2i) -> bool:
+	return line_of_sight.is_clear(observer.position, cell)
 
 
 ## Distance en pieds entre deux combattants (5 ft par case, diagonales
@@ -143,11 +180,83 @@ func distance_feet(a: Combatant, b: Combatant) -> int:
 ## corps à corps ; sinon attaque à distance si l'arme se tire ou se lance et
 ## que la cible est dans sa portée longue.
 func attack_kind(attacker: Combatant, target: Combatant, weapon: WeaponDef) -> AttackKind:
-	if weapon.kind == WeaponDef.Kind.MELEE and is_within_reach(attacker, target, weapon):
+	return attack_kind_at(attacker, target.position, weapon)
+
+
+## Même chose pour une case visée (attaque à l'aveugle).
+func attack_kind_at(attacker: Combatant, cell: Vector2i, weapon: WeaponDef) -> AttackKind:
+	if weapon.kind == WeaponDef.Kind.MELEE and is_cell_within_reach(attacker, cell, weapon):
 		return AttackKind.MELEE
-	if weapon.has_range() and distance_feet(attacker, target) <= weapon.range_long_feet:
+	var distance := GridPathfinder.chebyshev(attacker.position, cell) * FEET_PER_SQUARE
+	if weapon.has_range() and distance <= weapon.range_long_feet:
 		return AttackKind.RANGED
 	return AttackKind.NONE
+
+
+# --- Se cacher et trouver ------------------------------------------------------
+
+
+## Caché (action Se cacher réussie, pas encore trouvé) ?
+func is_hidden(combatant: Combatant) -> bool:
+	return has_effect(combatant, Effect.HIDDEN)
+
+
+## `target` est-il caché de `observer` ? On ne se cache que de ses ennemis.
+func is_hidden_from(target: Combatant, observer: Combatant) -> bool:
+	return target.side != observer.side and is_hidden(target)
+
+
+## DD pour trouver un combattant caché : le total de son jet de Discrétion.
+func hide_dc(combatant: Combatant) -> int:
+	for effect in effects:
+		if effect.target == combatant and effect.id == Effect.HIDDEN:
+			return effect.value
+	return 0
+
+
+## Ennemis vivants cachés de `observer`.
+func hidden_enemies_of(observer: Combatant) -> Array[Combatant]:
+	var hidden: Array[Combatant] = []
+	for enemy in living_enemies_of(observer):
+		if is_hidden(enemy):
+			hidden.append(enemy)
+	return hidden
+
+
+## Peut-il se cacher ici ? Il faut être hors de la ligne de vue de tout
+## ennemi conscient. Sur notre grille, un obstacle qui coupe la vue est un
+## abri total : la condition d'abri est remplie du même coup.
+func can_hide(combatant: Combatant) -> bool:
+	return is_out_of_sight_at(combatant, combatant.position)
+
+
+## Cette case est-elle hors de la ligne de vue de tous les ennemis
+## conscients de `combatant` ?
+func is_out_of_sight_at(combatant: Combatant, cell: Vector2i) -> bool:
+	for enemy in living_enemies_of(combatant):
+		if not enemy.is_down() and line_of_sight.is_clear(enemy.position, cell):
+			return false
+	return true
+
+
+## Jet de Dextérité (Discrétion) contre DD 15. En cas de réussite, le
+## combattant est caché et son total devient le DD pour le trouver.
+func roll_hide(combatant: Combatant, dice: Dice, bonus_action: bool) -> HideAttemptedEvent:
+	var bonus := combatant.definition.skill_bonus(CharacterDef.STEALTH)
+	var d20 := dice.roll_die(20)
+	var success := d20 + bonus >= HIDE_DC
+	var event := HideAttemptedEvent.new(combatant, d20, bonus, success, bonus_action)
+	if success:
+		add_effect(Effect.new(Effect.HIDDEN, combatant, combatant, Effect.Expiry.UNTIL_REMOVED, event.total))
+	return event
+
+
+## Le combattant n'est plus caché. Renvoie l'événement, ou rien s'il ne
+## l'était pas.
+func reveal(combatant: Combatant, reason: StringName) -> Array[CombatEvent]:
+	if not remove_effect(combatant, Effect.HIDDEN):
+		return []
+	return [RevealedEvent.new(combatant, combatant.position, reason)]
 
 
 ## Ennemis debout au contact de `combatant` (à 5 ft) qui le voient.
@@ -159,24 +268,26 @@ func hostiles_next_to(combatant: Combatant) -> Array[Combatant]:
 	return hostiles
 
 
+## Ennemis vivants (debout, inconscients ou cachés) de `combatant`.
 func living_enemies_of(combatant: Combatant) -> Array[Combatant]:
 	var enemies: Array[Combatant] = []
 	for other in combatants:
-		if other.side != combatant.side and not other.is_down():
+		if other.side != combatant.side and not other.is_dead:
 			enemies.append(other)
 	return enemies
 
 
-## Passe au prochain combattant debout ; nouveau round quand on revient au
-## début de l'initiative.
-func advance_turn() -> Array[CombatEvent]:
+## Passe au prochain combattant vivant ; nouveau round quand on revient au
+## début de l'initiative. Un combattant mourant fait son jet contre la mort
+## au début de son tour : il faut alors des dés.
+func advance_turn(dice: Dice = null) -> Array[CombatEvent]:
 	var events := _expire_effects(active(), Effect.Expiry.END_OF_SOURCE_TURN)
 	for i in initiative.size():
 		_active_index += 1
 		if _active_index >= initiative.size():
 			_active_index = 0
 			round += 1
-		if not active().is_down():
+		if not active().is_dead:
 			break
 	turn_count += 1
 	_reset_turn_budget()
@@ -184,6 +295,9 @@ func advance_turn() -> Array[CombatEvent]:
 	active().reaction_available = true
 	events.append(TurnStartedEvent.new(active(), round))
 	events.append_array(_expire_effects(active(), Effect.Expiry.START_OF_SOURCE_TURN))
+	if active().is_dying():
+		assert(dice != null, "Jet contre la mort : il faut des dés pour changer de tour.")
+		events.append_array(HitPoints.roll_death_save(self, active(), dice))
 	return events
 
 
@@ -206,6 +320,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 	var events: Array[CombatEvent] = []
 	var from := mover.position
 	var walked: Array[Vector2i] = []
+	var unseen := is_hidden(mover)
 	for i in path.size():
 		var skip: Array[Combatant] = []
 		if i == 0:
@@ -213,7 +328,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 		var reactor := _opportunity_reactor(mover, path[i], skip)
 		if reactor != null:
 			if not walked.is_empty():
-				events.append(MovedEvent.new(mover, from, walked))
+				events.append(MovedEvent.new(mover, from, walked, unseen))
 			var asked := skip.duplicate()
 			asked.append(reactor)
 			pending = ReactionWindow.new(reactor, mover, path.slice(i), asked)
@@ -223,7 +338,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 		movement_left -= 1
 		walked.append(path[i])
 	if not walked.is_empty():
-		events.append(MovedEvent.new(mover, from, walked))
+		events.append(MovedEvent.new(mover, from, walked, unseen))
 	return events
 
 
@@ -298,24 +413,27 @@ func _expire_effects(source: Combatant, expiry: Effect.Expiry) -> Array[CombatEv
 	return events
 
 
-## Termine le combat si un camp n'a plus personne debout.
+## Termine le combat si un camp n'a plus personne en lice. Un combattant
+## mourant y est encore : ses jets contre la mort peuvent le relever. Un
+## mort ou un stabilisé n'y est plus : sans allié pour le soigner, un
+## stabilisé ne se relèvera pas pendant le combat.
 func check_end() -> Array[CombatEvent]:
 	if is_over:
 		return []
-	var player_standing := false
-	var enemy_standing := false
+	var player_in_fight := false
+	var enemy_in_fight := false
 	for combatant in combatants:
-		if combatant.is_down():
+		if combatant.is_dead or combatant.is_stable:
 			continue
 		if combatant.side == Combatant.Side.PLAYER:
-			player_standing = true
+			player_in_fight = true
 		else:
-			enemy_standing = true
+			enemy_in_fight = true
 
-	if player_standing and enemy_standing:
+	if player_in_fight and enemy_in_fight:
 		return []
 	is_over = true
-	winner = Combatant.Side.PLAYER if player_standing else Combatant.Side.ENEMY
+	winner = Combatant.Side.PLAYER if player_in_fight else Combatant.Side.ENEMY
 	return [CombatEndedEvent.new(winner)]
 
 

@@ -11,6 +11,16 @@ const GREAT_WEAPON_FIGHTING := &"great_weapon_fighting"
 ## Don d'origine (historique Soldat) : une fois par tour, lancer deux fois
 ## les dés de dégâts de l'arme et garder l'un des deux résultats.
 const SAVAGE_ATTACKER := &"savage_attacker"
+## Trait du Gobelin : se désengager ou se cacher par une action bonus.
+const NIMBLE_ESCAPE := &"nimble_escape"
+
+# Compétences utilisées en combat, et la caractéristique de chacune.
+const STEALTH := &"stealth"
+const PERCEPTION := &"perception"
+const SKILL_ABILITIES: Dictionary[StringName, Abilities.Ability] = {
+	STEALTH: Abilities.Ability.DEXTERITY,
+	PERCEPTION: Abilities.Ability.WISDOM,
+}
 
 ## Identifiant stable, utilisé par la sauvegarde et le registre de données.
 @export var id: StringName
@@ -54,6 +64,20 @@ const SAVAGE_ATTACKER := &"savage_attacker"
 @export var second_wind_uses: int = 0
 ## Inspiration héroïque au début de la partie (trait Ingénieux de l'Humain).
 @export var heroic_inspiration: bool = false
+## Traits particuliers (constantes ci-dessus), surtout ceux des monstres.
+@export var traits: Array[StringName] = []
+## Dés de dégâts ajoutés à une attaque qui a l'avantage (« plus 1d4 dégâts
+## si le jet d'attaque avait l'avantage » du Gobelin). Vide si aucun.
+@export var advantage_damage_dice: String = ""
+
+@export_group("Compétences et survie")
+## Bonus total de compétence, comme dans un bloc de statistiques
+## (Discrétion +6). Une compétence absente vaut le modificateur de sa
+## caractéristique.
+@export var skill_bonuses: Dictionary[StringName, int] = {}
+## Monstre : meurt dès qu'il tombe à 0 PV (SRD « Monster Death »). Un
+## personnage, lui, perd connaissance et fait des jets contre la mort.
+@export var is_monster: bool = false
 
 
 func ability_score(ability: Abilities.Ability) -> int:
@@ -74,6 +98,16 @@ func ability_score(ability: Abilities.Ability) -> int:
 
 func has_feat(feat: StringName) -> bool:
 	return feats.has(feat)
+
+
+func has_trait(trait_id: StringName) -> bool:
+	return traits.has(trait_id)
+
+
+## Bonus d'un test de compétence (d20 + ce bonus).
+func skill_bonus(skill: StringName) -> int:
+	assert(SKILL_ABILITIES.has(skill), "Compétence inconnue : %s" % skill)
+	return skill_bonuses.get(skill, Abilities.modifier(ability_score(SKILL_ABILITIES[skill])))
 
 
 ## Le personnage peut-il utiliser la maîtrise de cette arme ?

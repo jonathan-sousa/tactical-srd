@@ -22,6 +22,9 @@ var is_ranged: bool = false
 
 var is_hit: bool = false
 var is_critical: bool = false
+## Toute touche est un critique : cible inconsciente à 5 ft ou moins
+## (condition Unconscious, « Automatic Critical Hits »).
+var critical_on_hit: bool = false
 
 ## `null` si l'attaque rate.
 var damage_roll: DiceRoll
@@ -30,6 +33,8 @@ var damage: int = 0
 var damage_type: DamageType.Type
 ## Savage Attacker : le jet de dégâts écarté, ou `null`.
 var discarded_damage_roll: DiceRoll
+## Dés en plus quand l'attaque a l'avantage (+1d4 du Gobelin), ou `null`.
+var advantage_damage_roll: DiceRoll
 ## Great Weapon Fighting appliqué aux dés de dégâts ?
 var great_weapon_fighting: bool = false
 ## Maîtrise Graze : dégâts infligés malgré l'échec (0 sinon).

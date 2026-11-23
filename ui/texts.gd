@@ -17,6 +17,8 @@ const BONUS_ACTION_AVAILABLE := "Action bonus : disponible"
 const BONUS_ACTION_USED := "Action bonus : utilisée"
 const SECOND_WIND := "Second souffle"
 const HEROIC_INSPIRATION := "Inspiration héroïque"
+const DEATH_SAVES := "Jets contre la mort"
+const UNCONSCIOUS_TURN := "Inconscient : jet contre la mort au début de chaque tour."
 const EFFECTS := "Effets"
 const YES := "Oui"
 const NO := "Non"
@@ -25,6 +27,8 @@ const DEFEAT := "Défaite"
 const REPLAY := "Rejouer"
 const ENEMY_TURN := "Tour de l'adversaire…"
 const NOTHING_LEFT := "Plus de déplacement ni d'action : terminez le tour (Espace)."
+## Aide au survol d'une case libre quand un ennemi est caché.
+const BLIND_ATTACK_SHIFT_HINT := "Maj + clic : attaquer cette case à l'aveugle."
 
 # --- Écrans et menus ------------------------------------------------------------
 
@@ -88,7 +92,7 @@ const REASONS: Dictionary[StringName, String] = {
 	Action.NOT_ENOUGH_MOVEMENT: "Pas assez de déplacement pour aller jusque-là.",
 	Action.ACTION_ALREADY_USED: "Action déjà utilisée ce tour-ci.",
 	Action.TARGET_NOT_ENEMY: "Ce n'est pas un ennemi.",
-	Action.TARGET_DOWN: "La cible est déjà à terre.",
+	Action.TARGET_DEAD: "La cible est morte.",
 	Action.TARGET_OUT_OF_REACH: "Hors de portée : placez-vous sur une case adjacente.",
 	Action.NO_WEAPON: "Aucune arme équipée.",
 	Action.TARGET_OUT_OF_RANGE: "Hors de portée de l'arme.",
@@ -100,17 +104,27 @@ const REASONS: Dictionary[StringName, String] = {
 	Action.DECISION_PENDING: "Une décision est en attente.",
 	Action.NO_DECISION_PENDING: "Aucune décision en attente.",
 	Action.NOT_YOUR_DECISION: "Ce n'est pas à vous de décider.",
+	Action.INCAPACITATED: "Inconscient : impossible d'agir.",
+	Action.ALREADY_HIDDEN: "Déjà caché.",
+	Action.SEEN_BY_ENEMY: "Un ennemi vous voit : impossible de se cacher.",
+	Action.NOTHING_TO_SEARCH: "Aucun ennemi caché à chercher.",
+	Action.NO_TARGET: "Aucune cible à attaquer ici.",
+	Action.PRONE: "À terre : relevez-vous d'abord.",
+	Action.NOT_PRONE: "Vous n'êtes pas à terre.",
 }
 
 ## Identifiant de Second Wind dans la barre d'actions.
 const SECOND_WIND_ID := &"second_wind"
 
-## Noms des actions sans jet de dés, tels que le SRD français les nomme.
+## Noms des actions de la barre, tels que le SRD français les nomme.
 const ACTION_NAMES: Dictionary[StringName, String] = {
 	StandardAction.DASH: "Foncer",
 	StandardAction.DISENGAGE: "Se désengager",
 	StandardAction.DODGE: "Esquiver",
 	SECOND_WIND_ID: SECOND_WIND,
+	SearchAction.ID: "Chercher",
+	StandUpAction.ID: "Se relever",
+	HideAction.ID: "Se cacher",
 }
 
 const ACTION_DESCRIPTIONS: Dictionary[StringName, String] = {
@@ -118,6 +132,9 @@ const ACTION_DESCRIPTIONS: Dictionary[StringName, String] = {
 	StandardAction.DISENGAGE: "Vos déplacements ne provoquent plus d'attaque d'opportunité jusqu'à la fin du tour.",
 	StandardAction.DODGE: "Jusqu'au début de votre prochain tour, les attaques contre vous ont le désavantage si vous voyez l'attaquant.",
 	SECOND_WIND_ID: "Action bonus : regagnez 1d10 + 1 PV. Deux utilisations par partie.",
+	SearchAction.ID: "Test de Sagesse (Perception) : un ennemi caché dont vous atteignez le jet de Discrétion est trouvé.",
+	StandUpAction.ID: "À terre, se relever coûte la moitié de votre vitesse (3 cases).",
+	HideAction.ID: "Test de Dextérité (Discrétion) contre DD 15, hors de vue de tout ennemi.",
 }
 
 ## Journal : « Guerrier fonce. »
@@ -132,6 +149,8 @@ const EFFECT_NAMES: Dictionary[StringName, String] = {
 	Effect.DISENGAGED: "Désengagé",
 	Effect.SAPPED: "Sapé",
 	Effect.SLOWED: "Ralenti",
+	Effect.HIDDEN: "Caché",
+	Effect.PRONE: "À terre",
 }
 
 const EFFECT_APPLIED_LOG: Dictionary[StringName, String] = {
@@ -139,6 +158,8 @@ const EFFECT_APPLIED_LOG: Dictionary[StringName, String] = {
 	Effect.DISENGAGED: "%s se désengage.",
 	Effect.SAPPED: "%s est sapé (Sap) : désavantage à sa prochaine attaque.",
 	Effect.SLOWED: "%s est ralenti (Slow) : 10 ft (2 cases) de vitesse en moins.",
+	Effect.HIDDEN: "%s se cache.",
+	Effect.PRONE: "%s tombe à terre.",
 }
 
 const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
@@ -146,6 +167,8 @@ const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
 	Effect.DISENGAGED: "%s n'est plus désengagé.",
 	Effect.SAPPED: "%s n'est plus sapé.",
 	Effect.SLOWED: "%s n'est plus ralenti.",
+	Effect.HIDDEN: "%s n'est plus caché.",
+	Effect.PRONE: "%s se relève.",
 }
 
 ## Maîtrises d'arme, nommées comme dans le SRD 5.2.1 (en anglais).
@@ -173,6 +196,19 @@ const ADVANTAGE_REASONS: Dictionary[StringName, String] = {
 	AdvantageResolver.ATTACKER_SAPPED: "attaquant sapé",
 	AdvantageResolver.LONG_RANGE: "longue portée",
 	AdvantageResolver.HOSTILE_NEARBY: "ennemi au contact",
+	AdvantageResolver.ATTACKER_HIDDEN: "attaquant caché",
+	AdvantageResolver.TARGET_UNSEEN: "cible invisible",
+	AdvantageResolver.TARGET_UNCONSCIOUS: "cible inconsciente",
+	AdvantageResolver.TARGET_PRONE: "cible à terre au contact",
+	AdvantageResolver.TARGET_PRONE_FAR: "cible à terre, de loin",
+	AdvantageResolver.ATTACKER_PRONE: "attaquant à terre",
+}
+
+## Causes de mort, pour le journal.
+const DEATH_CAUSES: Dictionary[StringName, String] = {
+	CombatantDiedEvent.MONSTER_AT_ZERO: "%s tombe à 0 PV et meurt.",
+	CombatantDiedEvent.MASSIVE_DAMAGE: "Dégâts massifs : %s meurt sur le coup.",
+	CombatantDiedEvent.DEATH_SAVES: "Troisième échec : %s meurt.",
 }
 
 
@@ -210,6 +246,25 @@ static func inspiration_prompt(result: AttackResult) -> String:
 	return "Attaque ratée : %d contre %s %d.\nRelancer le d20 grâce à l'%s ?" % [
 		result.attack_total, ARMOR_CLASS, result.target_armor_class, HEROIC_INSPIRATION.to_lower(),
 	]
+
+
+## Question posée au joueur après un jet contre la mort raté.
+static func death_save_inspiration_prompt(natural: int) -> String:
+	var failures := "deux échecs" if natural == 1 else "un échec"
+	return "Jet contre la mort : %d, %s.\nRelancer le d20 grâce à l'%s ?" % [natural, failures, HEROIC_INSPIRATION.to_lower()]
+
+
+## « Jets contre la mort : 1 réussite, 2 échecs ».
+static func death_saves_line(combatant: Combatant) -> String:
+	return "%s : %s, %s" % [
+		DEATH_SAVES,
+		_count(combatant.death_save_successes, "réussite"),
+		_count(combatant.death_save_failures, "échec"),
+	]
+
+
+static func _count(value: int, noun: String) -> String:
+	return "%d %s%s" % [value, noun, "" if value <= 1 else "s"]
 
 
 ## « Action bonus : disponible ».
@@ -274,13 +329,22 @@ static func attack_hint(target: Combatant, weapon: WeaponDef, attack_bonus: int,
 	return "Attaquer %s : %s, %s %s%s" % [target.definition.display_name, weapon.display_name, signed(attack_bonus), damage, _advantage_detail(advantage)]
 
 
+## Aide au survol de la dernière position connue d'un ennemi caché.
+static func blind_attack_hint(weapon: WeaponDef) -> String:
+	return "Attaque à l'aveugle (%s) : désavantage, et ratée si personne n'est là." % weapon.display_name
+
+
 # --- Journal de combat ---------------------------------------------------------
 
 
 static func initiative_line(entries: Array[InitiativeEntry]) -> String:
 	var parts: PackedStringArray = []
 	for entry in entries:
-		parts.append("%s %d (%d %s)" % [entry.combatant.definition.display_name, entry.total, entry.d20, signed(entry.bonus)])
+		var roll := str(entry.d20)
+		if entry.roll.rolls.size() > 1:
+			var why := "caché, avantage" if entry.roll.mode == Dice.RollMode.ADVANTAGE else "surpris, désavantage"
+			roll = "%d [%s ; %s]" % [entry.d20, ", ".join(entry.roll.rolls.map(str)), why]
+		parts.append("%s %d (%s %s)" % [entry.combatant.definition.display_name, entry.total, roll, signed(entry.bonus)])
 	return "Initiative : %s." % ", ".join(parts)
 
 
@@ -300,7 +364,9 @@ static func attack_line(result: AttackResult) -> String:
 		roll = "%d [%s]" % [result.d20.natural, ", ".join(result.d20.rolls.map(str))]
 
 	var verb := "attaque"
-	if result.is_opportunity:
+	if result.advantage != null and result.advantage.disadvantages.has(AdvantageResolver.TARGET_UNSEEN):
+		verb = "attaque à l'aveugle"
+	elif result.is_opportunity:
 		verb = "attaque d'opportunité"
 	elif result.is_ranged:
 		verb = "lance" if result.weapon.has_property(WeaponDef.THROWN) else "tire"
@@ -319,10 +385,14 @@ static func attack_line(result: AttackResult) -> String:
 	elif not result.is_hit:
 		line += ", raté"
 	else:
-		var outcome := "20 naturel, coup critique" if result.is_critical else "touché"
+		var outcome := "touché"
+		if result.is_critical:
+			outcome = "20 naturel, coup critique" if result.d20.is_natural_20() else "coup critique (cible inconsciente au contact)"
 		var detail := _damage_detail(result.damage_roll)
 		if result.discarded_damage_roll != null:
 			detail += " ; meilleur de deux jets, l'autre faisait %d" % result.discarded_damage_roll.total
+		if result.advantage_damage_roll != null:
+			detail += " ; avec l'avantage, %s" % _damage_detail(result.advantage_damage_roll)
 		line += ", %s, %d dégâts %s (%s)" % [
 			outcome,
 			result.damage,
@@ -355,7 +425,68 @@ static func _reasons(codes: Array[StringName]) -> String:
 
 
 static func action_line(event: ActionTakenEvent) -> String:
-	return ACTION_LOG[event.action] % event.combatant.definition.display_name
+	var line: String = ACTION_LOG[event.action] % event.combatant.definition.display_name
+	if event.bonus_action:
+		line += " (Nimble Escape, action bonus)"
+	return line
+
+
+## « Gobelin guerrier se cache (Nimble Escape). » Le total du jet reste
+## secret tant qu'on ne l'a pas trouvé : c'est le DD pour le trouver.
+static func hide_line(event: HideAttemptedEvent) -> String:
+	var name := event.combatant.definition.display_name
+	var how := " (Nimble Escape)" if event.bonus_action else ""
+	if event.success:
+		return "%s se cache%s : invisible tant qu'on ne l'a pas trouvé." % [name, how]
+	return "%s tente de se cacher%s : Discrétion %d %s = %d contre DD %d, raté." % [
+		name, how, event.d20, signed(event.bonus), event.total, CombatState.HIDE_DC,
+	]
+
+
+static func revealed_line(event: RevealedEvent) -> String:
+	var name := event.combatant.definition.display_name
+	if event.reason == RevealedEvent.ATTACKED:
+		return "%s sort de sa cachette pour attaquer !" % name
+	return "%s est trouvé : il n'est plus caché." % name
+
+
+static func search_line(event: SearchedEvent) -> String:
+	var name := event.combatant.definition.display_name
+	var roll := "Perception %d %s = %d" % [event.d20, signed(event.bonus), event.total]
+	if event.found.is_empty():
+		return "%s cherche (%s) : rien." % [name, roll]
+	var found: PackedStringArray = []
+	for i in event.found.size():
+		found.append("%s (Discrétion %d)" % [event.found[i].definition.display_name, event.found_dcs[i]])
+	return "%s cherche (%s) et trouve %s." % [name, roll, ", ".join(found)]
+
+
+static func empty_cell_attack_line(event: AttackedEmptyCellEvent) -> String:
+	return "%s attaque à l'aveugle (%s) : il n'y a personne, raté." % [event.attacker.definition.display_name, event.weapon.display_name]
+
+
+static func death_save_line(event: DeathSaveEvent) -> String:
+	var name := event.combatant.definition.display_name
+	var tally := "%s, %s" % [_count(event.successes, "réussite"), _count(event.failures, "échec")]
+	if event.natural == 0:
+		var hit := "deux échecs (coup critique)" if event.critical else "un échec"
+		return "%s est frappé à 0 PV : %s aux jets contre la mort (%s)." % [name, hit, tally]
+	if event.revived:
+		return "Jet contre la mort de %s : 20 naturel ! Il reprend connaissance avec 1 PV, toujours à terre." % name
+	var outcome := "réussite"
+	if event.natural == 1:
+		outcome = "1 naturel, deux échecs"
+	elif event.natural < HitPoints.DEATH_SAVE_DC:
+		outcome = "échec"
+	return "Jet contre la mort de %s : %d, %s (%s)." % [name, event.natural, outcome, tally]
+
+
+static func stabilized_line(event: CombatantStabilizedEvent) -> String:
+	return "Trois réussites : %s est stabilisé, mais reste inconscient." % event.combatant.definition.display_name
+
+
+static func died_line(event: CombatantDiedEvent) -> String:
+	return DEATH_CAUSES[event.cause] % event.combatant.definition.display_name
 
 
 static func effect_applied_line(event: EffectAppliedEvent) -> String:
@@ -393,7 +524,7 @@ static func reaction_declined_line(event: ReactionDeclinedEvent) -> String:
 
 
 static func downed_line(combatant: Combatant) -> String:
-	return "%s tombe à 0 PV." % combatant.definition.display_name
+	return "%s tombe à 0 PV : inconscient et à terre." % combatant.definition.display_name
 
 
 static func end_line(winner: Combatant.Side) -> String:

@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://data/defs/character_def.gd" id="1_p0yey"]
 [ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="2_3wrra"]
 [ext_resource type="Resource" path="res://data/weapons/scimitar.tres" id="3_ulwa0"]
+[ext_resource type="Resource" path="res://data/weapons/shortbow.tres" id="4_sbow"]
 
 [resource]
 script = ExtResource("1_p0yey")
@@ -15,4 +16,10 @@ charisma = 8
 max_hp = 10
 armor_class = 15
 initiative_bonus = 2
-weapons = Array[ExtResource("2_3wrra")]([ExtResource("3_ulwa0")])
+weapons = Array[ExtResource("2_3wrra")]([ExtResource("3_ulwa0"), ExtResource("4_sbow")])
+is_monster = true
+skill_bonuses = Dictionary[StringName, int]({
+&"stealth": 6
+})
+traits = Array[StringName]([&"nimble_escape"])
+advantage_damage_dice = "1d4"

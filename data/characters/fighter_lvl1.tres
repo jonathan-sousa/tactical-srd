@@ -29,3 +29,6 @@ feats = Array[StringName]([&"savage_attacker"])
 weapon_masteries = Array[StringName]([&"greatsword", &"flail", &"javelin"])
 second_wind_uses = 2
 heroic_inspiration = true
+skill_bonuses = Dictionary[StringName, int]({
+&"perception": 3
+})
