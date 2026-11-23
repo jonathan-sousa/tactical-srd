@@ -84,6 +84,7 @@ func test_fields_are_validated_one_by_one(save: Dictionary, test_parameters := [
 	[{"version": 1, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": "beaucoup"}}],
 	[{"version": 1, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": 2.5}}],
 	[{"version": 1, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": -4}}],
+	[{"version": 1, "story_step": "intro", "player": {"def_id": "fighter_lvl1", "hp_current": 0}}],
 	[{"version": 1, "story_step": "intro", "story_completed": "oui", "player": {"def_id": "fighter_lvl1", "hp_current": 12}}],
 ]) -> void:
 	_write_raw(JSON.stringify(save))

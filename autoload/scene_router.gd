@@ -17,6 +17,11 @@ const FADE_DURATION := 0.25
 
 var _veil := ColorRect.new()
 var _busy := false
+## Scène en cours d'ouverture.
+var _target := ""
+## Dernière demande arrivée pendant un fondu, vers une autre scène. Elle est
+## jouée juste après, au lieu d'être perdue.
+var _pending := ""
 
 
 func _ready() -> void:
@@ -33,12 +38,17 @@ func is_changing() -> bool:
 	return _busy
 
 
-## Fondu au noir, changement de scène, retour de l'image. Ignoré si un
-## changement est déjà en cours (double clic).
+## Fondu au noir, changement de scène, retour de l'image.
+##
+## Pendant un changement, une demande vers la même scène est ignorée (double
+## clic) ; une demande vers une autre scène est mise en attente et jouée
+## ensuite. Seule la dernière demande en attente est gardée.
 func go_to(scene_path: String) -> void:
 	if _busy:
+		_pending = "" if scene_path == _target else scene_path
 		return
 	_busy = true
+	_target = scene_path
 	# Pendant le fondu, le voile bloque la souris.
 	_veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	await _fade_to(1.0)
@@ -53,6 +63,11 @@ func go_to(scene_path: String) -> void:
 	await _fade_to(0.0)
 	_veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_busy = false
+	_target = ""
+	if not _pending.is_empty():
+		var next := _pending
+		_pending = ""
+		go_to(next)
 
 
 func _fade_to(alpha: float) -> void:

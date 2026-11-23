@@ -12,9 +12,6 @@ extends Node
 ## Émis quand le combat se termine.
 signal combat_finished(winner: Combatant.Side)
 
-const ENEMY_ACTION_DELAY := 0.45
-## Pause avant de quitter le combat, le temps de lire la dernière ligne.
-const END_DELAY := 1.5
 const LOG_TURN_COLOR := Color(1.0, 0.85, 0.3)
 const LOG_MUTED_COLOR := Color(0.6, 0.6, 0.6)
 const LOG_DOWN_COLOR := Color(1.0, 0.45, 0.4)
@@ -23,10 +20,18 @@ const LOG_DOWN_COLOR := Color(1.0, 0.45, 0.4)
 # chaque instance de la scène.
 @export var encounter_id: StringName = &"goblin_ambush"
 @export var player_id: StringName = &"fighter_lvl1"
+## Pause avant chaque action de l'adversaire, en secondes.
+@export var enemy_action_delay := 0.45
+## Pause avant de quitter le combat, le temps de lire la dernière ligne.
+@export var end_delay := 1.5
 
 var state: CombatState
-
-var _dice := Dice.new()
+## Source de hasard du combat. Les tests la remplacent par des dés truqués
+## avant d'ajouter la scène à l'arbre.
+var dice: Dice = Dice.new()
+## Ce qui se passe à la fin d'un combat de l'histoire. Par défaut,
+## GameState.finish_step ; les tests le remplacent pour ne pas changer de scène.
+var on_story_end: Callable
 var _player: Combatant
 var _tokens: Dictionary[Combatant, TokenView] = {}
 ## Vrai pendant qu'une action se joue : les clics sont ignorés.
@@ -34,6 +39,8 @@ var _busy := false
 var _pulse: Tween
 ## Vrai quand le combat fait partie de l'histoire (et non lancé seul).
 var _story_mode := false
+## Aiguillage des événements : type d'événement → méthode qui le rejoue.
+var _event_handlers: Dictionary[Script, Callable] = {}
 
 # Note Godot : `%Nom` retrouve un nœud marqué « nom unique » dans la scène,
 # sans dépendre de son chemin exact. @onready attend que la scène soit prête.
@@ -64,8 +71,14 @@ func _ready() -> void:
 		encounter = registry.encounter(encounter_id)
 		player_definition = registry.character(player_id)
 	if encounter == null or player_definition == null:
-		push_error("Combat : rencontre « %s » ou personnage « %s » introuvable." % [encounter_id, player_id])
+		if _story_mode:
+			push_error("Combat : l'étape « %s » n'a pas de rencontre ou la fiche du joueur est introuvable." % GameState.current_step_id)
+		else:
+			push_error("Combat : rencontre « %s » ou personnage « %s » introuvable." % [encounter_id, player_id])
 		return
+	if not on_story_end.is_valid():
+		on_story_end = GameState.finish_step
+	_register_event_handlers()
 
 	state = CombatState.create(encounter, player_definition, player_hp)
 	_player = state.combatants[0]
@@ -79,7 +92,7 @@ func _ready() -> void:
 	# Note Godot : connecter un signal = s'abonner à un événement (callback).
 	_board.cell_clicked.connect(_on_cell_clicked)
 	_board.cell_hovered.connect(_on_cell_hovered)
-	_end_turn_button.text = "%s (Espace)" % Texts.END_TURN
+	_end_turn_button.text = Texts.END_TURN_WITH_KEY
 	_end_turn_button.pressed.connect(_on_end_turn_pressed)
 	_replay_button.text = Texts.REPLAY
 	_replay_button.pressed.connect(_on_replay_pressed)
@@ -99,7 +112,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _start_combat() -> void:
 	_busy = true
-	await _play(state.start(_dice))
+	await _play(state.start(dice))
 	_busy = false
 	await _continue()
 
@@ -118,10 +131,11 @@ func _play_enemy_turn() -> void:
 	_refresh()
 	_hint_label.text = Texts.ENEMY_TURN
 	for action in EnemyAI.plan_turn(state, state.active()):
-		await get_tree().create_timer(ENEMY_ACTION_DELAY).timeout
+		await _wait(enemy_action_delay)
 		if not action.validate(state).is_empty():
+			push_warning("IA : action refusée (%s)." % action.validate(state))
 			continue
-		await _play(action.execute(state, _dice))
+		await _play(action.execute(state, dice))
 		if state.is_over:
 			break
 	_busy = false
@@ -139,7 +153,7 @@ func _perform(action: Action) -> void:
 	_board.path_preview = []
 	_hint_label.text = ""
 	_refresh()
-	await _play(action.execute(state, _dice))
+	await _play(action.execute(state, dice))
 	_busy = false
 	await _continue()
 
@@ -153,42 +167,70 @@ func _play(events: Array[CombatEvent]) -> void:
 
 
 func _play_event(event: CombatEvent) -> void:
-	# Note GDScript : `is` teste le type, `as` convertit vers ce type pour
-	# profiter du typage statique dans chaque branche.
-	if event is InitiativeRolledEvent:
-		var rolled := event as InitiativeRolledEvent
-		_initiative_bar.set_order(rolled.entries)
-		_log.add_line(Texts.initiative_line(rolled.entries), LOG_MUTED_COLOR)
-	elif event is TurnStartedEvent:
-		var turn := event as TurnStartedEvent
-		_log.add_line(Texts.turn_line(turn), LOG_TURN_COLOR)
-		for combatant: Combatant in _tokens:
-			_tokens[combatant].is_active = combatant == turn.combatant
-		_refresh()
-	elif event is MovedEvent:
-		var moved := event as MovedEvent
-		_log.add_line(Texts.move_line(moved))
-		var points: Array[Vector2] = []
-		for cell in moved.path:
-			points.append(_board.cell_center(cell))
-		await _tokens[moved.combatant].move_along(points)
-	elif event is AttackRolledEvent:
-		var result := (event as AttackRolledEvent).result
-		_log.add_line(Texts.attack_line(result))
-		await _tokens[result.attacker].lunge(_tokens[result.target].position)
-		if result.is_hit:
-			await _tokens[result.target].flash()
-	elif event is DamageDealtEvent:
-		_tokens[(event as DamageDealtEvent).target].refresh()
-		_refresh()
-	elif event is CombatantDownedEvent:
-		var downed := (event as CombatantDownedEvent).combatant
-		_log.add_line(Texts.downed_line(downed), LOG_DOWN_COLOR)
-		await _tokens[downed].fall()
-	elif event is CombatEndedEvent:
-		var winner := (event as CombatEndedEvent).winner
-		_log.add_line(Texts.end_line(winner), LOG_TURN_COLOR)
-		combat_finished.emit(winner)
+	var handler: Callable = _event_handlers.get(event.get_script(), Callable())
+	if not handler.is_valid():
+		push_error("Combat : aucun affichage pour l'événement %s." % event.get_script().get_global_name())
+		return
+	# Note GDScript : `await` sur un appel qui n'attend rien rend la main
+	# aussitôt ; on peut donc traiter tous les gestionnaires de la même façon.
+	await handler.call(event)
+
+
+# Note Godot : un nom de classe (`class_name`) désigne aussi son script, qui
+# sert ici de clé. `event.get_script()` renvoie le script exact de l'objet.
+func _register_event_handlers() -> void:
+	_event_handlers = {
+		InitiativeRolledEvent: _on_initiative_rolled,
+		TurnStartedEvent: _on_turn_started,
+		MovedEvent: _on_moved,
+		AttackRolledEvent: _on_attack_rolled,
+		DamageDealtEvent: _on_damage_dealt,
+		CombatantDownedEvent: _on_combatant_downed,
+		CombatEndedEvent: _on_combat_ended,
+	}
+
+
+func _on_initiative_rolled(event: InitiativeRolledEvent) -> void:
+	_initiative_bar.set_order(event.entries)
+	_log.add_line(Texts.initiative_line(event.entries), LOG_MUTED_COLOR)
+
+
+func _on_turn_started(event: TurnStartedEvent) -> void:
+	_log.add_line(Texts.turn_line(event), LOG_TURN_COLOR)
+	for combatant: Combatant in _tokens:
+		_tokens[combatant].is_active = combatant == event.combatant
+	_refresh()
+
+
+func _on_moved(event: MovedEvent) -> void:
+	_log.add_line(Texts.move_line(event))
+	var points: Array[Vector2] = []
+	for cell in event.path:
+		points.append(_board.cell_center(cell))
+	await _tokens[event.combatant].move_along(points)
+
+
+func _on_attack_rolled(event: AttackRolledEvent) -> void:
+	var result := event.result
+	_log.add_line(Texts.attack_line(result))
+	await _tokens[result.attacker].lunge(_tokens[result.target].position)
+	if result.is_hit:
+		await _tokens[result.target].flash()
+
+
+func _on_damage_dealt(event: DamageDealtEvent) -> void:
+	_tokens[event.target].refresh()
+	_refresh()
+
+
+func _on_combatant_downed(event: CombatantDownedEvent) -> void:
+	_log.add_line(Texts.downed_line(event.combatant), LOG_DOWN_COLOR)
+	await _tokens[event.combatant].fall()
+
+
+func _on_combat_ended(event: CombatEndedEvent) -> void:
+	_log.add_line(Texts.end_line(event.winner), LOG_TURN_COLOR)
+	combat_finished.emit(event.winner)
 
 
 # --- Saisie du joueur ----------------------------------------------------------
@@ -227,19 +269,14 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 	var reason := move.validate(state)
 	if reason.is_empty():
 		_board.path_preview = state.find_path(_player, cell)
-		_hint_label.text = "%s : %s" % [Texts.MOVEMENT, Texts.squares(_board.path_preview.size())]
+		_hint_label.text = Texts.move_hint(_board.path_preview.size())
 	else:
 		_hint_label.text = Texts.reason(reason)
 
 
 func _attack_hint(attack: AttackAction) -> String:
 	var expression := DiceExpression.parse(attack.weapon.damage_dice).with_modifier(_player.damage_modifier(attack.weapon))
-	return "Attaquer %s : %s, %s %s" % [
-		attack.target.definition.display_name,
-		attack.weapon.display_name,
-		Texts.signed(_player.attack_bonus(attack.weapon)),
-		expression,
-	]
+	return Texts.attack_hint(attack.target, attack.weapon, _player.attack_bonus(attack.weapon), expression)
 
 
 func _on_end_turn_pressed() -> void:
@@ -305,12 +342,24 @@ func _show_result() -> void:
 ## Dans l'histoire : victoire → étape suivante, défaite → écran de défaite.
 func _leave_combat() -> void:
 	_set_pulse(false)
-	await get_tree().create_timer(END_DELAY).timeout
+	await _wait(end_delay)
 	if state.winner == Combatant.Side.PLAYER:
-		GameState.finish_step(GameState.Outcome.VICTORY, _player.hp)
+		on_story_end.call(GameState.Outcome.VICTORY, _player.hp)
 	else:
-		GameState.finish_step(GameState.Outcome.DEFEAT)
+		on_story_end.call(GameState.Outcome.DEFEAT, -1)
 
 
 func _on_replay_pressed() -> void:
 	SceneRouter.go_to(SceneRouter.COMBAT)
+
+
+## Attend `seconds` secondes de jeu.
+##
+## Note Godot : un Tween créé par ce nœud lui est lié. Il s'arrête pendant la
+## pause comme le reste de la scène, et disparaît avec elle : si le joueur
+## quitte le combat pendant l'attente, la suite de la fonction ne reprend
+## jamais sur un nœud détruit. Un timer de SceneTree, lui, continuerait.
+func _wait(seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	await create_tween().tween_interval(seconds).finished

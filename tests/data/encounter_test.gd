@@ -4,10 +4,13 @@ extends GdUnitTestSuite
 const DIRECTIONS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
 
 var _encounter: EncounterDef
+## Les questions de grille (dedans, bloquée) sont celles du moteur.
+var _grid: GridPathfinder
 
 
 func before() -> void:
 	_encounter = DataRegistry.load_from().encounter(&"goblin_ambush")
+	_grid = GridPathfinder.new(_encounter.grid_size, _encounter.blocked_cells)
 
 
 func test_grid_is_about_12_by_8() -> void:
@@ -22,7 +25,7 @@ func test_has_at_least_one_enemy_with_a_definition() -> void:
 
 func test_blocked_cells_are_inside_the_grid() -> void:
 	for cell in _encounter.blocked_cells:
-		assert_bool(_encounter.is_inside(cell)).override_failure_message("Obstacle hors grille : %s" % cell).is_true()
+		assert_bool(_grid.is_inside(cell)).override_failure_message("Obstacle hors grille : %s" % cell).is_true()
 
 
 func test_starting_cells_are_free_and_distinct() -> void:
@@ -31,8 +34,8 @@ func test_starting_cells_are_free_and_distinct() -> void:
 		starts.append(placement.cell)
 
 	for cell in starts:
-		assert_bool(_encounter.is_inside(cell)).override_failure_message("Départ hors grille : %s" % cell).is_true()
-		assert_bool(_encounter.is_blocked(cell)).override_failure_message("Départ sur un obstacle : %s" % cell).is_false()
+		assert_bool(_grid.is_inside(cell)).override_failure_message("Départ hors grille : %s" % cell).is_true()
+		assert_bool(_grid.is_blocked(cell)).override_failure_message("Départ sur un obstacle : %s" % cell).is_false()
 		assert_int(starts.count(cell)).override_failure_message("Deux combattants sur %s" % cell).is_equal(1)
 
 
@@ -53,7 +56,7 @@ func _reachable_from(start: Vector2i) -> Dictionary[Vector2i, bool]:
 		var cell: Vector2i = queue.pop_front()
 		for direction in DIRECTIONS:
 			var next := cell + direction
-			if _encounter.is_inside(next) and not _encounter.is_blocked(next) and not seen.has(next):
+			if _grid.is_inside(next) and not _grid.is_blocked(next) and not seen.has(next):
 				seen[next] = true
 				queue.append(next)
 	return seen

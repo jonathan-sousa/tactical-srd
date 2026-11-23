@@ -57,3 +57,20 @@ func test_planned_actions_are_all_valid_in_sequence() -> void:
 	for action in EnemyAI.plan_turn(state, state.active()):
 		assert_str(action.validate(state)).is_empty()
 		action.execute(state, Dice.seeded(1))
+
+
+func test_without_movement_left_does_not_plan_a_move() -> void:
+	var state := _goblin_turn(Vector2i(0, 0), Vector2i(11, 0))
+	state.movement_left = 0
+	var plan := EnemyAI.plan_turn(state, state.active())
+	assert_int(plan.size()).is_equal(1)
+	assert_object(plan[0]).is_instanceof(EndTurnAction)
+
+
+func test_every_planned_action_is_valid_when_played_in_order() -> void:
+	for movement: int in [0, 1, 3, 6]:
+		var state := _goblin_turn(Vector2i(0, 0), Vector2i(11, 0))
+		state.movement_left = movement
+		for action in EnemyAI.plan_turn(state, state.active()):
+			assert_str(action.validate(state)).override_failure_message("Déplacement %d : action refusée." % movement).is_empty()
+			action.execute(state, FixedDice.new([]))

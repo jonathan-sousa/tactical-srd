@@ -122,7 +122,8 @@ func _validate(raw: Dictionary) -> Dictionary:
 	if typeof(player_dict.get("def_id")) != TYPE_STRING:
 		return {}
 	var hp: Variant = player_dict.get("hp_current")
-	if not _is_whole_number(hp) or int(hp) < 0:
+	# Un Guerrier sauvegardé est toujours debout : on sauvegarde entre deux étapes.
+	if not _is_whole_number(hp) or int(hp) < 1:
 		return {}
 	var saved_at: Variant = raw.get("saved_at", "")
 	return {

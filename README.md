@@ -1,5 +1,7 @@
 # Projet Phénix
 
+[![Tests](https://github.com/jonathan-sousa/tactical-srd/actions/workflows/tests.yml/badge.svg)](https://github.com/jonathan-sousa/tactical-srd/actions/workflows/tests.yml)
+
 Mini jeu tactique au tour par tour pour PC, en 2D vue de dessus sur grille, basé sur les règles publiées dans le SRD 5.2.1. « Projet Phénix » est un titre provisoire.
 
 La v1 enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (Guerrier contre Gobelin), une outro, avec options et sauvegarde.
@@ -32,6 +34,8 @@ GODOT_BIN=/chemin/vers/godot scripts/test.sh
 Le script importe le projet, puis exécute toutes les suites de `tests/`. Le code de sortie vaut 0 si tout passe. Les rapports HTML et XML sont écrits dans `reports/` (ignoré par Git).
 
 Pour un seul fichier : `scripts/test.sh -a res://tests/project_settings_test.gd`.
+
+Les mêmes vérifications tournent sur GitHub Actions à chaque push sur `main` et à chaque pull request (`.github/workflows/tests.yml`) : toute la suite de tests, puis un démarrage du jeu qui échoue sur la moindre erreur ou le moindre avertissement.
 
 Depuis l'éditeur : clic droit sur le dossier `tests/` puis **Run Tests**.
 
