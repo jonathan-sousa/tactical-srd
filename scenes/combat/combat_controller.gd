@@ -141,6 +141,7 @@ func _ready() -> void:
 		token.setup(combatant, combatant.position, _board.cell_center(combatant.position))
 		_tokens_root.add_child(token)
 		_tokens[combatant] = token
+		token.stepped.connect(AudioManager.play.bind(AudioManager.STEP))
 
 	# Note Godot : connecter un signal = s'abonner à un événement (callback).
 	_board.cell_clicked.connect(_on_cell_clicked)
@@ -173,6 +174,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _start_combat() -> void:
+	AudioManager.play_music(AudioManager.COMBAT_MUSIC)
 	_busy = true
 	await _play(state.start(dice))
 	_busy = false
@@ -271,6 +273,7 @@ func _perform(action: Action) -> void:
 	var reason := action.validate(state)
 	if not reason.is_empty():
 		_hint_label.text = Texts.reason(reason)
+		AudioManager.play(AudioManager.REFUSED)
 		return
 	_busy = true
 	_board.path_preview = []
@@ -362,19 +365,25 @@ func _on_attack_rolled(event: AttackRolledEvent) -> void:
 	_log.add_line(Texts.attack_summary(result))
 	_log.add_detail(Texts.attack_detail(result))
 	var target_token := _tokens[result.target]
+	AudioManager.play(AudioManager.THROW if result.is_ranged else AudioManager.SWING)
 	await _tokens[result.attacker].lunge(target_token.position)
 	if not result.is_hit:
+		AudioManager.play(AudioManager.MISS)
 		_float(target_token.position, Texts.FLOAT_MISS, FLOAT_MISS_COLOR)
 		return
 	if result.is_critical:
+		AudioManager.play(AudioManager.CRITICAL)
 		_float(target_token.position + Vector2(0, -26), Texts.FLOAT_CRITICAL, FLOAT_CRITICAL_COLOR, 28)
 		_shake()
+	else:
+		AudioManager.play(AudioManager.HIT)
 	await target_token.flash()
 
 
 func _on_damage_dealt(event: DamageDealtEvent) -> void:
 	if event.is_graze:
 		_log.add_line(Texts.graze_line(event))
+		AudioManager.play(AudioManager.GRAZE)
 		await _tokens[event.target].flash()
 	_float(_tokens[event.target].position, "−%d" % event.amount, FLOAT_DAMAGE_COLOR)
 	_tokens[event.target].refresh()
@@ -389,16 +398,19 @@ func _on_effect_applied(event: EffectAppliedEvent) -> void:
 func _on_healed(event: HealedEvent) -> void:
 	_log.add_line(Texts.healed_line(event), LOG_HEAL_COLOR)
 	_float(_tokens[event.combatant].position, "+%d" % event.amount, FLOAT_HEAL_COLOR)
+	AudioManager.play(AudioManager.HEAL)
 	_tokens[event.combatant].refresh()
 	_refresh()
 
 
 func _on_inspiration_used(event: InspirationUsedEvent) -> void:
+	AudioManager.play(AudioManager.INSPIRATION)
 	_log.add_line(Texts.inspiration_used_line(event), LOG_TURN_COLOR)
 
 
 func _on_combatant_downed(event: CombatantDownedEvent) -> void:
 	_log.add_line(Texts.downed_line(event.combatant), LOG_DOWN_COLOR)
+	AudioManager.play(AudioManager.DOWN)
 	_tokens[event.combatant].is_ghost = false
 	await _tokens[event.combatant].fall()
 	_refresh()
@@ -406,6 +418,7 @@ func _on_combatant_downed(event: CombatantDownedEvent) -> void:
 
 func _on_combatant_died(event: CombatantDiedEvent) -> void:
 	_log.add_line(Texts.died_line(event), LOG_DOWN_COLOR)
+	AudioManager.play(AudioManager.DEATH)
 	_tokens[event.combatant].is_ghost = false
 	await _tokens[event.combatant].die()
 	_refresh()
@@ -419,6 +432,7 @@ func _on_combatant_stabilized(event: CombatantStabilizedEvent) -> void:
 func _on_death_save(event: DeathSaveEvent) -> void:
 	var revived := event.revived
 	_log.add_line(Texts.death_save_line(event), LOG_HEAL_COLOR if revived else LOG_DOWN_COLOR)
+	AudioManager.play(AudioManager.HEAL if revived else AudioManager.DEATH_SAVE)
 	if revived:
 		await _tokens[event.combatant].rise()
 	_tokens[event.combatant].refresh()
@@ -428,6 +442,7 @@ func _on_death_save(event: DeathSaveEvent) -> void:
 func _on_hide_attempted(event: HideAttemptedEvent) -> void:
 	_log.add_line(Texts.hide_line(event), LOG_MUTED_COLOR)
 	if event.success:
+		AudioManager.play(AudioManager.HIDE)
 		_tokens[event.combatant].is_ghost = true
 	_refresh()
 
@@ -435,6 +450,7 @@ func _on_hide_attempted(event: HideAttemptedEvent) -> void:
 ## Révélé : le pion quitte sa dernière position connue pour sa vraie case.
 func _on_revealed(event: RevealedEvent) -> void:
 	_log.add_line(Texts.revealed_line(event), LOG_TURN_COLOR)
+	AudioManager.play(AudioManager.REVEAL)
 	var token := _tokens[event.combatant]
 	token.cell = event.cell
 	token.position = _board.cell_center(event.cell)
@@ -444,11 +460,13 @@ func _on_revealed(event: RevealedEvent) -> void:
 
 func _on_searched(event: SearchedEvent) -> void:
 	_log.add_line(Texts.search_line(event))
+	AudioManager.play(AudioManager.SEARCH)
 	_refresh()
 
 
 func _on_attacked_empty_cell(event: AttackedEmptyCellEvent) -> void:
 	_log.add_line(Texts.empty_cell_attack_line(event))
+	AudioManager.play(AudioManager.SWING)
 	await _tokens[event.attacker].lunge(_board.cell_center(event.cell))
 	_float(_board.cell_center(event.cell), Texts.FLOAT_MISS, FLOAT_MISS_COLOR)
 	_refresh()
@@ -474,6 +492,7 @@ func _on_reaction_declined(event: ReactionDeclinedEvent) -> void:
 
 func _on_combat_ended(event: CombatEndedEvent) -> void:
 	_log.add_line(Texts.end_line(event.winner), LOG_TURN_COLOR)
+	AudioManager.play_jingle(AudioManager.VICTORY_JINGLE if event.winner == Combatant.Side.PLAYER else AudioManager.DEFEAT_JINGLE)
 	combat_finished.emit(event.winner)
 
 

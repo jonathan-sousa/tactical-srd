@@ -33,6 +33,7 @@ var _done := false
 
 func _ready() -> void:
 	_hint_label.text = Texts.DIALOGUE_HINT
+	AudioManager.play_music(AudioManager.MENU_MUSIC)
 	_skip_button.text = Texts.DIALOGUE_SKIP
 	_skip_button.shortcut = _key_shortcut(KEY_TAB)
 	_skip_button.pressed.connect(skip)

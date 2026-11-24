@@ -15,6 +15,7 @@ extends Control
 func _ready() -> void:
 	_title_label.text = str(ProjectSettings.get_setting("application/config/name"))
 	_new_game_button.text = Texts.NEW_GAME
+	AudioManager.play_music(AudioManager.MENU_MUSIC)
 	_continue_button.text = Texts.CONTINUE
 	_options_button.text = Texts.OPTIONS
 	_credits_button.text = Texts.CREDITS
@@ -24,7 +25,7 @@ func _ready() -> void:
 	_continue_button.pressed.connect(_on_continue_pressed)
 	_options_button.pressed.connect(func() -> void: SceneRouter.go_to(SceneRouter.OPTIONS))
 	_credits_button.pressed.connect(func() -> void: SceneRouter.go_to(SceneRouter.CREDITS))
-	_quit_button.pressed.connect(func() -> void: get_tree().quit())
+	_quit_button.pressed.connect(AudioManager.quit_game)
 
 	_confirm_dialog.title = Texts.NEW_GAME_CONFIRM_TITLE
 	_confirm_dialog.dialog_text = Texts.NEW_GAME_CONFIRM

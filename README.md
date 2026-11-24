@@ -4,7 +4,19 @@
 
 Mini jeu tactique au tour par tour pour PC, en 2D vue de dessus sur grille, basé sur les règles publiées dans le SRD 5.2.1. « Projet Phénix » est un titre provisoire.
 
-La v1 enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (Guerrier contre Gobelin), une outro, avec options et sauvegarde.
+Le jeu enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (Guerrier contre Gobelin), une outro, avec options et sauvegarde. Le sprint 2 l'a peaufiné : toutes les règles d'un Guerrier de niveau 1 et d'un Gobelin guerrier, prévisions et retours en combat, graphismes, son et export Windows.
+
+## Règles implémentées
+
+Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officielle en regard, dans `docs/rules-deviations.md`.
+
+- **Tour de combat** : déplacement case par case, action, action bonus, réaction ; Foncer, Se désengager, Esquiver, Chercher, Se relever.
+- **Attaques** : au corps à corps, à distance et lancées, portées normale et longue, désavantage avec un ennemi au contact, ligne de vue (un obstacle est un abri total), avantage et désavantage qui s'annulent, coups critiques, attaques d'opportunité (le joueur est consulté à chaque fois).
+- **Guerrier humain niveau 1, historique Soldat** : Great Weapon Fighting, Second Wind, Weapon Mastery (épée à deux mains : Graze, fléau : Sap, javelots : Slow), Savage Attacker, Inspiration héroïque.
+- **Gobelin guerrier** : cimeterre et arc court, +1d4 dégâts avec l'avantage, Nimble Escape (se désengager ou se cacher par une action bonus).
+- **Se cacher et chercher** : condition Invisible, attaque à l'aveugle d'une case, embuscade et surprise au début du combat.
+- **0 PV** : mort du monstre, Guerrier inconscient et à terre, jets contre la mort, dégâts massifs, critique automatique au contact.
+- **IA** : une action à la fois ; elle se cache, tire de loin, se désengage avant de reculer à l'abri, achève un Guerrier inconscient.
 
 ## Prérequis
 
@@ -19,8 +31,18 @@ La v1 enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (Gu
 
 ## Lancer le jeu
 
-- Depuis l'éditeur : touche **F5**. Écran titre, menu, intro, combat, puis outro (ou écran de défaite). **Échap** ouvre le menu pause pendant le dialogue et le combat.
-- Combat seul : ouvrir `scenes/combat/combat.tscn` puis touche **F6**. Clic sur une case bleue pour se déplacer, clic sur un ennemi adjacent pour attaquer, **Espace** pour finir le tour.
+- Depuis l'éditeur : touche **F5**. Écran titre, menu, intro, combat, puis outro (ou écran de défaite). **Échap** ouvre le menu pause pendant le dialogue et le combat. Dans un dialogue, **Tab** passe la scène et **H** ouvre l'historique.
+- Combat seul : ouvrir `scenes/combat/combat.tscn` puis touche **F6**.
+
+Commandes du combat :
+
+- clic sur une case bleue : se déplacer (le chemin passe en croix rouges s'il provoque une attaque d'opportunité) ;
+- clic sur un ennemi : l'attaquer avec l'arme choisie ; le survol affiche les chances de toucher et les dégâts ;
+- clic sur un ennemi caché (pion transparent), ou **Maj** + clic sur une case : attaque à l'aveugle ;
+- trois premières lettres de la rangée du haut (**A Z E** en AZERTY) : choisir l'épée, le fléau ou les javelots ;
+- **1** à **6** : Foncer, Se désengager, Esquiver, Second souffle, Chercher, Se relever ;
+- **O** / **N** : répondre à une question (attaque d'opportunité, relance) ;
+- **Espace** : finir le tour.
 - En ligne de commande : `godot --path .`
 
 ## Lancer les tests
@@ -42,10 +64,10 @@ Depuis l'éditeur : clic droit sur le dossier `tests/` puis **Run Tests**.
 ## Arborescence
 
 ```text
-autoload/      singletons : SceneRouter, GameState, SaveManager, Settings
+autoload/      singletons : SceneRouter, GameState, SaveManager, Settings, AudioManager
 rules/         moteur de règles pur (RefCounted, aucun Node)
-  actions/     MoveAction, AttackAction, EndTurnAction
-  events/      événements émis par le moteur
+  actions/     actions du joueur et de l'IA (déplacement, attaque, se cacher…)
+  events/      événements émis par le moteur, rejoués par la présentation
 data/
   defs/        scripts des types de Resource (CharacterDef, WeaponDef…)
   characters/  .tres des personnages et monstres
@@ -53,8 +75,8 @@ data/
   encounters/
   dialogues/
 scenes/        title, menu, dialogue, combat, options, credits
-ui/            composants réutilisables et Theme commun
-assets/        placeholders : sprites, tiles, polices
+ui/            composants réutilisables, Theme commun, textes et palette
+assets/        tuiles, sprites, interface, police et sons (voir assets/CREDITS.md)
 tests/         gdUnit4, en miroir de rules/ et autoload/
 docs/          écarts de règles, notes d'architecture
 scripts/       outils en ligne de commande
@@ -64,7 +86,7 @@ scripts/       outils en ligne de commande
 
 Les presets « Windows Desktop » et « Linux » sont dans `export_presets.cfg`. Chacun produit un exécutable unique, données intégrées, dans `build/` (ignoré par Git). Les dossiers `tests/`, `addons/`, `docs/` et `scripts/` sont exclus du jeu exporté.
 
-1. Installer les modèles d'export de Godot 4.7.2 : menu **Éditeur > Gérer les modèles d'export > Télécharger et installer**.
+1. Installer les modèles d'export de Godot 4.7.2 : menu **Éditeur > Gérer les modèles d'export > Télécharger et installer**. Pour Windows seul, il suffit de copier `version.txt` et les fichiers `windows_*_x86_64*.exe` de l'archive `.tpz` dans `%APPDATA%\Godot\export_templates\4.7.2.stable\`.
 2. Menu **Projet > Exporter…**, choisir le preset, puis **Exporter le projet** (décocher « Exporter avec le débogage »).
 
 En ligne de commande :
@@ -74,7 +96,7 @@ godot --headless --path . --export-release "Windows Desktop" build/windows/Proje
 godot --headless --path . --export-release "Linux" build/linux/ProjetPhenix.x86_64
 ```
 
-L'exécutable Windows n'est pas signé : SmartScreen peut afficher un avertissement au premier lancement (« Informations complémentaires » puis « Exécuter quand même »).
+L'exécutable Windows porte l'icône du jeu, la version 1.1.0 et ses métadonnées (nom, éditeur, mentions). Il n'est pas signé : SmartScreen peut afficher un avertissement au premier lancement (« Informations complémentaires » puis « Exécuter quand même »).
 
 ## Enchaînement des écrans
 
@@ -88,7 +110,7 @@ L'exécutable Windows n'est pas signé : SmartScreen peut afficher un avertissem
 - Sauvegarde automatique à chaque étape franchie, dans `user://save_1.json` (sous Windows : `%APPDATA%\Godot\app_userdata\Projet Phénix\`). Pas de sauvegarde en plein combat.
 - Écriture atomique (fichier `.tmp` puis renommage) et champ `version` avec migrations. Un fichier illisible ou d'une version inconnue affiche un message et grise « Continuer ».
 - Seul du JSON validé champ par champ est lu depuis `user://`, jamais une Resource.
-- Les options (volume général, plein écran) sont dans `user://settings.cfg`, indépendamment de la sauvegarde.
+- Les options (volumes général, musique et effets, plein écran, texte agrandi) sont dans `user://settings.cfg`, indépendamment de la sauvegarde. Un fichier d'options plus ancien garde son volume général ; les nouveaux réglages prennent leur valeur par défaut.
 
 ## Conventions
 
@@ -97,11 +119,15 @@ L'exécutable Windows n'est pas signé : SmartScreen peut afficher un avertissem
 - Rendu Compatibility, résolution de base 1280×720, stretch `canvas_items`, aspect `keep`.
 - Commits en français, un par étape cohérente.
 
-## État de la v1
+## Son
+
+Trois bus audio (`default_bus_layout.tres`) : Master, Music et Effects, réglables séparément dans les options. L'autoload `AudioManager` enchaîne les musiques en fondu et joue les bruitages ; la présentation les déclenche à partir des événements du moteur. Sans écran (tests, intégration continue), il garde l'état sans rien jouer.
+
+## État du jeu
 
 Critères d'acceptation du brief :
 
-- Partie complète depuis l'exécutable exporté (titre, menu, intro, combat, outro, retour au menu) : vérifiée sur le jeu complet et par le démarrage sans erreur de l'export Linux. L'export Windows reste à lancer sur un PC Windows.
+- Partie complète depuis l'exécutable exporté (titre, menu, intro, combat, outro, retour au menu) : l'export Windows est produit et démarre sans erreur sur un PC Windows ; la partie complète au clavier et à la souris reste à jouer à la main depuis l'exécutable.
 - La défaite propose de réessayer, et le réessai repart d'un combat propre : vérifié.
 - Quitter puis Continuer reprend à la dernière étape franchie : vérifié, y compris après fermeture du jeu.
 - Le journal affiche chaque jet avec son détail : vérifié et couvert par des tests.

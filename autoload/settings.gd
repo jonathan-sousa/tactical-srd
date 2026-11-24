@@ -1,4 +1,5 @@
-## Options du joueur (volume général, plein écran, texte agrandi), persistées dans
+## Options du joueur (volumes général, musique et effets, plein écran, texte
+## agrandi), persistées dans
 ## `user://settings.cfg` indépendamment de la sauvegarde, et appliquées au
 ## démarrage du jeu.
 ##
@@ -15,8 +16,12 @@ const DEFAULT_PATH := "user://settings.cfg"
 const DEFAULT_VOLUME := 1.0
 
 var path := DEFAULT_PATH
-## Volume général de 0.0 (muet) à 1.0.
+## Volumes de 0.0 (muet) à 1.0 : général, puis musique et effets, qui
+## s'ajoutent au général. Un fichier d'avant le sprint 2 n'a que le volume
+## général : les deux autres prennent alors leur valeur par défaut.
 var master_volume := DEFAULT_VOLUME
+var music_volume := DEFAULT_VOLUME
+var effects_volume := DEFAULT_VOLUME
 var fullscreen := false
 ## Texte agrandi dans le journal de combat, les aides et les dialogues.
 var large_text := false
@@ -29,14 +34,16 @@ func _ready() -> void:
 
 func load_settings() -> void:
 	master_volume = DEFAULT_VOLUME
+	music_volume = DEFAULT_VOLUME
+	effects_volume = DEFAULT_VOLUME
 	fullscreen = false
 	large_text = false
 	var config := ConfigFile.new()
 	if config.load(path) != OK:
 		return
-	var volume: Variant = config.get_value("audio", "master_volume", DEFAULT_VOLUME)
-	if typeof(volume) in [TYPE_FLOAT, TYPE_INT]:
-		master_volume = clampf(float(volume), 0.0, 1.0)
+	master_volume = _read_volume(config, "master_volume")
+	music_volume = _read_volume(config, "music_volume")
+	effects_volume = _read_volume(config, "effects_volume")
 	var full: Variant = config.get_value("display", "fullscreen", false)
 	if typeof(full) == TYPE_BOOL:
 		fullscreen = full
@@ -48,6 +55,8 @@ func load_settings() -> void:
 func save_settings() -> Error:
 	var config := ConfigFile.new()
 	config.set_value("audio", "master_volume", master_volume)
+	config.set_value("audio", "music_volume", music_volume)
+	config.set_value("audio", "effects_volume", effects_volume)
 	config.set_value("display", "fullscreen", fullscreen)
 	config.set_value("display", "large_text", large_text)
 	return config.save(path)
@@ -55,6 +64,18 @@ func save_settings() -> Error:
 
 func set_master_volume(volume: float) -> void:
 	master_volume = clampf(volume, 0.0, 1.0)
+	apply_volume()
+	save_settings()
+
+
+func set_music_volume(volume: float) -> void:
+	music_volume = clampf(volume, 0.0, 1.0)
+	apply_volume()
+	save_settings()
+
+
+func set_effects_volume(volume: float) -> void:
+	effects_volume = clampf(volume, 0.0, 1.0)
 	apply_volume()
 	save_settings()
 
@@ -82,11 +103,29 @@ func apply() -> void:
 	apply_window_mode()
 
 
-## Note Godot : le volume d'un bus audio se règle en décibels ; le bus 0 est
-## le bus « Master » par lequel passent tous les sons.
+## Note Godot : le volume d'un bus audio se règle en décibels ; le bus
+## « Master » reçoit tous les sons, dont ceux des bus « Music » et
+## « Effects » (default_bus_layout.tres).
 func apply_volume() -> void:
-	AudioServer.set_bus_volume_db(0, volume_to_db(master_volume))
-	AudioServer.set_bus_mute(0, master_volume <= 0.0)
+	_apply_bus(&"Master", master_volume)
+	_apply_bus(&"Music", music_volume)
+	_apply_bus(&"Effects", effects_volume)
+
+
+static func _apply_bus(bus_name: StringName, volume: float) -> void:
+	var index := AudioServer.get_bus_index(bus_name)
+	if index < 0:
+		push_error("Bus audio introuvable : %s" % bus_name)
+		return
+	AudioServer.set_bus_volume_db(index, volume_to_db(volume))
+	AudioServer.set_bus_mute(index, volume <= 0.0)
+
+
+static func _read_volume(config: ConfigFile, key: String) -> float:
+	var volume: Variant = config.get_value("audio", key, DEFAULT_VOLUME)
+	if typeof(volume) in [TYPE_FLOAT, TYPE_INT]:
+		return clampf(float(volume), 0.0, 1.0)
+	return DEFAULT_VOLUME
 
 
 func apply_window_mode() -> void:

@@ -17,6 +17,7 @@ const FONT_LICENSE_PATH := "res://assets/fonts/OFL.txt"
 
 func _ready() -> void:
 	_title_label.text = Texts.CREDITS
+	AudioManager.play_music(AudioManager.MENU_MUSIC)
 	_back_button.text = Texts.BACK
 	_back_button.pressed.connect(_back)
 	_fill()

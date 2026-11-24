@@ -72,3 +72,41 @@ func test_large_text_is_announced_and_picks_the_bigger_size() -> void:
 	_settings.set_large_text(true)
 	assert_array(announced).contains_exactly([true])
 	assert_int(_settings.font_size(15, 19)).is_equal(19)
+
+
+func test_music_and_effects_volumes_round_trip() -> void:
+	_settings.music_volume = 0.3
+	_settings.effects_volume = 0.7
+	assert_int(_settings.save_settings()).is_equal(OK)
+	var other: Node = auto_free(SettingsScript.new())
+	other.path = TEST_PATH
+	other.load_settings()
+	assert_float(other.music_volume).is_equal_approx(0.3, 0.001)
+	assert_float(other.effects_volume).is_equal_approx(0.7, 0.001)
+
+
+func test_file_from_before_the_music_volume_keeps_its_master_volume() -> void:
+	# Fichier de la v1 : seulement le volume général.
+	var file := FileAccess.open(TEST_PATH, FileAccess.WRITE)
+	file.store_string("[audio]
+master_volume=0.5
+[display]
+fullscreen=false
+")
+	file.close()
+	_settings.load_settings()
+	assert_float(_settings.master_volume).is_equal_approx(0.5, 0.001)
+	assert_float(_settings.music_volume).is_equal(1.0)
+	assert_float(_settings.effects_volume).is_equal(1.0)
+
+
+func test_volumes_are_applied_to_their_bus() -> void:
+	var saved_music: float = Settings.music_volume
+	_settings.music_volume = 0.5
+	_settings.effects_volume = 0.0
+	_settings.apply_volume()
+	assert_float(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(&"Music"))).is_equal_approx(linear_to_db(0.5), 0.01)
+	assert_bool(AudioServer.is_bus_mute(AudioServer.get_bus_index(&"Effects"))).is_true()
+	# Remet les volumes du jeu.
+	Settings.music_volume = saved_music
+	Settings.apply_volume()

@@ -8,14 +8,22 @@ const CREDITS_PATH := "res://assets/CREDITS.md"
 func test_every_asset_file_is_credited() -> void:
 	var credits := FileAccess.get_file_as_string(CREDITS_PATH)
 	assert_str(credits).is_not_empty()
-	for folder in DirAccess.get_directories_at(ASSETS_DIR):
-		for file in DirAccess.get_files_at(ASSETS_DIR.path_join(folder)):
-			if file.get_extension() in ["png", "ttf"]:
-				var name := file if folder == "ui" else "%s/%s" % [folder, file]
-				if folder == "ui":
-					# Le pack d'interface est crédité en bloc (`ui/*.png`).
-					name = "ui/*.png"
-				assert_str(credits).override_failure_message("Ressource non créditée : %s/%s" % [folder, file]).contains(name)
+	for path in _asset_files(ASSETS_DIR):
+		var relative := path.trim_prefix(ASSETS_DIR + "/")
+		# Le pack d'interface est crédité en bloc (`ui/*.png`).
+		var name := "ui/*.png" if relative.begins_with("ui/") else relative
+		assert_str(credits).override_failure_message("Ressource non créditée : %s" % relative).contains(name)
+
+
+## Fichiers d'images, de sons et de police, sous-dossiers compris.
+func _asset_files(dir_path: String) -> Array[String]:
+	var found: Array[String] = []
+	for file in DirAccess.get_files_at(dir_path):
+		if file.get_extension() in ["png", "ttf", "ogg", "mp3"]:
+			found.append(dir_path.path_join(file))
+	for sub_dir in DirAccess.get_directories_at(dir_path):
+		found.append_array(_asset_files(dir_path.path_join(sub_dir)))
+	return found
 
 
 func test_font_license_ships_with_the_font() -> void:
