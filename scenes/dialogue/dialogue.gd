@@ -107,7 +107,7 @@ func toggle_history() -> void:
 	_history_text.clear()
 	for i in _index + 1:
 		var line := dialogue.lines[i]
-		_history_text.push_color(Color(1, 0.85, 0.3))
+		_history_text.push_color(Palette.GOLD)
 		_history_text.add_text(line.speaker)
 		_history_text.pop()
 		_history_text.newline()

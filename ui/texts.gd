@@ -58,7 +58,14 @@ const STORY_COMPLETED := "Histoire terminée. Lancez une nouvelle partie pour la
 const CREDITS_RULES := "Règles"
 const CREDITS_ENGINE := "Moteur"
 const CREDITS_ASSETS := "Graphismes et police"
-const CREDITS_ASSETS_BODY := "Plateau, pions et interface dessinés par le code du jeu. Police par défaut de Godot Engine (voir les licences ci-dessous)."
+## Ressources graphiques et police : une ligne par pack (voir assets/CREDITS.md).
+const CREDITS_ASSETS_LINES: Array[String] = [
+	"Tuiles du plateau : Tiny Town, par Kenney (www.kenney.nl), licence CC0.",
+	"Pions et portraits : Tiny Dungeon, par Kenney (www.kenney.nl), licence CC0 ; le Gobelin est une tuile recolorée pour ce jeu.",
+	"Panneaux et boutons : UI Pack RPG Expansion, par Kenney (www.kenney.nl), licence CC0.",
+	"Police : Pixelify Sans, © 2021 The Pixelify Sans Project Authors, SIL Open Font License 1.1 (texte ci-dessous).",
+]
+const CREDITS_FONT_LICENSE := "Pixelify Sans — SIL Open Font License 1.1"
 const CREDITS_TOOLS := "Outils"
 const CREDITS_TOOLS_BODY := "Tests automatisés avec gdUnit4 (licence MIT), non inclus dans le jeu exporté."
 const CREDITS_THIRD_PARTY := "Composants tiers de Godot Engine"

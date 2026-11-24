@@ -20,14 +20,14 @@ const ACTION_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6]
 ## la rangée du haut : A Z E en AZERTY, Q W E en QWERTY).
 const WEAPON_KEYS: Array[Key] = [KEY_Q, KEY_W, KEY_E]
 
-const LOG_TURN_COLOR := Color(1.0, 0.85, 0.3)
-const LOG_MUTED_COLOR := Color(0.6, 0.6, 0.6)
-const LOG_DOWN_COLOR := Color(1.0, 0.45, 0.4)
-const LOG_HEAL_COLOR := Color(0.55, 0.9, 0.55)
+const LOG_TURN_COLOR := Palette.GOLD
+const LOG_MUTED_COLOR := Palette.MUTED
+const LOG_DOWN_COLOR := Palette.DANGER
+const LOG_HEAL_COLOR := Palette.HEAL
 const FLOAT_DAMAGE_COLOR := Color(1.0, 0.45, 0.35)
 const FLOAT_HEAL_COLOR := Color(0.5, 1.0, 0.55)
 const FLOAT_MISS_COLOR := Color(0.85, 0.85, 0.9)
-const FLOAT_CRITICAL_COLOR := Color(1.0, 0.85, 0.3)
+const FLOAT_CRITICAL_COLOR := Palette.GOLD
 ## Secousse du plateau sur un coup critique : amplitude en pixels, durée.
 const SHAKE_STRENGTH := 6.0
 const SHAKE_DURATION := 0.25
@@ -77,6 +77,7 @@ var _event_handlers: Dictionary[Script, Callable] = {}
 @onready var _decision_yes: Button = %DecisionYesButton
 @onready var _decision_no: Button = %DecisionNoButton
 @onready var _target_label: Label = %TargetLabel
+@onready var _board_area: Control = %BoardArea
 
 ## Boutons de la barre d'actions, par code d'action, et l'action que chacun
 ## propose (une fonction qui la construit).
@@ -128,7 +129,11 @@ func _ready() -> void:
 		_player.heroic_inspiration = GameState.player_heroic_inspiration
 	_weapon = _player.melee_weapon()
 	_board.setup(encounter)
-	_board_origin = _board.position
+	# Le plateau (un Node2D) suit la place que lui réserve l'interface.
+	# Note Godot : `item_rect_changed` est émis quand un Control change de
+	# position ou de taille, par exemple quand son conteneur le place.
+	_board_area.item_rect_changed.connect(_place_board)
+	_place_board()
 	_apply_text_size()
 	Settings.large_text_changed.connect(func(_enabled: bool) -> void: _apply_text_size())
 	for combatant in state.combatants:
@@ -706,6 +711,11 @@ func _refresh() -> void:
 	_set_pulse(nothing_left)
 	if nothing_left:
 		_hint_label.text = Texts.NOTHING_LEFT
+
+
+func _place_board() -> void:
+	_board.position = _board_area.global_position
+	_board_origin = _board.position
 
 
 ## Panneau de la cible : l'ennemi survolé, sinon le premier encore en vie.

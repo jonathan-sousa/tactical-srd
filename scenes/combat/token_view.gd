@@ -1,5 +1,6 @@
-## Pion d'un combattant : un disque de couleur avec l'initiale du nom et une
-## barre de PV. Placeholder dessiné en code, en attendant de vrais sprites.
+## Pion d'un combattant : son sprite (CharacterDef.sprite, 16 px agrandi ×3)
+## sur un anneau à la couleur de son camp, avec une barre de PV. Sans
+## sprite, un disque avec les deux premières lettres du nom.
 ##
 ## Un ennemi caché est montré en transparence à sa dernière position connue
 ## (`cell`), qui n'est pas forcément sa vraie case.
@@ -12,7 +13,7 @@ extends Node2D
 const RADIUS := 24.0
 const PLAYER_COLOR := Color(0.27, 0.52, 0.92)
 const ENEMY_COLOR := Color(0.82, 0.3, 0.25)
-const ACTIVE_RING_COLOR := Color(1.0, 0.85, 0.3)
+const ACTIVE_RING_COLOR := Palette.GOLD
 const HP_BACK_COLOR := Color(0.1, 0.1, 0.1)
 ## Barre de PV : vert au-dessus de la moitié, orange jusqu'au quart, rouge
 ## en dessous.
@@ -32,6 +33,11 @@ const BADGE_COLORS: Dictionary[StringName, Color] = {
 	Effect.PRONE: Color(0.75, 0.55, 0.3),
 }
 const STEP_DURATION := 0.12
+## Sprite agrandi ×3, posé sur l'anneau.
+const SPRITE_SIZE := 48.0
+## Léger balancement au repos : amplitude en pixels et durée d'un aller.
+const BOB_HEIGHT := 2.0
+const BOB_DURATION := 0.7
 const DOWN_TINT := Color(0.45, 0.45, 0.45, 0.75)
 const DEAD_TINT := Color(0.3, 0.3, 0.3, 0.6)
 const DEAD_MARK_COLOR := Color(0.1, 0.1, 0.1)
@@ -67,6 +73,17 @@ var _shown_hp := 0.0:
 		_shown_hp = value
 		queue_redraw()
 var _hp_tween: Tween
+## Décalage vertical du balancement.
+var _bob := 0.0:
+	set(value):
+		_bob = value
+		queue_redraw()
+
+
+func _ready() -> void:
+	var tween := create_tween().set_loops()
+	tween.tween_property(self, "_bob", -BOB_HEIGHT, BOB_DURATION).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(self, "_bob", 0.0, BOB_DURATION).set_trans(Tween.TRANS_SINE)
 
 
 func setup(p_combatant: Combatant, p_cell: Vector2i, center: Vector2) -> void:
@@ -134,6 +151,15 @@ func die() -> void:
 	queue_redraw()
 
 
+## Anneau aplati sous les pieds, à la couleur du camp ; doré pendant son tour.
+func _draw_feet_ring(color: Color) -> void:
+	draw_set_transform(Vector2(0, RADIUS - 4.0), 0.0, Vector2(1.0, 0.45))
+	draw_circle(Vector2.ZERO, RADIUS - 2.0, Color(color, 0.35))
+	var ring := ACTIVE_RING_COLOR if is_active and not combatant.is_down() else color
+	draw_arc(Vector2.ZERO, RADIUS - 2.0, 0.0, TAU, 48, ring, 4.0 if is_active else 3.0)
+	draw_set_transform(Vector2.ZERO)
+
+
 ## Couleur de la barre de PV selon la part de PV restants.
 static func hp_color(ratio: float) -> Color:
 	if ratio > 0.5:
@@ -154,17 +180,27 @@ func _draw() -> void:
 	if combatant == null:
 		return
 	var color := PLAYER_COLOR if combatant.side == Combatant.Side.PLAYER else ENEMY_COLOR
-	if is_active and not combatant.is_down():
-		draw_arc(Vector2.ZERO, RADIUS + 5.0, 0.0, TAU, 48, ACTIVE_RING_COLOR, 3.0)
-	draw_circle(Vector2.ZERO, RADIUS, color)
-	draw_arc(Vector2.ZERO, RADIUS, 0.0, TAU, 48, color.darkened(0.4), 2.0)
-
 	var font := ThemeDB.fallback_font
-	# Deux lettres pour distinguer Guerrier (Gu) et Gobelin (Go).
-	var initial := combatant.definition.display_name.left(2)
-	var font_size := 20
-	var text_size := font.get_string_size(initial, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
-	draw_string(font, Vector2(-text_size.x / 2.0, text_size.y / 3.0), initial, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, Color.WHITE)
+	var sprite := combatant.definition.sprite
+	if sprite != null:
+		_draw_feet_ring(color)
+		var standing := not combatant.is_down()
+		var rect := Rect2(Vector2(-SPRITE_SIZE / 2.0, -SPRITE_SIZE / 2.0 - 4.0 + (_bob if standing else 0.0)), Vector2.ONE * SPRITE_SIZE)
+		if not standing:
+			# Inconscient ou mort : le personnage est couché.
+			draw_set_transform(Vector2(0, 8), PI / 2.0)
+			rect.position = Vector2(-SPRITE_SIZE / 2.0, -SPRITE_SIZE / 2.0)
+		draw_texture_rect(sprite, rect, false)
+		draw_set_transform(Vector2.ZERO)
+	else:
+		if is_active and not combatant.is_down():
+			draw_arc(Vector2.ZERO, RADIUS + 5.0, 0.0, TAU, 48, ACTIVE_RING_COLOR, 3.0)
+		draw_circle(Vector2.ZERO, RADIUS, color)
+		draw_arc(Vector2.ZERO, RADIUS, 0.0, TAU, 48, color.darkened(0.4), 2.0)
+		# Deux lettres pour distinguer Guerrier (Gu) et Gobelin (Go).
+		var initial := combatant.definition.display_name.left(2)
+		var text_size := font.get_string_size(initial, HORIZONTAL_ALIGNMENT_CENTER, -1, 20)
+		draw_string(font, Vector2(-text_size.x / 2.0, text_size.y / 3.0), initial, HORIZONTAL_ALIGNMENT_CENTER, -1, 20, Color.WHITE)
 
 	var ratio := clampf(_shown_hp / combatant.definition.max_hp, 0.0, 1.0)
 	var bar := Rect2(Vector2(-RADIUS, RADIUS + 4.0), Vector2(RADIUS * 2.0, 6.0))

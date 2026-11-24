@@ -1,8 +1,11 @@
-## Grille de combat : cases, obstacles, surlignage des cases atteignables et
-## aperçu du chemin. Ne connaît aucune règle : on lui dit quoi dessiner.
+## Grille de combat : sol et obstacles en tuiles, surlignage des cases
+## atteignables et aperçu du chemin. Ne connaît aucune règle : on lui dit quoi
+## dessiner.
 ##
 ## Note Godot : un Node2D dessine dans `_draw()`, appelée par le moteur quand
 ## on demande `queue_redraw()`. C'est du dessin immédiat, sans fichier image.
+## Les tuiles, elles, sont des TileMapLayer : une grille de petites images
+## prises dans une planche (Kenney Tiny Town, 16 px, agrandies ×4).
 class_name BoardView
 extends Node2D
 
@@ -14,11 +17,15 @@ signal cell_hovered(cell: Vector2i)
 const CELL_SIZE := 64
 const NO_CELL := Vector2i(-1, -1)
 
-const FLOOR_COLOR := Color(0.23, 0.22, 0.2)
-const FLOOR_ALT_COLOR := Color(0.25, 0.24, 0.22)
-const LINE_COLOR := Color(0.12, 0.11, 0.1)
-const OBSTACLE_COLOR := Color(0.42, 0.38, 0.33)
-const OBSTACLE_EDGE_COLOR := Color(0.3, 0.27, 0.23)
+## Planche de tuiles et taille d'une tuile dans la planche.
+const TILES: Texture2D = preload("res://assets/tiles/tiny_town.png")
+const TILE_SIZE := 16
+## Herbe : unie, touffue, fleurie (coordonnées dans la planche).
+const GRASS_TILES: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+## Obstacles : buisson, sapin, arbre d'automne.
+const OBSTACLE_TILES: Array[Vector2i] = [Vector2i(5, 0), Vector2i(4, 2), Vector2i(3, 2)]
+
+const LINE_COLOR := Color(0.05, 0.1, 0.04, 0.22)
 const REACHABLE_COLOR := Color(0.3, 0.55, 0.95, 0.28)
 const ATTACKABLE_COLOR := Color(0.95, 0.3, 0.25, 0.35)
 const PATH_COLOR := Color(0.55, 0.8, 1.0, 0.9)
@@ -54,12 +61,58 @@ var path_warning := false:
 		queue_redraw()
 
 var _hovered := NO_CELL
+## Couches de tuiles déjà créées (le sol, puis les obstacles).
+var _layer_count := 0
 
 
 func setup(encounter: EncounterDef) -> void:
 	grid_size = encounter.grid_size
 	blocked_cells = encounter.blocked_cells
+	_build_tiles()
 	queue_redraw()
+
+
+## Sol et obstacles. Le choix de la tuile dépend seulement de la case : le
+## même combat a toujours le même décor.
+func _build_tiles() -> void:
+	var tile_set := TileSet.new()
+	tile_set.tile_size = Vector2i(TILE_SIZE, TILE_SIZE)
+	var source := TileSetAtlasSource.new()
+	source.texture = TILES
+	source.texture_region_size = Vector2i(TILE_SIZE, TILE_SIZE)
+	for coords: Vector2i in GRASS_TILES + OBSTACLE_TILES:
+		source.create_tile(coords)
+	tile_set.add_source(source, 0)
+
+	var floor_layer := _make_layer(tile_set, "Floor")
+	var obstacle_layer := _make_layer(tile_set, "Obstacles")
+	for x in grid_size.x:
+		for y in grid_size.y:
+			var cell := Vector2i(x, y)
+			var variant := _variant(cell)
+			floor_layer.set_cell(cell, 0, GRASS_TILES[0] if variant % 5 > 1 else GRASS_TILES[1 + variant % 2])
+			if blocked_cells.has(cell):
+				obstacle_layer.set_cell(cell, 0, OBSTACLE_TILES[variant % OBSTACLE_TILES.size()])
+
+
+# Note Godot : `show_behind_parent` dessine ce nœud sous le dessin de son
+# parent : les surlignages du plateau restent au-dessus de l'herbe.
+func _make_layer(tile_set: TileSet, layer_name: String) -> TileMapLayer:
+	var layer := TileMapLayer.new()
+	layer.name = layer_name
+	layer.tile_set = tile_set
+	layer.scale = Vector2.ONE * (CELL_SIZE / float(TILE_SIZE))
+	layer.show_behind_parent = true
+	add_child(layer)
+	# Avant les pions (Tokens), après les couches déjà créées.
+	move_child(layer, _layer_count)
+	_layer_count += 1
+	return layer
+
+
+## Nombre pseudo-aléatoire stable pour une case.
+static func _variant(cell: Vector2i) -> int:
+	return absi(cell.x * 73856093 ^ cell.y * 19349663) % 97
 
 
 ## Centre d'une case, dans le repère du plateau.
@@ -96,11 +149,7 @@ func _draw() -> void:
 		for y in grid_size.y:
 			var cell := Vector2i(x, y)
 			var rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
-			draw_rect(rect, FLOOR_COLOR if (x + y) % 2 == 0 else FLOOR_ALT_COLOR)
-			if blocked_cells.has(cell):
-				draw_rect(rect.grow(-6), OBSTACLE_COLOR)
-				draw_rect(rect.grow(-6), OBSTACLE_EDGE_COLOR, false, 3.0)
-			elif reachable.has(cell):
+			if reachable.has(cell):
 				draw_rect(rect, REACHABLE_COLOR)
 			if attackable.has(cell):
 				draw_rect(rect, ATTACKABLE_COLOR)

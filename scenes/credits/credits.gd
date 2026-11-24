@@ -5,8 +5,10 @@
 ## restent exactes à chaque mise à jour du moteur, sans copie à maintenir.
 extends Control
 
-const HEADING_COLOR := Color(1.0, 0.85, 0.3)
-const MUTED_COLOR := Color(0.65, 0.65, 0.65)
+const HEADING_COLOR := Palette.GOLD
+const MUTED_COLOR := Palette.MUTED
+## Texte de la licence de la police, livré avec le jeu (voir export_presets.cfg).
+const FONT_LICENSE_PATH := "res://assets/fonts/OFL.txt"
 
 @onready var _title_label: Label = %CreditsTitle
 @onready var _body: RichTextLabel = %CreditsBody
@@ -43,7 +45,8 @@ func _fill() -> void:
 	_paragraph(Engine.get_license_text(), MUTED_COLOR)
 
 	_heading(Texts.CREDITS_ASSETS)
-	_paragraph(Texts.CREDITS_ASSETS_BODY)
+	for line in Texts.CREDITS_ASSETS_LINES:
+		_paragraph(line)
 
 	_heading(Texts.CREDITS_TOOLS)
 	_paragraph(Texts.CREDITS_TOOLS_BODY)
@@ -58,6 +61,8 @@ func _fill() -> void:
 		_paragraph("\n".join(lines), MUTED_COLOR)
 
 	_heading(Texts.CREDITS_LICENSES)
+	_subheading(Texts.CREDITS_FONT_LICENSE)
+	_paragraph(FileAccess.get_file_as_string(FONT_LICENSE_PATH), MUTED_COLOR)
 	var licenses: Dictionary = Engine.get_license_info()
 	for name: String in licenses:
 		_subheading(name)

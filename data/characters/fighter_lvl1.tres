@@ -5,10 +5,12 @@
 [ext_resource type="Resource" path="res://data/weapons/greatsword.tres" id="3_r0ivs"]
 [ext_resource type="Resource" path="res://data/weapons/flail.tres" id="4_flail"]
 [ext_resource type="Resource" path="res://data/weapons/javelin.tres" id="5_javel"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fighter.png" id="9_sprite"]
 
 [resource]
 script = ExtResource("1_w10rj")
 id = &"fighter_lvl1"
+sprite = ExtResource("9_sprite")
 display_name = "Guerrier"
 strength = 17
 dexterity = 13
