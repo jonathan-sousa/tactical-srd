@@ -2,7 +2,7 @@
 class_name InitiativeBar
 extends HBoxContainer
 
-const ACTIVE_COLOR := Color(1.0, 0.85, 0.3)
+const ACTIVE_COLOR := Palette.GOLD
 const IDLE_COLOR := Color(0.85, 0.85, 0.85)
 const DOWN_COLOR := Color(0.45, 0.45, 0.45)
 

@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_s32o4"]
 [ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_tiqlg"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fighter.png" id="8_fighter"]
+[ext_resource type="Texture2D" path="res://assets/sprites/goblin.png" id="9_goblin"]
 
 [sub_resource type="Resource" id="Resource_stx1u"]
 script = ExtResource("1_s32o4")
@@ -16,16 +18,19 @@ text = "Au détour du col, les chariots gisent renversés, leurs bâches lacér�
 [sub_resource type="Resource" id="Resource_axwlu"]
 script = ExtResource("1_s32o4")
 speaker = "Guerrier"
+portrait = ExtResource("8_fighter")
 text = "Des traces de pas… petites, nombreuses. Et toutes fraîches."
 
 [sub_resource type="Resource" id="Resource_4p1oo"]
 script = ExtResource("1_s32o4")
 speaker = "Gobelin"
+portrait = ExtResource("9_goblin")
 text = "Hé, la grande carcasse ! Pose ton épée et vide ta bourse, on sera peut-être gentils."
 
 [sub_resource type="Resource" id="Resource_n8x1o"]
 script = ExtResource("1_s32o4")
 speaker = "Guerrier"
+portrait = ExtResource("8_fighter")
 text = "J'ai une meilleure idée."
 
 [resource]

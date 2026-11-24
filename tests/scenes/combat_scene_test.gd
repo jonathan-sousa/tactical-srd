@@ -383,3 +383,16 @@ func test_hit_shows_floating_damage() -> void:
 		if child is FloatingText:
 			floating += 1
 	assert_int(floating).is_greater(0)
+
+
+func test_board_is_built_from_tiles() -> void:
+	await _start(FIGHTER_FIRST)
+	var board: BoardView = _scene.get_node("%Board")
+	var floor_layer: TileMapLayer = board.get_node("Floor")
+	var obstacles: TileMapLayer = board.get_node("Obstacles")
+	var encounter := _state().encounter
+	assert_int(floor_layer.get_used_cells().size()).is_equal(encounter.grid_size.x * encounter.grid_size.y)
+	assert_array(obstacles.get_used_cells()).contains_exactly_in_any_order(encounter.blocked_cells)
+	# Le plateau suit la zone que l'interface lui réserve.
+	var area: Control = _scene.get_node("%BoardArea")
+	assert_that(board.position).is_equal(area.global_position)

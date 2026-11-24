@@ -6,9 +6,9 @@
 class_name CombatLog
 extends RichTextLabel
 
-const TEXT_COLOR := Color(0.9, 0.9, 0.9)
+const TEXT_COLOR := Palette.TEXT
 const DETAIL_COLOR := Color(0.62, 0.62, 0.66)
-const HEADER_COLOR := Color(1.0, 0.85, 0.3)
+const HEADER_COLOR := Palette.GOLD
 
 
 func _ready() -> void:

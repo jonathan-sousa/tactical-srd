@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_qy03l"]
 [ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_ovsm7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/fighter.png" id="8_fighter"]
 
 [sub_resource type="Resource" id="Resource_2kjju"]
 script = ExtResource("1_qy03l")
@@ -11,6 +12,7 @@ text = "Le gobelin s'effondre parmi les caisses éventrées."
 [sub_resource type="Resource" id="Resource_nbs0v"]
 script = ExtResource("1_qy03l")
 speaker = "Guerrier"
+portrait = ExtResource("8_fighter")
 text = "Il n'était pas seul. Les autres ne doivent pas être loin."
 
 [sub_resource type="Resource" id="Resource_x2qko"]

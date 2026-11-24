@@ -4,10 +4,12 @@
 [ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="2_3wrra"]
 [ext_resource type="Resource" path="res://data/weapons/scimitar.tres" id="3_ulwa0"]
 [ext_resource type="Resource" path="res://data/weapons/shortbow.tres" id="4_sbow"]
+[ext_resource type="Texture2D" path="res://assets/sprites/goblin.png" id="9_sprite"]
 
 [resource]
 script = ExtResource("1_p0yey")
 id = &"goblin_warrior"
+sprite = ExtResource("9_sprite")
 display_name = "Gobelin guerrier"
 strength = 8
 dexterity = 15
