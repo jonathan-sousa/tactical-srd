@@ -325,7 +325,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 		var skip: Array[Combatant] = []
 		if i == 0:
 			skip = already_asked
-		var reactor := _opportunity_reactor(mover, path[i], skip)
+		var reactor := _opportunity_reactor(mover, mover.position, path[i], skip)
 		if reactor != null:
 			if not walked.is_empty():
 				events.append(MovedEvent.new(mover, from, walked, unseen))
@@ -350,20 +350,36 @@ func resume_movement(window: ReactionWindow) -> Array[CombatEvent]:
 	return walk(window.mover, window.remaining_path, window.asked)
 
 
-## Premier ennemi qui peut faire une attaque d'opportunité si `mover` va
-## sur `next` (SRD « Opportunity Attacks ») : il le voit, il a encore sa
-## réaction, et ce pas fait sortir `mover` de son allonge. Aucun si `mover`
-## s'est désengagé.
-func _opportunity_reactor(mover: Combatant, next: Vector2i, skip: Array[Combatant]) -> Combatant:
+## Ennemis qui auraient droit à une attaque d'opportunité si `mover`
+## suivait ce chemin, dans l'ordre où ils seraient sollicités. Sert aux
+## prévisualisations et à l'IA : chacun peut encore décider de ne pas réagir.
+func opportunity_attackers(mover: Combatant, path: Array[Vector2i]) -> Array[Combatant]:
+	var found: Array[Combatant] = []
+	var from := mover.position
+	for cell in path:
+		var reactor := _opportunity_reactor(mover, from, cell, found)
+		while reactor != null:
+			found.append(reactor)
+			reactor = _opportunity_reactor(mover, from, cell, found)
+		from = cell
+	return found
+
+
+## Premier ennemi qui peut faire une attaque d'opportunité si `mover` va de
+## `from` à `next` (SRD « Opportunity Attacks ») : il le voit, il a encore
+## sa réaction, et ce pas fait sortir `mover` de son allonge. Aucun si
+## `mover` s'est désengagé.
+func _opportunity_reactor(mover: Combatant, from: Vector2i, next: Vector2i, skip: Array[Combatant]) -> Combatant:
 	if has_effect(mover, Effect.DISENGAGED):
 		return null
 	for other in combatants:
 		if other.side == mover.side or other.is_down() or not other.reaction_available or skip.has(other):
 			continue
 		var weapon := other.melee_weapon()
-		if weapon == null:
+		if weapon == null or is_hidden_from(mover, other):
 			continue
-		if is_cell_within_reach(other, mover.position, weapon) 				and not is_cell_within_reach(other, next, weapon) 				and can_see(other, mover):
+		var leaves_reach := is_cell_within_reach(other, from, weapon) and not is_cell_within_reach(other, next, weapon)
+		if leaves_reach and line_of_sight.is_clear(other.position, from):
 			return other
 	return null
 

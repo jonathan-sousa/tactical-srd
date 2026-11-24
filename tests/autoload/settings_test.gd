@@ -26,11 +26,13 @@ func test_defaults_without_file() -> void:
 	_settings.load_settings()
 	assert_float(_settings.master_volume).is_equal(1.0)
 	assert_bool(_settings.fullscreen).is_false()
+	assert_bool(_settings.large_text).is_false()
 
 
 func test_round_trip() -> void:
 	_settings.master_volume = 0.4
 	_settings.fullscreen = true
+	_settings.large_text = true
 	assert_int(_settings.save_settings()).is_equal(OK)
 
 	var other: Node = auto_free(SettingsScript.new())
@@ -38,6 +40,7 @@ func test_round_trip() -> void:
 	other.load_settings()
 	assert_float(other.master_volume).is_equal_approx(0.4, 0.001)
 	assert_bool(other.fullscreen).is_true()
+	assert_bool(other.large_text).is_true()
 
 
 func test_invalid_values_fall_back_to_defaults() -> void:
@@ -60,3 +63,12 @@ func test_volume_is_clamped() -> void:
 func test_volume_to_decibels() -> void:
 	assert_float(SettingsScript.volume_to_db(1.0)).is_equal_approx(0.0, 0.001)
 	assert_float(SettingsScript.volume_to_db(0.0)).is_less(-60.0)
+
+
+func test_large_text_is_announced_and_picks_the_bigger_size() -> void:
+	var announced: Array[bool] = []
+	_settings.large_text_changed.connect(func(enabled: bool) -> void: announced.append(enabled))
+	assert_int(_settings.font_size(15, 19)).is_equal(15)
+	_settings.set_large_text(true)
+	assert_array(announced).contains_exactly([true])
+	assert_int(_settings.font_size(15, 19)).is_equal(19)

@@ -3,6 +3,9 @@
 ## Texte affiché lettre par lettre ; clic ou Entrée affiche toute la
 ## réplique d'un coup, puis passe à la suivante. Après la dernière, émet
 ## `finished` et, dans l'histoire, passe à l'étape suivante.
+##
+## « Passer » (Tab) saute tout le dialogue ; « Historique » (H) montre les
+## répliques déjà lues.
 extends Control
 
 signal finished
@@ -22,10 +25,22 @@ var _done := false
 @onready var _text_label: Label = %TextLabel
 @onready var _portrait: TextureRect = %Portrait
 @onready var _hint_label: Label = %HintLabel
+@onready var _skip_button: Button = %SkipButton
+@onready var _history_button: Button = %HistoryButton
+@onready var _history_panel: PanelContainer = %HistoryPanel
+@onready var _history_text: RichTextLabel = %HistoryText
 
 
 func _ready() -> void:
 	_hint_label.text = Texts.DIALOGUE_HINT
+	_skip_button.text = Texts.DIALOGUE_SKIP
+	_skip_button.shortcut = _key_shortcut(KEY_TAB)
+	_skip_button.pressed.connect(skip)
+	_history_button.text = Texts.DIALOGUE_HISTORY
+	_history_button.shortcut = _key_shortcut(KEY_H)
+	_history_button.pressed.connect(toggle_history)
+	_apply_text_size()
+	Settings.large_text_changed.connect(func(_enabled: bool) -> void: _apply_text_size())
 	if dialogue == null:
 		var step := GameState.current_step()
 		if step != null and step.kind == StoryStep.Kind.DIALOGUE:
@@ -63,7 +78,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Affiche toute la réplique si elle s'écrit encore, sinon passe à la suivante.
 func advance() -> void:
-	if _done or dialogue == null:
+	if _done or dialogue == null or _history_panel.visible:
 		return
 	if _typing:
 		_complete_line()
@@ -71,6 +86,53 @@ func advance() -> void:
 		_show_line(_index + 1)
 	else:
 		_finish()
+
+
+## Saute le reste du dialogue.
+func skip() -> void:
+	if _done or dialogue == null:
+		return
+	_history_panel.hide()
+	_finish()
+
+
+## Ouvre ou ferme l'historique des répliques déjà lues.
+func toggle_history() -> void:
+	if dialogue == null:
+		return
+	if _history_panel.visible:
+		_history_panel.hide()
+		_history_button.text = Texts.DIALOGUE_HISTORY
+		return
+	_history_text.clear()
+	for i in _index + 1:
+		var line := dialogue.lines[i]
+		_history_text.push_color(Color(1, 0.85, 0.3))
+		_history_text.add_text(line.speaker)
+		_history_text.pop()
+		_history_text.newline()
+		_history_text.add_text(line.text)
+		_history_text.newline()
+		_history_text.newline()
+	_history_panel.show()
+	_history_button.text = Texts.DIALOGUE_HISTORY_CLOSE
+
+
+func is_history_open() -> bool:
+	return _history_panel.visible
+
+
+func _apply_text_size() -> void:
+	_text_label.add_theme_font_size_override(&"font_size", Settings.font_size(22, 26))
+	_history_text.add_theme_font_size_override(&"normal_font_size", Settings.font_size(18, 22))
+
+
+static func _key_shortcut(key: Key) -> Shortcut:
+	var event := InputEventKey.new()
+	event.keycode = key
+	var shortcut := Shortcut.new()
+	shortcut.events = [event]
+	return shortcut
 
 
 func _show_line(index: int) -> void:

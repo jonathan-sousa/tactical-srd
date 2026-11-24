@@ -24,6 +24,13 @@ const LOG_TURN_COLOR := Color(1.0, 0.85, 0.3)
 const LOG_MUTED_COLOR := Color(0.6, 0.6, 0.6)
 const LOG_DOWN_COLOR := Color(1.0, 0.45, 0.4)
 const LOG_HEAL_COLOR := Color(0.55, 0.9, 0.55)
+const FLOAT_DAMAGE_COLOR := Color(1.0, 0.45, 0.35)
+const FLOAT_HEAL_COLOR := Color(0.5, 1.0, 0.55)
+const FLOAT_MISS_COLOR := Color(0.85, 0.85, 0.9)
+const FLOAT_CRITICAL_COLOR := Color(1.0, 0.85, 0.3)
+## Secousse du plateau sur un coup critique : amplitude en pixels, durée.
+const SHAKE_STRENGTH := 6.0
+const SHAKE_DURATION := 0.25
 
 # Note Godot : @export rend la variable réglable dans l'inspecteur, pour
 # chaque instance de la scène.
@@ -69,6 +76,7 @@ var _event_handlers: Dictionary[Script, Callable] = {}
 @onready var _decision_question: Label = %DecisionQuestionLabel
 @onready var _decision_yes: Button = %DecisionYesButton
 @onready var _decision_no: Button = %DecisionNoButton
+@onready var _target_label: Label = %TargetLabel
 
 ## Boutons de la barre d'actions, par code d'action, et l'action que chacun
 ## propose (une fonction qui la construit).
@@ -79,6 +87,13 @@ var _weapon: WeaponDef
 var _weapon_buttons: Dictionary[WeaponDef, Button] = {}
 ## Lettre de la touche de chaque arme, calculée une fois.
 var _weapon_key_labels: Array[String] = []
+## Ennemi survolé, montré dans le panneau de la cible (sinon le premier
+## ennemi vivant).
+var _hovered_enemy: Combatant
+## Dernier round annoncé dans le journal.
+var _logged_round := 0
+## Position de repos du plateau, que la secousse retrouve.
+var _board_origin: Vector2
 
 
 func _ready() -> void:
@@ -113,6 +128,9 @@ func _ready() -> void:
 		_player.heroic_inspiration = GameState.player_heroic_inspiration
 	_weapon = _player.melee_weapon()
 	_board.setup(encounter)
+	_board_origin = _board.position
+	_apply_text_size()
+	Settings.large_text_changed.connect(func(_enabled: bool) -> void: _apply_text_size())
 	for combatant in state.combatants:
 		var token := TokenView.new()
 		token.setup(combatant, combatant.position, _board.cell_center(combatant.position))
@@ -311,6 +329,9 @@ func _on_initiative_rolled(event: InitiativeRolledEvent) -> void:
 
 
 func _on_turn_started(event: TurnStartedEvent) -> void:
+	if event.round != _logged_round:
+		_logged_round = event.round
+		_log.add_header(Texts.round_header(event.round))
 	_log.add_line(Texts.turn_line(event), LOG_TURN_COLOR)
 	for combatant: Combatant in _tokens:
 		_tokens[combatant].is_active = combatant == event.combatant
@@ -333,16 +354,24 @@ func _on_moved(event: MovedEvent) -> void:
 
 func _on_attack_rolled(event: AttackRolledEvent) -> void:
 	var result := event.result
-	_log.add_line(Texts.attack_line(result))
-	await _tokens[result.attacker].lunge(_tokens[result.target].position)
-	if result.is_hit:
-		await _tokens[result.target].flash()
+	_log.add_line(Texts.attack_summary(result))
+	_log.add_detail(Texts.attack_detail(result))
+	var target_token := _tokens[result.target]
+	await _tokens[result.attacker].lunge(target_token.position)
+	if not result.is_hit:
+		_float(target_token.position, Texts.FLOAT_MISS, FLOAT_MISS_COLOR)
+		return
+	if result.is_critical:
+		_float(target_token.position + Vector2(0, -26), Texts.FLOAT_CRITICAL, FLOAT_CRITICAL_COLOR, 28)
+		_shake()
+	await target_token.flash()
 
 
 func _on_damage_dealt(event: DamageDealtEvent) -> void:
 	if event.is_graze:
 		_log.add_line(Texts.graze_line(event))
 		await _tokens[event.target].flash()
+	_float(_tokens[event.target].position, "−%d" % event.amount, FLOAT_DAMAGE_COLOR)
 	_tokens[event.target].refresh()
 	_refresh()
 
@@ -354,6 +383,7 @@ func _on_effect_applied(event: EffectAppliedEvent) -> void:
 
 func _on_healed(event: HealedEvent) -> void:
 	_log.add_line(Texts.healed_line(event), LOG_HEAL_COLOR)
+	_float(_tokens[event.combatant].position, "+%d" % event.amount, FLOAT_HEAL_COLOR)
 	_tokens[event.combatant].refresh()
 	_refresh()
 
@@ -415,6 +445,7 @@ func _on_searched(event: SearchedEvent) -> void:
 func _on_attacked_empty_cell(event: AttackedEmptyCellEvent) -> void:
 	_log.add_line(Texts.empty_cell_attack_line(event))
 	await _tokens[event.attacker].lunge(_board.cell_center(event.cell))
+	_float(_board.cell_center(event.cell), Texts.FLOAT_MISS, FLOAT_MISS_COLOR)
 	_refresh()
 
 
@@ -484,7 +515,12 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 	if not _is_player_turn():
 		return
 	_board.path_preview = []
+	_board.path_warning = false
 	_hint_label.text = ""
+	var shown := _enemy_token_at(cell) if cell != BoardView.NO_CELL else null
+	if shown != _hovered_enemy:
+		_hovered_enemy = shown
+		_refresh_target()
 	if cell == BoardView.NO_CELL or cell == _player.position:
 		return
 
@@ -501,20 +537,22 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 		return
 
 	if reason.is_empty():
-		_board.path_preview = state.find_path(_player, cell)
-		_hint_label.text = Texts.move_hint(_board.path_preview.size())
+		var path := state.find_path(_player, cell)
+		var attackers := state.opportunity_attackers(_player, path)
+		_board.path_warning = not attackers.is_empty()
+		_board.path_preview = path
+		_hint_label.text = Texts.move_hint(path.size(), attackers)
 	else:
 		_hint_label.text = Texts.reason(reason)
 	if not state.hidden_enemies_of(_player).is_empty():
 		_hint_label.text += "\n" + Texts.BLIND_ATTACK_SHIFT_HINT
 
 
-## Aide au survol d'un ennemi : arme, bonus, dégâts, et raisons
-## d'avantage ou de désavantage (calculées par le moteur).
+## Aide au survol d'un ennemi : chances de toucher, dégâts possibles,
+## raisons d'avantage ou de désavantage. Tout vient de la prévision du
+## moteur (AttackEstimate).
 func _attack_hint(attack: AttackAction) -> String:
-	var expression := DiceExpression.parse(attack.weapon.damage_dice).with_modifier(_player.damage_modifier(attack.weapon))
-	var advantage := AdvantageResolver.for_attack(state, _player, attack.target, attack.weapon)
-	return Texts.attack_hint(attack.target, attack.weapon, _player.attack_bonus(attack.weapon), expression, advantage)
+	return Texts.attack_hint(attack.target, attack.weapon, AttackEstimate.of(state, _player, attack.target, attack.weapon))
 
 
 ## Un bouton par arme du personnage, avec sa touche. L'arme choisie sert à
@@ -616,6 +654,9 @@ func _on_end_turn_pressed() -> void:
 func _refresh() -> void:
 	_panel.refresh(_player, state)
 	_initiative_bar.refresh(state.active())
+	for combatant: Combatant in _tokens:
+		_tokens[combatant].conditions = state.effects_on(combatant)
+	_refresh_target()
 
 	var player_turn := _is_player_turn()
 	var reachable: Dictionary[Vector2i, int] = {}
@@ -665,6 +706,37 @@ func _refresh() -> void:
 	_set_pulse(nothing_left)
 	if nothing_left:
 		_hint_label.text = Texts.NOTHING_LEFT
+
+
+## Panneau de la cible : l'ennemi survolé, sinon le premier encore en vie.
+func _refresh_target() -> void:
+	var target := _hovered_enemy
+	if target == null or target.is_dead:
+		for enemy in state.living_enemies_of(_player):
+			target = enemy
+			break
+	_target_label.visible = target != null
+	if target != null:
+		_target_label.text = Texts.target_line(target, state.effects_on(target))
+
+
+## Texte flottant au-dessus d'un point du plateau.
+func _float(at: Vector2, text: String, color: Color, font_size: int = 24) -> void:
+	FloatingText.spawn(_tokens_root, at, text, color, font_size)
+
+
+## Petite secousse du plateau (coup critique). Ne bloque pas le jeu.
+func _shake() -> void:
+	var tween := create_tween()
+	for i in 4:
+		var offset := Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * SHAKE_STRENGTH
+		tween.tween_property(_board, "position", _board_origin + offset, SHAKE_DURATION / 5.0)
+	tween.tween_property(_board, "position", _board_origin, SHAKE_DURATION / 5.0)
+
+
+func _apply_text_size() -> void:
+	_hint_label.add_theme_font_size_override(&"font_size", Settings.font_size(18, 21))
+	_target_label.add_theme_font_size_override(&"font_size", Settings.font_size(18, 21))
 
 
 func _set_pulse(enabled: bool) -> void:

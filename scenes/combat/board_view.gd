@@ -22,6 +22,12 @@ const OBSTACLE_EDGE_COLOR := Color(0.3, 0.27, 0.23)
 const REACHABLE_COLOR := Color(0.3, 0.55, 0.95, 0.28)
 const ATTACKABLE_COLOR := Color(0.95, 0.3, 0.25, 0.35)
 const PATH_COLOR := Color(0.55, 0.8, 1.0, 0.9)
+## Chemin qui provoque une attaque d'opportunité.
+const PATH_WARNING_COLOR := Color(1.0, 0.4, 0.3, 0.95)
+## Hachures des cases attaquables : une forme en plus de la couleur, pour
+## qui distingue mal le rouge.
+const HATCH_COLOR := Color(1.0, 0.55, 0.5, 0.7)
+const HATCH_SPACING := 12.0
 const HOVER_COLOR := Color(1, 1, 1, 0.6)
 
 var grid_size: Vector2i
@@ -40,6 +46,11 @@ var attackable: Array[Vector2i] = []:
 var path_preview: Array[Vector2i] = []:
 	set(value):
 		path_preview = value
+		queue_redraw()
+## Le chemin prévu provoque-t-il une attaque d'opportunité ?
+var path_warning := false:
+	set(value):
+		path_warning = value
 		queue_redraw()
 
 var _hovered := NO_CELL
@@ -93,10 +104,28 @@ func _draw() -> void:
 				draw_rect(rect, REACHABLE_COLOR)
 			if attackable.has(cell):
 				draw_rect(rect, ATTACKABLE_COLOR)
+				_draw_hatching(rect)
 			draw_rect(rect, LINE_COLOR, false, 1.0)
 
 	for cell in path_preview:
-		draw_circle(cell_center(cell), 6.0, PATH_COLOR)
+		if path_warning:
+			# Une croix en plus de la couleur : le danger se lit sans elle.
+			var center := cell_center(cell)
+			draw_line(center + Vector2(-6, -6), center + Vector2(6, 6), PATH_WARNING_COLOR, 3.0)
+			draw_line(center + Vector2(-6, 6), center + Vector2(6, -6), PATH_WARNING_COLOR, 3.0)
+		else:
+			draw_circle(cell_center(cell), 6.0, PATH_COLOR)
 
 	if _hovered != NO_CELL:
 		draw_rect(Rect2(Vector2(_hovered) * CELL_SIZE, Vector2.ONE * CELL_SIZE).grow(-2), HOVER_COLOR, false, 2.0)
+
+
+## Hachures diagonales dans une case : des segments x + y = constante,
+## coupés aux bords de la case.
+func _draw_hatching(rect: Rect2) -> void:
+	var offset := HATCH_SPACING
+	while offset < rect.size.x * 2.0:
+		var start := Vector2(minf(offset, rect.size.x), maxf(offset - rect.size.x, 0.0))
+		var end := Vector2(maxf(offset - rect.size.y, 0.0), minf(offset, rect.size.y))
+		draw_line(rect.position + start, rect.position + end, HATCH_COLOR, 1.5)
+		offset += HATCH_SPACING

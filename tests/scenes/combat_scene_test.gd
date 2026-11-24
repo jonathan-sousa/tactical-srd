@@ -350,3 +350,36 @@ func test_unconscious_player_turn_passes_with_a_death_save() -> void:
 	assert_bool(_fighter().is_stable).is_true()
 	assert_bool(_state().is_over).is_true()
 	assert_str((_scene.get_node("%ResultLabel") as Label).text).is_equal(Texts.DEFEAT)
+
+
+func test_hovering_an_enemy_shows_hit_chance_and_target_panel() -> void:
+	await _start(FIGHTER_FIRST)
+	_put_goblin_next_to_fighter()
+	_scene.call("_on_cell_hovered", _goblin().position)
+	var hint: Label = _scene.get_node("%HintLabel")
+	# Épée + 5 contre CA 15 : 55 %, 2d6 + 3 avec Great Weapon Fighting.
+	assert_str(hint.text).contains("55 % de toucher, 9 à 15 dégâts")
+	var target: Label = _scene.get_node("%TargetLabel")
+	assert_str(target.text).starts_with("Gobelin guerrier · PV 10 / 10 · CA 15")
+
+
+func test_path_out_of_reach_warns_of_an_opportunity_attack() -> void:
+	await _start(FIGHTER_FIRST)
+	_put_goblin_next_to_fighter()
+	var away := _fighter().position + Vector2i(-1, 0)
+	_scene.call("_on_cell_hovered", away)
+	assert_str((_scene.get_node("%HintLabel") as Label).text).contains("attaque d'opportunité de Gobelin guerrier")
+	assert_bool((_scene.get_node("%Board") as BoardView).path_warning).is_true()
+
+
+func test_hit_shows_floating_damage() -> void:
+	await _start(FIGHTER_FIRST + [15, 1, 1, 1, 1])
+	_put_goblin_next_to_fighter()
+	_scene.call("_on_cell_clicked", _goblin().position)
+	# Élan puis clignotement (environ 0,45 s), puis le « −9 » apparaît.
+	await _runner.simulate_frames(12, 50)
+	var floating := 0
+	for child in (_scene.get_node("%Tokens") as Node).get_children():
+		if child is FloatingText:
+			floating += 1
+	assert_int(floating).is_greater(0)

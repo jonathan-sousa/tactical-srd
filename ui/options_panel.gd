@@ -10,6 +10,7 @@ signal closed
 @onready var _volume_slider: HSlider = %VolumeSlider
 @onready var _volume_value: Label = %VolumeValue
 @onready var _fullscreen_check: CheckButton = %FullscreenCheck
+@onready var _large_text_check: CheckButton = %LargeTextCheck
 @onready var _back_button: Button = %OptionsBackButton
 
 
@@ -17,10 +18,12 @@ func _ready() -> void:
 	_title_label.text = Texts.OPTIONS
 	_volume_label.text = Texts.MASTER_VOLUME
 	_fullscreen_check.text = Texts.FULLSCREEN
+	_large_text_check.text = Texts.LARGE_TEXT
 	_back_button.text = Texts.BACK
 	sync_from_settings()
 	_volume_slider.value_changed.connect(_on_volume_changed)
 	_fullscreen_check.toggled.connect(func(enabled: bool) -> void: Settings.set_fullscreen(enabled))
+	_large_text_check.toggled.connect(func(enabled: bool) -> void: Settings.set_large_text(enabled))
 	_back_button.pressed.connect(func() -> void: closed.emit())
 
 
@@ -30,6 +33,7 @@ func sync_from_settings() -> void:
 	# l'enregistrement, qui n'est voulu que pour un changement du joueur.
 	_volume_slider.set_value_no_signal(roundf(Settings.master_volume * 100.0))
 	_fullscreen_check.set_pressed_no_signal(Settings.fullscreen)
+	_large_text_check.set_pressed_no_signal(Settings.large_text)
 	_update_volume_label()
 	if is_visible_in_tree():
 		_volume_slider.grab_focus()
