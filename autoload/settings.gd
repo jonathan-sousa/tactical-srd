@@ -1,4 +1,4 @@
-## Options du joueur (volume général, plein écran), persistées dans
+## Options du joueur (volume général, plein écran, texte agrandi), persistées dans
 ## `user://settings.cfg` indépendamment de la sauvegarde, et appliquées au
 ## démarrage du jeu.
 ##
@@ -7,6 +7,10 @@
 ## le fichier peut avoir été modifié à la main.
 extends Node
 
+## Émis quand le joueur change la taille du texte : les écrans ouverts
+## s'adaptent aussitôt.
+signal large_text_changed(enabled: bool)
+
 const DEFAULT_PATH := "user://settings.cfg"
 const DEFAULT_VOLUME := 1.0
 
@@ -14,6 +18,8 @@ var path := DEFAULT_PATH
 ## Volume général de 0.0 (muet) à 1.0.
 var master_volume := DEFAULT_VOLUME
 var fullscreen := false
+## Texte agrandi dans le journal de combat, les aides et les dialogues.
+var large_text := false
 
 
 func _ready() -> void:
@@ -24,6 +30,7 @@ func _ready() -> void:
 func load_settings() -> void:
 	master_volume = DEFAULT_VOLUME
 	fullscreen = false
+	large_text = false
 	var config := ConfigFile.new()
 	if config.load(path) != OK:
 		return
@@ -33,12 +40,16 @@ func load_settings() -> void:
 	var full: Variant = config.get_value("display", "fullscreen", false)
 	if typeof(full) == TYPE_BOOL:
 		fullscreen = full
+	var large: Variant = config.get_value("display", "large_text", false)
+	if typeof(large) == TYPE_BOOL:
+		large_text = large
 
 
 func save_settings() -> Error:
 	var config := ConfigFile.new()
 	config.set_value("audio", "master_volume", master_volume)
 	config.set_value("display", "fullscreen", fullscreen)
+	config.set_value("display", "large_text", large_text)
 	return config.save(path)
 
 
@@ -52,6 +63,18 @@ func set_fullscreen(enabled: bool) -> void:
 	fullscreen = enabled
 	apply_window_mode()
 	save_settings()
+
+
+func set_large_text(enabled: bool) -> void:
+	large_text = enabled
+	save_settings()
+	large_text_changed.emit(enabled)
+
+
+## Taille de police selon l'option : `normal`, ou `large` si le texte est
+## agrandi.
+func font_size(normal: int, large: int) -> int:
+	return large if large_text else normal
 
 
 func apply() -> void:

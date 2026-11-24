@@ -67,6 +67,13 @@ const CREDITS_LICENSES := "Textes des licences"
 ## 5.2.1. Ne pas la traduire ni la reformuler (exigence de la licence).
 const SRD_ATTRIBUTION := "This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode."
 const DIALOGUE_HINT := "Clic ou Entrée pour continuer"
+const DIALOGUE_SKIP := "Passer (Tab)"
+const DIALOGUE_HISTORY := "Historique (H)"
+const DIALOGUE_HISTORY_CLOSE := "Fermer l'historique (H)"
+const LARGE_TEXT := "Texte agrandi"
+## Textes flottants au-dessus des pions.
+const FLOAT_MISS := "Raté !"
+const FLOAT_CRITICAL := "Critique !"
 
 const DAMAGE_TYPES: Dictionary[DamageType.Type, String] = {
 	DamageType.Type.ACID: "d'acide",
@@ -188,6 +195,16 @@ const PROPERTY_NAMES: Dictionary[StringName, String] = {
 	WeaponDef.TWO_HANDED: "Deux mains",
 	WeaponDef.VERSATILE: "Polyvalente",
 	WeaponDef.AMMUNITION: "Munitions",
+}
+
+## Pastille d'un effet sur un pion : une lettre.
+const EFFECT_BADGES: Dictionary[StringName, String] = {
+	Effect.DODGING: "E",
+	Effect.DISENGAGED: "D",
+	Effect.SAPPED: "S",
+	Effect.SLOWED: "R",
+	Effect.HIDDEN: "C",
+	Effect.PRONE: "T",
 }
 
 ## Raisons d'avantage ou de désavantage, affichées après le jet.
@@ -318,15 +335,61 @@ static func squares(count: int) -> String:
 	return "%d case%s" % [count, "" if count <= 1 else "s"]
 
 
-## Aide au survol d'une case libre : « Déplacement : 3 cases ».
-static func move_hint(square_count: int) -> String:
-	return "%s : %s" % [MOVEMENT, squares(square_count)]
+## Aide au survol d'une case libre : « Déplacement : 3 cases », et
+## l'avertissement si le trajet provoque une attaque d'opportunité.
+static func move_hint(square_count: int, opportunity_attackers: Array[Combatant] = []) -> String:
+	var line := "%s : %s" % [MOVEMENT, squares(square_count)]
+	if not opportunity_attackers.is_empty():
+		var names: PackedStringArray = []
+		for attacker in opportunity_attackers:
+			names.append(attacker.definition.display_name)
+		line += ". Attention : attaque d'opportunité de %s (Se désengager l'évite)." % ", ".join(names)
+	return line
 
 
-## Aide au survol d'un ennemi : « Attaquer Gobelin guerrier : Épée à deux
-## mains, + 5 2d6+3 ».
-static func attack_hint(target: Combatant, weapon: WeaponDef, attack_bonus: int, damage: DiceExpression, advantage: AdvantageResult = null) -> String:
-	return "Attaquer %s : %s, %s %s%s" % [target.definition.display_name, weapon.display_name, signed(attack_bonus), damage, _advantage_detail(advantage)]
+## Panneau de la cible : « Gobelin guerrier · PV 7 / 10 · CA 15 · Caché ».
+static func target_line(combatant: Combatant, effect_ids: Array[StringName]) -> String:
+	var parts: PackedStringArray = [
+		combatant.definition.display_name,
+		"%s %d / %d" % [HIT_POINTS, combatant.hp, combatant.definition.max_hp],
+		"%s %d" % [ARMOR_CLASS, combatant.armor_class()],
+	]
+	if combatant.is_dead:
+		parts.append("mort")
+	elif combatant.is_down():
+		parts.append("inconscient")
+	for id in effect_ids:
+		parts.append(effect_name(id))
+	return " · ".join(parts)
+
+
+## En-tête d'un nouveau round dans le journal.
+static func round_header(round: int) -> String:
+	return "Round %d" % round
+
+
+## Aide au survol d'un ennemi, d'après la prévision du moteur :
+## « Attaquer Gobelin guerrier (Épée à deux mains) : 55 % de toucher, 9 à
+## 15 dégâts ; Graze : 3 si raté ».
+static func attack_hint(target: Combatant, weapon: WeaponDef, estimate: AttackEstimate) -> String:
+	var line := "Attaquer %s (%s) : %s de toucher, %s dégâts" % [
+		target.definition.display_name, weapon.display_name, percent(estimate.hit_chance),
+		_range_text(estimate.damage_min, estimate.damage_max),
+	]
+	if estimate.critical_chance >= estimate.hit_chance and estimate.hit_chance > 0.0:
+		line += " (toujours critique)"
+	if estimate.graze_damage > 0:
+		line += " ; Graze : %d si raté" % estimate.graze_damage
+	return line + _advantage_detail(estimate.advantage)
+
+
+## « 55 % ».
+static func percent(chance: float) -> String:
+	return "%d %%" % roundi(chance * 100.0)
+
+
+static func _range_text(low: int, high: int) -> String:
+	return str(low) if low == high else "%d à %d" % [low, high]
 
 
 ## Aide au survol de la dernière position connue d'un ennemi caché.
@@ -349,20 +412,17 @@ static func initiative_line(entries: Array[InitiativeEntry]) -> String:
 
 
 static func turn_line(event: TurnStartedEvent) -> String:
-	return "— Round %d : tour de %s —" % [event.round, event.combatant.definition.display_name]
+	return "Tour de %s" % event.combatant.definition.display_name
 
 
 static func move_line(event: MovedEvent) -> String:
 	return "%s se déplace de %s." % [event.combatant.definition.display_name, squares(event.path.size())]
 
 
-## Exemple : « Gobelin guerrier attaque : 14 + 4 = 18 contre CA 16, touché,
-## 5 dégâts tranchants (1d6+2 : 3 + 2) ».
-static func attack_line(result: AttackResult) -> String:
-	var roll := str(result.d20.natural)
-	if result.d20.rolls.size() > 1:
-		roll = "%d [%s]" % [result.d20.natural, ", ".join(result.d20.rolls.map(str))]
-
+## Ligne principale du journal : qui attaque, avec quoi, et le résultat.
+## Exemple : « Gobelin guerrier attaque (Cimeterre) : touché, 5 dégâts
+## tranchants ». Le détail des jets suit sur une ligne à part.
+static func attack_summary(result: AttackResult) -> String:
 	var verb := "attaque"
 	if result.advantage != null and result.advantage.disadvantages.has(AdvantageResolver.TARGET_UNSEEN):
 		verb = "attaque à l'aveugle"
@@ -370,35 +430,29 @@ static func attack_line(result: AttackResult) -> String:
 		verb = "attaque d'opportunité"
 	elif result.is_ranged:
 		verb = "lance" if result.weapon.has_property(WeaponDef.THROWN) else "tire"
-	var line := "%s %s (%s) : %s %s = %d contre %s %d" % [
-		result.attacker.definition.display_name,
-		verb,
-		result.weapon.display_name,
-		roll,
-		signed(result.attack_bonus),
-		result.attack_total,
-		ARMOR_CLASS,
-		result.target_armor_class,
-	]
+	var outcome := "raté"
 	if result.d20.is_natural_1():
-		line += ", 1 naturel, raté"
-	elif not result.is_hit:
-		line += ", raté"
-	else:
-		var outcome := "touché"
+		outcome = "1 naturel, raté"
+	elif result.is_hit:
+		var hit := "touché"
 		if result.is_critical:
-			outcome = "20 naturel, coup critique" if result.d20.is_natural_20() else "coup critique (cible inconsciente au contact)"
-		var detail := _damage_detail(result.damage_roll)
+			hit = "20 naturel, coup critique" if result.d20.is_natural_20() else "coup critique (cible inconsciente au contact)"
+		outcome = "%s, %d dégâts %s" % [hit, result.damage, damage_type(result.damage_type)]
+	return "%s %s (%s) : %s" % [result.attacker.definition.display_name, verb, result.weapon.display_name, outcome]
+
+
+## Détail des jets d'une attaque : « 14 + 4 = 18 contre CA 16 ; 1d6+2 : 3 + 2 ».
+static func attack_detail(result: AttackResult) -> String:
+	var roll := str(result.d20.natural)
+	if result.d20.rolls.size() > 1:
+		roll = "%d [%s]" % [result.d20.natural, ", ".join(result.d20.rolls.map(str))]
+	var line := "%s %s = %d contre %s %d" % [roll, signed(result.attack_bonus), result.attack_total, ARMOR_CLASS, result.target_armor_class]
+	if result.is_hit:
+		line += " ; %s" % _damage_detail(result.damage_roll)
 		if result.discarded_damage_roll != null:
-			detail += " ; meilleur de deux jets, l'autre faisait %d" % result.discarded_damage_roll.total
+			line += " ; meilleur de deux jets, l'autre faisait %d" % result.discarded_damage_roll.total
 		if result.advantage_damage_roll != null:
-			detail += " ; avec l'avantage, %s" % _damage_detail(result.advantage_damage_roll)
-		line += ", %s, %d dégâts %s (%s)" % [
-			outcome,
-			result.damage,
-			damage_type(result.damage_type),
-			detail,
-		]
+			line += " ; avec l'avantage, %s" % _damage_detail(result.advantage_damage_roll)
 	return line + _advantage_detail(result.advantage)
 
 

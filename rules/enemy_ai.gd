@@ -264,18 +264,7 @@ static func _threatened(state: CombatState, actor: Combatant) -> bool:
 ## Ce chemin fait-il sortir `actor` de l'allonge d'un ennemi capable de
 ## réagir ? Jamais après Se désengager.
 static func _provokes(state: CombatState, actor: Combatant, path: Array[Vector2i]) -> bool:
-	if state.has_effect(actor, Effect.DISENGAGED):
-		return false
-	for enemy in state.living_enemies_of(actor):
-		var weapon := enemy.melee_weapon()
-		if weapon == null or not enemy.reaction_available or not state.can_see(enemy, actor):
-			continue
-		var previous := actor.position
-		for cell in path:
-			if state.is_cell_within_reach(enemy, previous, weapon) and not state.is_cell_within_reach(enemy, cell, weapon):
-				return true
-			previous = cell
-	return false
+	return not state.opportunity_attackers(actor, path).is_empty()
 
 
 ## Un abri (case hors de vue de tout ennemi conscient) est-il atteignable

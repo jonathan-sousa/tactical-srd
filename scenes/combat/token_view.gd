@@ -14,7 +14,23 @@ const PLAYER_COLOR := Color(0.27, 0.52, 0.92)
 const ENEMY_COLOR := Color(0.82, 0.3, 0.25)
 const ACTIVE_RING_COLOR := Color(1.0, 0.85, 0.3)
 const HP_BACK_COLOR := Color(0.1, 0.1, 0.1)
-const HP_COLOR := Color(0.35, 0.85, 0.4)
+## Barre de PV : vert au-dessus de la moitié, orange jusqu'au quart, rouge
+## en dessous.
+const HP_HIGH_COLOR := Color(0.35, 0.85, 0.4)
+const HP_MID_COLOR := Color(0.95, 0.65, 0.2)
+const HP_LOW_COLOR := Color(0.9, 0.25, 0.2)
+const HP_BAR_DURATION := 0.35
+## Pastilles d'effets : couleur de fond de chacune (la lettre vient de
+## Texts.EFFECT_BADGES).
+const BADGE_RADIUS := 9.0
+const BADGE_COLORS: Dictionary[StringName, Color] = {
+	Effect.DODGING: Color(0.3, 0.6, 0.95),
+	Effect.DISENGAGED: Color(0.45, 0.75, 0.55),
+	Effect.SAPPED: Color(0.65, 0.4, 0.8),
+	Effect.SLOWED: Color(0.35, 0.7, 0.85),
+	Effect.HIDDEN: Color(0.4, 0.4, 0.45),
+	Effect.PRONE: Color(0.75, 0.55, 0.3),
+}
 const STEP_DURATION := 0.12
 const DOWN_TINT := Color(0.45, 0.45, 0.45, 0.75)
 const DEAD_TINT := Color(0.3, 0.3, 0.3, 0.6)
@@ -37,20 +53,39 @@ var is_ghost := false:
 		is_ghost = value
 		self_modulate = Color(1, 1, 1, GHOST_ALPHA) if value else Color.WHITE
 
+## Effets en cours, affichés en pastilles au-dessus du pion.
+var conditions: Array[StringName] = []:
+	set(value):
+		conditions = value
+		queue_redraw()
+
 ## Teinte de repos, que le clignotement retrouve ensuite.
 var _rest_tint := Color.WHITE
+## PV affichés par la barre : ils rejoignent les vrais PV en douceur.
+var _shown_hp := 0.0:
+	set(value):
+		_shown_hp = value
+		queue_redraw()
+var _hp_tween: Tween
 
 
 func setup(p_combatant: Combatant, p_cell: Vector2i, center: Vector2) -> void:
 	combatant = p_combatant
 	cell = p_cell
 	position = center
-	queue_redraw()
+	_shown_hp = combatant.hp
 
 
-## Rafraîchit l'affichage (PV, état) après un changement.
+## Rafraîchit l'affichage après un changement : la barre de PV glisse vers
+## les PV actuels.
 func refresh() -> void:
 	queue_redraw()
+	if combatant == null or is_equal_approx(_shown_hp, float(combatant.hp)):
+		return
+	if _hp_tween != null:
+		_hp_tween.kill()
+	_hp_tween = create_tween()
+	_hp_tween.tween_property(self, "_shown_hp", float(combatant.hp), HP_BAR_DURATION).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 ## Déplacement case par case le long des points donnés.
@@ -99,6 +134,15 @@ func die() -> void:
 	queue_redraw()
 
 
+## Couleur de la barre de PV selon la part de PV restants.
+static func hp_color(ratio: float) -> Color:
+	if ratio > 0.5:
+		return HP_HIGH_COLOR
+	if ratio > 0.25:
+		return HP_MID_COLOR
+	return HP_LOW_COLOR
+
+
 func _tint_to(tint: Color) -> void:
 	_rest_tint = tint
 	var tween := create_tween()
@@ -122,10 +166,20 @@ func _draw() -> void:
 	var text_size := font.get_string_size(initial, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
 	draw_string(font, Vector2(-text_size.x / 2.0, text_size.y / 3.0), initial, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, Color.WHITE)
 
-	var ratio := clampf(float(combatant.hp) / combatant.definition.max_hp, 0.0, 1.0)
-	var bar := Rect2(Vector2(-RADIUS, RADIUS + 4.0), Vector2(RADIUS * 2.0, 5.0))
+	var ratio := clampf(_shown_hp / combatant.definition.max_hp, 0.0, 1.0)
+	var bar := Rect2(Vector2(-RADIUS, RADIUS + 4.0), Vector2(RADIUS * 2.0, 6.0))
 	draw_rect(bar, HP_BACK_COLOR)
-	draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), HP_COLOR)
+	draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), hp_color(ratio))
+
+	# Pastilles d'effets en haut à droite, de droite à gauche.
+	var badge_center := Vector2(RADIUS - 2.0, -RADIUS + 2.0)
+	for id in conditions:
+		draw_circle(badge_center, BADGE_RADIUS, BADGE_COLORS.get(id, Color.DIM_GRAY))
+		draw_arc(badge_center, BADGE_RADIUS, 0.0, TAU, 24, Color(0.05, 0.05, 0.08), 1.5)
+		var letter: String = Texts.EFFECT_BADGES.get(id, "?")
+		var letter_size := font.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, 13)
+		draw_string(font, badge_center + Vector2(-letter_size.x / 2.0, 4.5), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, 13, Color.WHITE)
+		badge_center.x -= BADGE_RADIUS * 2.0 + 2.0
 
 	if combatant.is_dead:
 		var arm := RADIUS * 0.7

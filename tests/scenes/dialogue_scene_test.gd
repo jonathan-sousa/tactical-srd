@@ -48,3 +48,28 @@ func test_finished_after_last_line() -> void:
 	for i in _dialogue.lines.size() * 2:
 		_scene.call("advance")
 	assert_bool(emitted[0]).is_true()
+
+
+func test_skip_finishes_the_whole_dialogue() -> void:
+	var emitted := [false]
+	_scene.connect("finished", func() -> void: emitted[0] = true)
+	_runner.simulate_key_pressed(KEY_TAB)
+	await _runner.await_input_processed()
+	assert_bool(emitted[0]).is_true()
+
+
+func test_history_lists_lines_already_read_and_pauses_the_dialogue() -> void:
+	_scene.call("advance")
+	_scene.call("advance")
+	_runner.simulate_key_pressed(KEY_H)
+	await _runner.await_input_processed()
+	assert_bool(_scene.call("is_history_open")).is_true()
+	var history: RichTextLabel = _scene.get_node("%HistoryText")
+	assert_str(history.get_parsed_text()).contains(_dialogue.lines[0].text)
+	assert_str(history.get_parsed_text()).contains(_dialogue.lines[1].text)
+	# Historique ouvert : Entrée ne fait pas avancer le dialogue.
+	_scene.call("advance")
+	assert_int(_scene.call("current_index")).is_equal(1)
+	_runner.simulate_key_pressed(KEY_H)
+	await _runner.await_input_processed()
+	assert_bool(_scene.call("is_history_open")).is_false()

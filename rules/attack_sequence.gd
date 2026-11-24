@@ -25,9 +25,7 @@ static func begin(
 	_spend_thrown_weapon(attacker, weapon, kind)
 
 	var advantage := AdvantageResolver.for_attack(state, attacker, target, weapon)
-	# Condition Unconscious : toute touche à 5 ft ou moins est un critique.
-	var critical_on_hit := target.is_down() and state.distance_feet(attacker, target) <= CombatState.FEET_PER_SQUARE
-	var result := AttackResolver.roll_attack(attacker, target, weapon, dice, advantage.mode, critical_on_hit)
+	var result := AttackResolver.roll_attack(attacker, target, weapon, dice, advantage.mode, critical_on_hit(state, attacker, target))
 	result.advantage = advantage
 	result.is_opportunity = is_opportunity
 	result.is_ranged = kind == CombatState.AttackKind.RANGED
@@ -73,9 +71,7 @@ static func finish(state: CombatState, result: AttackResult, dice: Dice) -> Arra
 			events.append_array(HitPoints.apply_damage(state, target, graze, result.damage_type, true))
 		return events
 
-	var great_weapon_fighting := attacker.definition.fighting_style == CharacterDef.GREAT_WEAPON_FIGHTING \
-		and not result.is_ranged \
-		and (weapon.has_property(WeaponDef.TWO_HANDED) or weapon.has_property(WeaponDef.VERSATILE))
+	var great_weapon_fighting := uses_great_weapon_fighting(attacker, weapon, result.is_ranged)
 	var savage_attacker := attacker.definition.has_feat(CharacterDef.SAVAGE_ATTACKER) \
 		and attacker.savage_attacker_turn != state.turn_count
 	if savage_attacker:
@@ -92,6 +88,19 @@ static func finish(state: CombatState, result: AttackResult, dice: Dice) -> Arra
 			if result.damage > 0:
 				events.append_array(state.apply_effect(Effect.new(Effect.SLOWED, target, attacker, Effect.Expiry.START_OF_SOURCE_TURN)))
 	return events
+
+
+## Condition Unconscious : toute touche à 5 ft ou moins est un critique.
+static func critical_on_hit(state: CombatState, attacker: Combatant, target: Combatant) -> bool:
+	return target.is_down() and state.distance_feet(attacker, target) <= CombatState.FEET_PER_SQUARE
+
+
+## Great Weapon Fighting : arme de corps à corps à deux mains (ou
+## polyvalente), maniée au corps à corps.
+static func uses_great_weapon_fighting(attacker: Combatant, weapon: WeaponDef, is_ranged: bool) -> bool:
+	return attacker.definition.fighting_style == CharacterDef.GREAT_WEAPON_FIGHTING \
+		and not is_ranged \
+		and (weapon.has_property(WeaponDef.TWO_HANDED) or weapon.has_property(WeaponDef.VERSATILE))
 
 
 # Un javelot lancé quitte la main : un exemplaire de moins.
