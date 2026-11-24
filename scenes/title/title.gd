@@ -15,6 +15,7 @@ func _ready() -> void:
 	# ProjectSettings lit les valeurs de project.godot (ici config/name).
 	_title_label.text = str(ProjectSettings.get_setting("application/config/name"))
 	_press_key_label.text = Texts.PRESS_ANY_KEY
+	AudioManager.play_music(AudioManager.MENU_MUSIC)
 	# Clignotement doux du message, en boucle.
 	var tween := create_tween().set_loops()
 	tween.tween_property(_press_key_label, "modulate:a", 0.3, 0.8)

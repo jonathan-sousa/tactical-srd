@@ -41,6 +41,52 @@ custom_minimum_size = Vector2(64, 0)
 layout_mode = 2
 horizontal_alignment = 2
 
+[node name="MusicRow" type="HBoxContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="MusicLabel" type="Label" parent="Content/MusicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+
+[node name="MusicSlider" type="HSlider" parent="Content/MusicRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+step = 5.0
+value = 100.0
+
+[node name="MusicValue" type="Label" parent="Content/MusicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+horizontal_alignment = 2
+
+[node name="SfxRow" type="HBoxContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SfxLabel" type="Label" parent="Content/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+
+[node name="SfxSlider" type="HSlider" parent="Content/SfxRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+step = 5.0
+value = 100.0
+
+[node name="SfxValue" type="Label" parent="Content/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+horizontal_alignment = 2
+
 [node name="FullscreenCheck" type="CheckButton" parent="Content"]
 unique_name_in_owner = true
 layout_mode = 2

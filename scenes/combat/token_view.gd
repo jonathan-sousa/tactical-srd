@@ -10,6 +10,9 @@
 class_name TokenView
 extends Node2D
 
+## Émis à chaque case franchie pendant un déplacement (bruit de pas).
+signal stepped
+
 const RADIUS := 24.0
 const PLAYER_COLOR := Color(0.27, 0.52, 0.92)
 const ENEMY_COLOR := Color(0.82, 0.3, 0.25)
@@ -112,6 +115,7 @@ func refresh() -> void:
 ## peu comme une promesse qu'on attend.
 func move_along(points: Array[Vector2]) -> void:
 	for point in points:
+		stepped.emit()
 		var tween := create_tween()
 		tween.tween_property(self, "position", point, STEP_DURATION)
 		await tween.finished

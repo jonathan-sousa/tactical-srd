@@ -396,3 +396,12 @@ func test_board_is_built_from_tiles() -> void:
 	# Le plateau suit la zone que l'interface lui réserve.
 	var area: Control = _scene.get_node("%BoardArea")
 	assert_that(board.position).is_equal(area.global_position)
+
+
+func test_combat_plays_its_music_and_hit_sounds() -> void:
+	await _start(FIGHTER_FIRST + [15, 1, 1, 1, 1])
+	assert_object(AudioManager.current_music()).is_same(AudioManager.COMBAT_MUSIC)
+	_put_goblin_next_to_fighter()
+	_scene.call("_on_cell_clicked", _goblin().position)
+	await _settle()
+	assert_str(AudioManager.last_effect).is_equal(AudioManager.HIT)
