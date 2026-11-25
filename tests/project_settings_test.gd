@@ -28,3 +28,12 @@ func test_compatibility_renderer() -> void:
 func test_untyped_declaration_is_an_error() -> void:
 	# 2 = Error dans l'énumération des niveaux d'avertissement GDScript.
 	assert_int(ProjectSettings.get_setting("debug/gdscript/warnings/untyped_declaration")).is_equal(2)
+
+
+func test_windows_metadata_follow_the_game_version() -> void:
+	# Le workflow de publication refuse sinon de publier.
+	var version: String = ProjectSettings.get_setting("application/config/version")
+	assert_str(version).is_not_empty()
+	var presets := FileAccess.get_file_as_string("res://export_presets.cfg")
+	assert_str(presets).contains('application/file_version="%s.0"' % version)
+	assert_str(presets).contains('application/product_version="%s.0"' % version)

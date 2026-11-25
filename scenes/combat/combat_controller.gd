@@ -43,9 +43,15 @@ const SHAKE_DURATION := 0.25
 
 var state: CombatState
 ## Source de hasard du combat. Les tests la remplacent par des dés truqués
-## avant d'ajouter la scène à l'arbre ; sinon `_ready` en crée (à graine en
-## mode démo, voir Autoplay).
+## avant d'ajouter la scène à l'arbre ; sinon `_ready` crée des dés à graine
+## (voir `seed_value`).
 var dice: Dice
+## Graine des dés : tirée au hasard pour chaque combat (-1), imposée en mode
+## démo ou en rejeu, ou par un test.
+var seed_value := -1
+## Fichier où le combat est enregistré au fil des choix du joueur (voir
+## CombatRecord). Les tests en donnent un autre.
+var record_path := "user://replays/last_combat.json"
 ## Ce qui se passe à la fin d'un combat de l'histoire. Par défaut,
 ## GameState.finish_step ; les tests le remplacent pour ne pas changer de scène.
 var on_story_end: Callable
@@ -58,6 +64,11 @@ var _pulse: Tween
 var _story_mode := false
 ## Aiguillage des événements : type d'événement → méthode qui le rejoue.
 var _event_handlers: Dictionary[Script, Callable] = {}
+## Enregistrement du combat en cours, ou `null` (démo, rejeu, dés truqués).
+var _record: CombatRecord
+## Rejeu : l'enregistrement à rejouer et le prochain choix à lire.
+var _replay: CombatRecord
+var _replay_index := 0
 
 # Note Godot : `%Nom` retrouve un nœud marqué « nom unique » dans la scène,
 # sans dépendre de son chemin exact. @onready attend que la scène soit prête.
@@ -103,7 +114,14 @@ func _ready() -> void:
 	var player_definition: CharacterDef
 	var player_hp := -1
 	var step := GameState.current_step()
-	if step != null and step.kind == StoryStep.Kind.ENCOUNTER:
+	_replay = Autoplay.replay
+	if _replay != null:
+		# Rejeu : la rencontre et la situation de départ viennent du fichier.
+		var replay_registry := GameState.registry
+		encounter = replay_registry.encounter(_replay.encounter_id)
+		player_definition = replay_registry.character(_replay.player_id)
+		player_hp = _replay.player_hp
+	elif step != null and step.kind == StoryStep.Kind.ENCOUNTER:
 		_story_mode = true
 		encounter = step.encounter
 		player_definition = GameState.player_definition()
@@ -120,8 +138,15 @@ func _ready() -> void:
 		return
 	if not on_story_end.is_valid():
 		on_story_end = GameState.finish_step
+	var record_choices := dice == null and not Autoplay.enabled and _replay == null
 	if dice == null:
-		dice = Autoplay.make_dice()
+		if _replay != null:
+			seed_value = _replay.seed_value
+		elif Autoplay.enabled:
+			seed_value = Autoplay.seed_value
+		elif seed_value < 0:
+			seed_value = randi()
+		dice = Dice.seeded(seed_value)
 	_register_event_handlers()
 
 	state = CombatState.create(encounter, player_definition, player_hp)
@@ -130,6 +155,19 @@ func _ready() -> void:
 		# Ressources sans repos dans l'histoire : on reprend celles qui restent.
 		_player.second_wind_uses = GameState.player_second_wind_uses
 		_player.heroic_inspiration = GameState.player_heroic_inspiration
+	if _replay != null:
+		_player.second_wind_uses = _replay.second_wind_uses
+		_player.heroic_inspiration = _replay.heroic_inspiration
+		Autoplay.report("rejeu : graine %d, %d choix du joueur." % [_replay.seed_value, _replay.entries.size()])
+	if record_choices:
+		_record = CombatRecord.new()
+		_record.seed_value = seed_value
+		_record.encounter_id = encounter.id
+		_record.player_id = player_definition.id
+		_record.player_hp = _player.hp
+		_record.second_wind_uses = _player.second_wind_uses
+		_record.heroic_inspiration = _player.heroic_inspiration
+		_save_record()
 	_weapon = _player.melee_weapon()
 	_board.setup(encounter)
 	# Le plateau (un Node2D) suit la place que lui réserve l'interface.
@@ -194,6 +232,8 @@ func _continue() -> void:
 		await _play_enemy_turn()
 	elif state.active() == _player and _player.is_down():
 		await _play_unconscious_turn()
+	elif _replay != null:
+		await _play_replay_turn()
 	elif Autoplay.enabled:
 		# Mode démo : l'IA joue aussi le Guerrier.
 		await _play_ai_turn()
@@ -226,6 +266,63 @@ func _play_ai_turn() -> void:
 	await _continue()
 
 
+## Rejeu : les choix du joueur sont lus dans l'enregistrement, un à un.
+func _play_replay_turn() -> void:
+	_busy = true
+	var actor := state.active()
+	while not state.is_over and state.active() == actor:
+		await _wait(enemy_action_delay)
+		var action := _next_replay_action()
+		if action == null:
+			_busy = false
+			_stop_replay()
+			return
+		await _play(action.execute(state, dice))
+		await _resolve_decisions()
+	_busy = false
+	await _continue()
+
+
+## Prochain choix enregistré, prêt à jouer, ou `null` si l'enregistrement
+## est fini ou ne correspond plus au combat (règles ou IA modifiées).
+func _next_replay_action() -> Action:
+	if _replay_index >= _replay.entries.size():
+		Autoplay.report("rejeu : fin de l'enregistrement avant la fin du combat.")
+		return null
+	var entry := _replay.entries[_replay_index]
+	_replay_index += 1
+	var action := CombatRecord.decode(entry, _player, state)
+	var reason := "choix illisible" if action == null else Texts.reason(action.validate(state))
+	if action == null or not action.validate(state).is_empty():
+		Autoplay.report("rejeu : le choix %d (%s) ne correspond plus au combat : %s." % [_replay_index, entry, reason])
+		return null
+	return action
+
+
+## Arrête un rejeu qui ne peut pas continuer, puis quitte.
+func _stop_replay() -> void:
+	Autoplay.report("rejeu : arrêté.")
+	Autoplay.later(self, AudioManager.quit_game, end_delay)
+
+
+## Note le choix du joueur dans l'enregistrement, et l'écrit aussitôt : il
+## reste exploitable même si le jeu est quitté en plein combat.
+func _remember(action: Action) -> void:
+	if _record == null:
+		return
+	_record.entries.append(CombatRecord.encode(action))
+	_save_record()
+
+
+func _save_record() -> void:
+	DirAccess.make_dir_recursive_absolute(record_path.get_base_dir())
+	var file := FileAccess.open(record_path, FileAccess.WRITE)
+	if file == null:
+		push_error("Enregistrement du combat impossible (%s)." % error_string(FileAccess.get_open_error()))
+		return
+	file.store_string(_record.to_json())
+
+
 ## Inconscient, le joueur ne peut rien faire : son jet contre la mort a
 ## déjà eu lieu au début du tour, qui se termine tout seul.
 func _play_unconscious_turn() -> void:
@@ -243,8 +340,15 @@ func _resolve_decisions() -> void:
 	while state.pending != null and not state.is_over:
 		var decision := state.pending
 		var answer: Action
-		if decision.decider == _player and not Autoplay.enabled:
+		if decision.decider == _player and _replay != null:
+			await _wait(enemy_action_delay)
+			answer = _next_replay_action()
+			if answer == null:
+				_stop_replay()
+				return
+		elif decision.decider == _player and not Autoplay.enabled:
 			answer = await _ask_player(decision)
+			_remember(answer)
 		else:
 			await _wait(enemy_action_delay)
 			answer = EnemyAI.decide(state)
@@ -290,6 +394,8 @@ func _perform(action: Action) -> void:
 	_board.path_preview = []
 	_hint_label.text = ""
 	_refresh()
+	if action.actor == _player:
+		_remember(action)
 	await _play(action.execute(state, dice))
 	await _resolve_decisions()
 	_busy = false
@@ -508,6 +614,11 @@ func _on_combat_ended(event: CombatEndedEvent) -> void:
 			_player.hp, _player.definition.max_hp,
 			state.combatants[1].hp, state.combatants[1].definition.max_hp,
 		])
+	if _record != null:
+		_record.outcome = CombatRecord.outcome_of(state)
+		_save_record()
+	if _replay != null:
+		_check_replay_outcome()
 	_log.add_line(Texts.end_line(event.winner), LOG_TURN_COLOR)
 	AudioManager.play_jingle(AudioManager.VICTORY_JINGLE if event.winner == Combatant.Side.PLAYER else AudioManager.DEFEAT_JINGLE)
 	combat_finished.emit(event.winner)
@@ -752,6 +863,19 @@ func _refresh() -> void:
 func _place_board() -> void:
 	_board.position = _board_area.global_position
 	_board_origin = _board.position
+
+
+## Fin d'un rejeu : le résultat est-il celui de l'enregistrement ? Puis on
+## quitte.
+func _check_replay_outcome() -> void:
+	var outcome := CombatRecord.outcome_of(state)
+	if _replay.outcome.is_empty():
+		Autoplay.report("rejeu : combat terminé (l'enregistrement n'avait pas de résultat).")
+	elif outcome == _replay.outcome:
+		Autoplay.report("rejeu : conforme, même résultat que l'enregistrement.")
+	else:
+		Autoplay.report("rejeu : DIFFÉRENT de l'enregistrement (%s attendu, %s obtenu)." % [_replay.outcome, outcome])
+	Autoplay.later(self, AudioManager.quit_game, end_delay + 1.0)
 
 
 ## Panneau de la cible : l'ennemi survolé, sinon le premier encore en vie.

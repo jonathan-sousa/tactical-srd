@@ -1,0 +1,100 @@
+# Publication : à chaque tag de version (v1.2.0…), on exporte le jeu pour
+# Windows et Linux et on publie les archives dans une Release GitHub.
+#
+# Lancé à la main (onglet Actions), le workflow exporte seulement : les
+# archives sont alors disponibles en artefact, sans rien publier. Utile pour
+# vérifier l'export avant de poser un tag.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Créer la Release et y déposer les fichiers.
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version du jeu
+        id: version
+        run: |
+          VERSION=$(grep -oP '^config/version="\K[^"]+' project.godot)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version du jeu : $VERSION"
+          # Un tag doit correspondre à la version du projet et à celle des
+          # métadonnées de l'exécutable Windows.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$VERSION" ]; then
+            echo "::error::Le tag ${GITHUB_REF_NAME} ne correspond pas à config/version ($VERSION)."
+            exit 1
+          fi
+          if ! grep -q "application/file_version=\"$VERSION.0\"" export_presets.cfg; then
+            echo "::error::export_presets.cfg n'annonce pas la version $VERSION.0."
+            exit 1
+          fi
+
+      - name: Cache de Godot et des modèles d'export
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          key: godot-${{ env.GODOT_VERSION }}-linux-export-templates
+
+      - name: Téléchargement de Godot et des modèles d'export
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot
+          curl -fsSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+          # Seuls les modèles utiles : version, Windows et Linux en release.
+          TEMPLATES=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p "$TEMPLATES"
+          curl -fsSL -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -qj /tmp/templates.tpz "templates/version.txt" "templates/windows_release_x86_64.exe" "templates/linux_release.x86_64" -d "$TEMPLATES"
+          rm /tmp/templates.tpz
+
+      - name: Import du projet
+        run: ~/godot/godot --headless --path . --import
+
+      - name: Export Windows et Linux
+        run: |
+          mkdir -p build/windows build/linux
+          ~/godot/godot --headless --path . --export-release "Windows Desktop" build/windows/ProjetPhenix.exe
+          ~/godot/godot --headless --path . --export-release "Linux" build/linux/ProjetPhenix.x86_64
+          test -s build/windows/ProjetPhenix.exe
+          test -s build/linux/ProjetPhenix.x86_64
+
+      - name: Archives
+        id: archives
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          mkdir -p dist
+          (cd build/windows && zip -q "../../dist/ProjetPhenix-$VERSION-windows.zip" ProjetPhenix.exe)
+          tar -czf "dist/ProjetPhenix-$VERSION-linux.tar.gz" -C build/linux ProjetPhenix.x86_64
+          ls -l dist
+
+      - name: Archives en artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: projet-phenix-${{ steps.version.outputs.version }}
+          path: dist/
+
+      - name: Release GitHub
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "Projet Phénix ${{ steps.version.outputs.version }}" \
+            --generate-notes
