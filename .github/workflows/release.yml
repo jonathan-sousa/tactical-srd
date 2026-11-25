@@ -1,14 +1,20 @@
 # Publication : à chaque tag de version (v1.2.0…), on exporte le jeu pour
 # Windows et Linux et on publie les archives dans une Release GitHub.
 #
-# Lancé à la main (onglet Actions), le workflow exporte seulement : les
-# archives sont alors disponibles en artefact, sans rien publier. Utile pour
-# vérifier l'export avant de poser un tag.
+# Lancé à la main (onglet Actions), ou par une PR qui touche à l'export ou
+# à la version, le workflow exporte seulement : les archives sont alors
+# disponibles en artefact, sans rien publier. Utile pour vérifier l'export
+# avant de poser un tag.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "export_presets.cfg"
+      - "project.godot"
   workflow_dispatch:
 
 env:
