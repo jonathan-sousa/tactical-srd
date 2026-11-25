@@ -20,6 +20,8 @@ func _ready() -> void:
 	var tween := create_tween().set_loops()
 	tween.tween_property(_press_key_label, "modulate:a", 0.3, 0.8)
 	tween.tween_property(_press_key_label, "modulate:a", 1.0, 0.8)
+	if Autoplay.enabled:
+		Autoplay.later(self, _leave)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -27,6 +29,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		or (event is InputEventMouseButton and event.pressed) \
 		or (event is InputEventJoypadButton and event.pressed)
 	if pressed and not _leaving:
-		_leaving = true
 		get_viewport().set_input_as_handled()
-		SceneRouter.go_to(SceneRouter.MENU)
+		_leave()
+
+
+func _leave() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	SceneRouter.go_to(SceneRouter.MENU)

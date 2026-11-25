@@ -43,8 +43,9 @@ const SHAKE_DURATION := 0.25
 
 var state: CombatState
 ## Source de hasard du combat. Les tests la remplacent par des dés truqués
-## avant d'ajouter la scène à l'arbre.
-var dice: Dice = Dice.new()
+## avant d'ajouter la scène à l'arbre ; sinon `_ready` en crée (à graine en
+## mode démo, voir Autoplay).
+var dice: Dice
 ## Ce qui se passe à la fin d'un combat de l'histoire. Par défaut,
 ## GameState.finish_step ; les tests le remplacent pour ne pas changer de scène.
 var on_story_end: Callable
@@ -119,6 +120,8 @@ func _ready() -> void:
 		return
 	if not on_story_end.is_valid():
 		on_story_end = GameState.finish_step
+	if dice == null:
+		dice = Autoplay.make_dice()
 	_register_event_handlers()
 
 	state = CombatState.create(encounter, player_definition, player_hp)
@@ -191,13 +194,21 @@ func _continue() -> void:
 		await _play_enemy_turn()
 	elif state.active() == _player and _player.is_down():
 		await _play_unconscious_turn()
+	elif Autoplay.enabled:
+		# Mode démo : l'IA joue aussi le Guerrier.
+		await _play_ai_turn()
 
 
 ## L'IA choisit une action à la fois, jusqu'à finir son tour.
 func _play_enemy_turn() -> void:
+	_hint_label.text = Texts.ENEMY_TURN
+	await _play_ai_turn()
+
+
+## Tour joué par l'IA : celui du Gobelin, ou du Guerrier en mode démo.
+func _play_ai_turn() -> void:
 	_busy = true
 	_refresh()
-	_hint_label.text = Texts.ENEMY_TURN
 	var actor := state.active()
 	for i in EnemyAI.MAX_ACTIONS_PER_TURN:
 		if state.is_over or state.active() != actor:
@@ -232,7 +243,7 @@ func _resolve_decisions() -> void:
 	while state.pending != null and not state.is_over:
 		var decision := state.pending
 		var answer: Action
-		if decision.decider == _player:
+		if decision.decider == _player and not Autoplay.enabled:
 			answer = await _ask_player(decision)
 		else:
 			await _wait(enemy_action_delay)
@@ -491,6 +502,12 @@ func _on_reaction_declined(event: ReactionDeclinedEvent) -> void:
 
 
 func _on_combat_ended(event: CombatEndedEvent) -> void:
+	if Autoplay.enabled:
+		Autoplay.report("Résumé : %s au round %d, Guerrier %d / %d PV, Gobelin %d / %d PV." % [
+			(Texts.VICTORY if event.winner == Combatant.Side.PLAYER else Texts.DEFEAT).to_lower(), state.round,
+			_player.hp, _player.definition.max_hp,
+			state.combatants[1].hp, state.combatants[1].definition.max_hp,
+		])
 	_log.add_line(Texts.end_line(event.winner), LOG_TURN_COLOR)
 	AudioManager.play_jingle(AudioManager.VICTORY_JINGLE if event.winner == Combatant.Side.PLAYER else AudioManager.DEFEAT_JINGLE)
 	combat_finished.emit(event.winner)

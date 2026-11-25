@@ -45,7 +45,22 @@ Commandes du combat :
 - **Espace** : finir le tour.
 - En ligne de commande : `godot --path .`
 
-## Lancer les tests
+## Mode démo
+
+Le jeu peut se jouer tout seul, de l'écran titre à la fin de l'histoire, puis se fermer :
+
+```sh
+godot --path . -- --autoplay --seed=42 --speed=2
+```
+
+- `--seed=N` : graine des dés. Même graine, même code, même partie, à chaque fois.
+- `--speed=N` : accélère le jeu (de 0,25 à 16, 1 par défaut).
+- Le Guerrier est conduit par la même IA que le Gobelin. Le journal du combat est recopié dans la console (lignes `[démo]`), avec un résumé à la fin.
+- La partie du joueur n'est pas touchée : le mode démo sauvegarde dans `user://autoplay_save.json`.
+- Sans fenêtre, pour ne lire que le journal : ajouter `--headless` avant `--path`.
+
+Pour reproduire un comportement signalé, il suffit de donner sa graine.
+
 
 En ligne de commande, en mode headless :
 
@@ -61,10 +76,26 @@ Les mêmes vérifications tournent sur GitHub Actions à chaque push, sur toutes
 
 Depuis l'éditeur : clic droit sur le dossier `tests/` puis **Run Tests**.
 
+### Combats automatiques et graines
+
+`CombatSimulator` (dans `rules/`) joue un combat entier sans affichage, les deux camps conduits par l'IA. Avec des dés à graine, le combat est déterministe. Trois familles de tests s'en servent :
+
+- `tests/rules/reference_combats_test.gd` : une graine par comportement à garantir (embuscade et tir caché, Nimble Escape, Second souffle, Inspiration héroïque, Graze, Chercher, relevé sur un 20, stabilisé, mort, victoire). Les comportements sont décrits dans `tests/helpers/combat_scenarios.gd`.
+- `tests/rules/invariants_test.gd` : 300 combats, et après chaque action des règles qui ne doivent jamais être violées (PV dans les bornes, une action et une action bonus par tour, une réaction entre deux tours, aucune action refusée à l'IA, combat toujours terminé…).
+- `tests/scenes/combat_scene_test.gd` vérifie que la scène en mode démo joue exactement le même combat que le simulateur.
+
+Si un changement voulu des règles ou de l'IA modifie les combats, retrouver une graine pour chaque comportement :
+
+```sh
+godot --headless --path . -s scripts/find_seeds.gd -- --max=3000
+```
+
+puis recopier les graines dans `tests/rules/reference_combats_test.gd`.
+
 ## Arborescence
 
 ```text
-autoload/      singletons : SceneRouter, GameState, SaveManager, Settings, AudioManager
+autoload/      singletons : SceneRouter, GameState, SaveManager, Settings, AudioManager, Autoplay
 rules/         moteur de règles pur (RefCounted, aucun Node)
   actions/     actions du joueur et de l'IA (déplacement, attaque, se cacher…)
   events/      événements émis par le moteur, rejoués par la présentation

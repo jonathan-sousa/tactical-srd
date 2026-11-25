@@ -6,6 +6,9 @@
 ## consomme quelque chose (action, action bonus, déplacement) : le tour se
 ## termine toujours.
 ##
+## Le Guerrier joué par l'IA (mode démo, tests) prend Second Wind à la
+## moitié de ses PV.
+##
 ## Tactique du Gobelin, dans l'ordre :
 ## 1. Hors de vue, il se cache d'abord (Nimble Escape) : son attaque aura
 ##    l'avantage, et +1d4 dégâts.
@@ -30,6 +33,11 @@ static func next_action(state: CombatState, actor: Combatant) -> Action:
 	var stand_up := StandUpAction.new(actor)
 	if stand_up.validate(state).is_empty():
 		return stand_up
+
+	# À la moitié de ses PV ou moins : Second Wind (action bonus).
+	var second_wind := SecondWindAction.new(actor)
+	if actor.hp * 2 <= actor.definition.max_hp and second_wind.validate(state).is_empty():
+		return second_wind
 
 	var target := _choose_target(state, actor)
 	if target == null:

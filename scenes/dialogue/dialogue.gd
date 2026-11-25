@@ -20,6 +20,8 @@ var _shown := 0.0
 var _typing := false
 var _story_mode := false
 var _done := false
+## Mode démo : temps écoulé depuis que la réplique est entièrement affichée.
+var _autoplay_wait := 0.0
 
 @onready var _speaker_label: Label = %SpeakerLabel
 @onready var _text_label: Label = %TextLabel
@@ -62,6 +64,11 @@ func is_typing() -> bool:
 
 
 func _process(delta: float) -> void:
+	if Autoplay.enabled and not _typing and not _done:
+		_autoplay_wait += delta
+		if _autoplay_wait >= Autoplay.STEP_DELAY * 2.0:
+			_autoplay_wait = 0.0
+			advance()
 	if not _typing:
 		return
 	_shown += delta * CHARACTERS_PER_SECOND
@@ -141,6 +148,8 @@ func _show_line(index: int) -> void:
 	var line := dialogue.lines[index]
 	_speaker_label.text = line.speaker
 	_text_label.text = line.text
+	if Autoplay.enabled:
+		Autoplay.report("%s : %s" % [line.speaker, line.text])
 	_text_label.visible_characters = 0
 	_portrait.texture = line.portrait
 	_portrait.visible = line.portrait != null
