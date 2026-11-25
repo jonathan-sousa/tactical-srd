@@ -125,11 +125,13 @@ func combatant_at(cell: Vector2i) -> Combatant:
 	return null
 
 
-## Cases occupées par les autres combattants vivants.
+## Cases que `except` sait occupées par les autres combattants vivants. Un
+## ennemi caché n'y figure pas : on ignore où il est, et on peut le heurter
+## en entrant dans sa case (voir `walk`).
 func occupied_cells(except: Combatant) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for combatant in combatants:
-		if combatant != except and not combatant.is_dead:
+		if combatant != except and not combatant.is_dead and not is_hidden_from(combatant, except):
 			cells.append(combatant.position)
 	return cells
 
@@ -252,11 +254,44 @@ func roll_hide(combatant: Combatant, dice: Dice, bonus_action: bool) -> HideAtte
 
 
 ## Le combattant n'est plus caché. Renvoie l'événement, ou rien s'il ne
-## l'était pas.
-func reveal(combatant: Combatant, reason: StringName) -> Array[CombatEvent]:
+## l'était pas. `observer` : l'ennemi qui l'a trouvé, s'il y en a un.
+func reveal(combatant: Combatant, reason: StringName, observer: Combatant = null) -> Array[CombatEvent]:
 	if not remove_effect(combatant, Effect.HIDDEN):
 		return []
-	return [RevealedEvent.new(combatant, combatant.position, reason)]
+	return [RevealedEvent.new(combatant, combatant.position, reason, observer)]
+
+
+## Perception passive (SRD « Passive Perception ») : 10 + bonus de Sagesse
+## (Perception). Aucun effet du jeu ne donne l'avantage ou le désavantage
+## en Perception : pas de +5 ni de -5 pour l'instant.
+func passive_perception(combatant: Combatant) -> int:
+	return 10 + combatant.definition.skill_bonus(CharacterDef.PERCEPTION)
+
+
+## Règle de MJ (docs/rules-deviations.md) : un caché est trouvé dès qu'un
+## ennemi conscient a une vue dégagée sur lui, sauf `skip`, le caché dont
+## le tour est en cours (il peut encore sortir de sa cachette et frapper).
+## Vérifié à la fin de chaque déplacement et à chaque changement de tour.
+func reveal_exposed(skip: Combatant = null) -> Array[CombatEvent]:
+	var events: Array[CombatEvent] = []
+	for hidden in combatants:
+		if hidden == skip or hidden.is_dead or not is_hidden(hidden):
+			continue
+		for enemy in living_enemies_of(hidden):
+			if not enemy.is_down() and line_of_sight.is_clear(enemy.position, hidden.position):
+				events.append_array(reveal(hidden, RevealedEvent.SEEN, enemy))
+				break
+	return events
+
+
+## Règle de MJ : un ennemi conscient qui voit la case où passe le caché, et
+## dont la Perception passive atteint le total de sa Discrétion, le
+## remarque. `null` si personne ne le remarque.
+func _noticer(hidden: Combatant, cell: Vector2i) -> Combatant:
+	for enemy in living_enemies_of(hidden):
+		if not enemy.is_down() and line_of_sight.is_clear(enemy.position, cell) 				and passive_perception(enemy) >= hide_dc(hidden):
+			return enemy
+	return null
 
 
 ## Ennemis debout au contact de `combatant` (à 5 ft) qui le voient.
@@ -282,6 +317,8 @@ func living_enemies_of(combatant: Combatant) -> Array[Combatant]:
 ## au début de son tour : il faut alors des dés.
 func advance_turn(dice: Dice = null) -> Array[CombatEvent]:
 	var events := _expire_effects(active(), Effect.Expiry.END_OF_SOURCE_TURN)
+	# Fin du tour : un caché resté en vue est trouvé.
+	events.append_array(reveal_exposed())
 	for i in initiative.size():
 		_active_index += 1
 		if _active_index >= initiative.size():
@@ -298,6 +335,8 @@ func advance_turn(dice: Dice = null) -> Array[CombatEvent]:
 	if active().is_dying():
 		assert(dice != null, "Jet contre la mort : il faut des dés pour changer de tour.")
 		events.append_array(HitPoints.roll_death_save(self, active(), dice))
+	# Un combattant qui reprend connaissance voit les cachés en vue.
+	events.append_array(reveal_exposed(active()))
 	return events
 
 
@@ -316,12 +355,26 @@ func apply_effect(effect: Effect) -> Array[CombatEvent]:
 ## ennemi capable de réagir, le déplacement s'arrête et une fenêtre de
 ## réaction s'ouvre (voir ReactionWindow). `already_asked` : combattants
 ## déjà sollicités pour le premier pas, quand un déplacement reprend.
+##
+## Règles de MJ sur les cachés (docs/rules-deviations.md) :
+## - entrer dans la case d'un ennemi caché le heurte : le déplacement
+##   s'arrête sur la case d'avant, et il est trouvé ;
+## - un caché qui passe en vue d'un ennemi à la Perception passive
+##   suffisante est remarqué sur cette case, et la suite du trajet est vue ;
+## - à la fin du déplacement, les cachés que `mover` voit sont trouvés.
 func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatant] = []) -> Array[CombatEvent]:
 	var events: Array[CombatEvent] = []
 	var from := mover.position
 	var walked: Array[Vector2i] = []
 	var unseen := is_hidden(mover)
 	for i in path.size():
+		var blocker := combatant_at(path[i])
+		if blocker != null:
+			if not walked.is_empty():
+				events.append(MovedEvent.new(mover, from, walked, unseen))
+			events.append_array(reveal(blocker, RevealedEvent.BUMPED, mover))
+			events.append_array(reveal_exposed(mover))
+			return events
 		var skip: Array[Combatant] = []
 		if i == 0:
 			skip = already_asked
@@ -337,8 +390,17 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 		mover.position = path[i]
 		movement_left -= 1
 		walked.append(path[i])
+		if unseen:
+			var noticer := _noticer(mover, path[i])
+			if noticer != null:
+				events.append(MovedEvent.new(mover, from, walked, unseen))
+				events.append_array(reveal(mover, RevealedEvent.NOTICED, noticer))
+				from = path[i]
+				walked = []
+				unseen = false
 	if not walked.is_empty():
 		events.append(MovedEvent.new(mover, from, walked, unseen))
+	events.append_array(reveal_exposed(mover))
 	return events
 
 

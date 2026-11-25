@@ -1,8 +1,9 @@
 ## Action Se cacher (SRD « Hide ») : jet de Dextérité (Discrétion) contre
 ## DD 15, hors de la ligne de vue de tout ennemi. Réussite : le combattant
 ## est caché, avec la condition Invisible, jusqu'à ce qu'il attaque ou qu'un
-## ennemi le trouve (action Chercher). Sortir à découvert ne le révèle pas
-## (lecture littérale du SRD, voir docs/rules-deviations.md).
+## ennemi le trouve : action Chercher, ou règles de MJ de `CombatState`
+## (vue en fin de tour ou de déplacement, Perception passive, heurt ; voir
+## docs/rules-deviations.md).
 ##
 ## Le Gobelin peut la prendre par une action bonus (Nimble Escape).
 class_name HideAction

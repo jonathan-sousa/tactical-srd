@@ -2,8 +2,10 @@
 ## « Hide », « Search », « Invisible », « Unseen Attackers and Targets »,
 ## « Surprise »).
 ##
-## Lecture littérale retenue : un combattant caché le reste à découvert,
-## jusqu'à ce qu'il attaque ou qu'un ennemi le trouve avec Chercher.
+## Règles de MJ retenues (docs/rules-deviations.md) : un caché est trouvé
+## s'il finit son tour en vue d'un ennemi conscient, quand un ennemi finit
+## son déplacement en vue de lui, quand une Perception passive suffisante le
+## voit passer, ou quand on le heurte.
 extends GdUnitTestSuite
 
 const FixedDice := preload("res://tests/helpers/fixed_dice.gd")
@@ -106,17 +108,163 @@ func test_cannot_hide_twice() -> void:
 # --- Caché, donc invisible ----------------------------------------------------------
 
 
-func test_hidden_goblin_stays_hidden_in_plain_sight() -> void:
+func test_passive_perception_is_10_plus_the_perception_bonus() -> void:
+	_start()
+	# Guerrier : Perception +3 ; Gobelin : Sagesse 8, soit -1.
+	assert_int(_state.passive_perception(_fighter)).is_equal(13)
+	assert_int(_state.passive_perception(_goblin)).is_equal(9)
+
+
+func test_hidden_goblin_ending_its_turn_in_plain_sight_is_found() -> void:
 	_start()
 	_goblin_hides(12)
-	# Il sort de derrière le mur, en pleine vue : lecture littérale, il
-	# reste caché, et son déplacement n'est pas vu.
+	# Il sort de derrière le mur, en pleine vue : son déplacement n'est pas
+	# vu, et il reste caché tant que son tour dure.
 	var events := _run(MoveAction.new(_goblin, Vector2i(5, 4)))
+	assert_int(events.size()).is_equal(1)
 	assert_bool((events[0] as MovedEvent).unseen).is_true()
 	assert_bool(_state.line_of_sight.is_clear(_fighter.position, _goblin.position)).is_true()
+	assert_bool(_state.is_hidden(_goblin)).is_true()
+	# Il finit son tour en vue du Guerrier : trouvé.
+	events = _run(EndTurnAction.new(_goblin))
+	var revealed := events[0] as RevealedEvent
+	assert_str(revealed.reason).is_equal(RevealedEvent.SEEN)
+	assert_object(revealed.observer).is_same(_fighter)
+	assert_that(revealed.cell).is_equal(Vector2i(5, 4))
+	assert_bool(_state.can_see(_fighter, _goblin)).is_true()
+
+
+func test_hidden_goblin_back_out_of_sight_before_the_end_of_its_turn_stays_hidden() -> void:
+	_start()
+	_goblin_hides(12)
+	_run(MoveAction.new(_goblin, Vector2i(5, 4)))
+	_run(MoveAction.new(_goblin, Vector2i(6, 3)))
 	_end_turn()
 	assert_bool(_state.is_hidden(_goblin)).is_true()
-	assert_bool(_state.can_see(_fighter, _goblin)).is_false()
+
+
+func test_hidden_goblin_steps_out_and_shoots_with_advantage() -> void:
+	_start()
+	_goblin_hides(12)
+	_run(MoveAction.new(_goblin, Vector2i(5, 4)))
+	var bow: WeaponDef = _goblin.definition.weapons[1]
+	# Avantage : 15 et 3, on garde 15 ; 15 + 4 = 19 contre CA 16. 1d6 + 2
+	# et 1d4 (avantage) : 3 + 2 + 2 = 7.
+	var events := _run(AttackAction.new(_goblin, _fighter, bow), [15, 3, 3, 2])
+	assert_str((events[0] as RevealedEvent).reason).is_equal(RevealedEvent.ATTACKED)
+	var result := (events[1] as AttackRolledEvent).result
+	assert_array(result.advantage.advantages).contains([AdvantageResolver.ATTACKER_HIDDEN])
+	assert_int(_fighter.hp).is_equal(5)
+
+
+func test_fighter_walking_around_the_wall_finds_the_hidden_goblin() -> void:
+	_start()
+	_goblin_hides(12)
+	_end_turn()
+	assert_bool(_state.is_hidden(_goblin)).is_true()
+	var events := _run(MoveAction.new(_fighter, Vector2i(6, 4)))
+	assert_object(events[0]).is_instanceof(MovedEvent)
+	var revealed := events[1] as RevealedEvent
+	assert_str(revealed.reason).is_equal(RevealedEvent.SEEN)
+	assert_object(revealed.observer).is_same(_fighter)
+	assert_that(revealed.cell).is_equal(Vector2i(8, 2))
+	assert_bool(_state.is_hidden(_goblin)).is_false()
+
+
+func test_fighter_moving_without_a_view_on_the_goblin_finds_nothing() -> void:
+	_start()
+	_goblin_hides(12)
+	_end_turn()
+	var events := _run(MoveAction.new(_fighter, Vector2i(3, 2)))
+	assert_int(events.size()).is_equal(1)
+	assert_bool(_state.is_hidden(_goblin)).is_true()
+
+
+## Le Guerrier a une Perception passive de 20 : il remarque le Gobelin
+## (Discrétion 15) dès la première case en vue de son trajet.
+func test_high_passive_perception_notices_the_hidden_mover_on_the_first_cell_in_view() -> void:
+	_start()
+	_fighter.definition.skill_bonuses[CharacterDef.PERCEPTION] = 10
+	_goblin_hides(9)
+	var path := _state.find_path(_goblin, Vector2i(4, 4))
+	var first_in_view := -1
+	for i in path.size():
+		if _state.line_of_sight.is_clear(_fighter.position, path[i]):
+			first_in_view = i
+			break
+	assert_int(first_in_view).is_between(0, path.size() - 2)
+
+	var events := _run(MoveAction.new(_goblin, Vector2i(4, 4)))
+	# Le début du trajet, jusqu'à la case où il est remarqué, n'est pas vu.
+	var hidden_part := events[0] as MovedEvent
+	assert_bool(hidden_part.unseen).is_true()
+	assert_that(hidden_part.path.back()).is_equal(path[first_in_view])
+	var revealed := events[1] as RevealedEvent
+	assert_str(revealed.reason).is_equal(RevealedEvent.NOTICED)
+	assert_object(revealed.observer).is_same(_fighter)
+	assert_that(revealed.cell).is_equal(path[first_in_view])
+	# La suite du trajet est vue.
+	var rest := events[2] as MovedEvent
+	assert_bool(rest.unseen).is_false()
+	assert_that(rest.path.back()).is_equal(Vector2i(4, 4))
+
+
+func test_passive_perception_below_the_stealth_total_notices_nothing() -> void:
+	_start()
+	# Perception passive 13 contre Discrétion 15.
+	_goblin_hides(9)
+	var events := _run(MoveAction.new(_goblin, Vector2i(4, 4)))
+	assert_int(events.size()).is_equal(1)
+	assert_bool(_state.is_hidden(_goblin)).is_true()
+
+
+func test_walking_into_a_hidden_goblin_bumps_into_it() -> void:
+	_start()
+	_goblin_hides(12)
+	_end_turn()
+	# (Situation forcée : le Gobelin caché juste à côté du Guerrier.)
+	_goblin.position = Vector2i(2, 2)
+	# Sa case n'est pas exclue des chemins : le Guerrier ignore qu'il y est.
+	assert_array(_state.find_path(_fighter, Vector2i(2, 2))).contains_exactly([Vector2i(2, 2)])
+	var events := _run(MoveAction.new(_fighter, Vector2i(2, 2)))
+	var revealed := events[0] as RevealedEvent
+	assert_str(revealed.reason).is_equal(RevealedEvent.BUMPED)
+	assert_object(revealed.observer).is_same(_fighter)
+	assert_that(_fighter.position).is_equal(Vector2i(1, 2))
+	assert_int(_state.movement_left).is_equal(6)
+	assert_bool(_state.is_hidden(_goblin)).is_false()
+
+
+func test_bumping_stops_the_move_on_the_previous_cell() -> void:
+	_start()
+	_goblin_hides(12)
+	_end_turn()
+	_goblin.position = Vector2i(3, 2)
+	var path := _state.find_path(_fighter, Vector2i(3, 2))
+	assert_int(path.size()).is_equal(2)
+	var events := _run(MoveAction.new(_fighter, Vector2i(3, 2)))
+	assert_object(events[0]).is_instanceof(MovedEvent)
+	assert_str((events[1] as RevealedEvent).reason).is_equal(RevealedEvent.BUMPED)
+	assert_that(_fighter.position).is_equal(path[0])
+	assert_int(_state.movement_left).is_equal(5)
+
+
+func test_fighter_waking_up_in_view_finds_the_hidden_goblin() -> void:
+	_start()
+	_goblin_hides(12)
+	HitPoints.apply_damage(_state, _fighter, _fighter.hp, DamageType.Type.SLASHING)
+	# Le Guerrier est inconscient : le Gobelin finit son tour en vue sans
+	# être trouvé. Puis 20 naturel au jet contre la mort : le Guerrier se
+	# réveille, le voit et le trouve.
+	_goblin.position = Vector2i(3, 2)
+	var events := _run(EndTurnAction.new(_goblin), [20])
+	assert_bool(_fighter.is_down()).is_false()
+	var revealed := events.back() as RevealedEvent
+	assert_object(revealed).is_not_null()
+	assert_str(revealed.reason).is_equal(RevealedEvent.SEEN)
+	for event: CombatEvent in events.slice(0, events.size() - 1):
+		assert_object(event).is_not_instanceof(RevealedEvent)
+	assert_bool(_state.is_hidden(_goblin)).is_false()
 
 
 func test_hidden_attacker_has_advantage_and_is_revealed() -> void:
@@ -188,12 +336,14 @@ func test_search_needs_a_hidden_enemy() -> void:
 # --- Attaquer à l'aveugle -------------------------------------------------------------
 
 
-## Le Gobelin se cache, puis vient se poster à découvert en (3,2).
+## Le Gobelin caché se trouve en (3,2), en vue mais pas encore trouvé
+## (situation forcée : sur notre grille sans brouillard ni abri partiel, il
+## serait trouvé en fin de tour ; l'attaque à l'aveugle servira avec eux).
 func _goblin_hidden_in_plain_sight() -> void:
 	_start()
 	_goblin_hides(12)
-	_goblin.position = Vector2i(3, 2)
 	_end_turn()
+	_goblin.position = Vector2i(3, 2)
 
 
 func test_blind_attack_on_the_right_cell_has_disadvantage() -> void:
@@ -207,7 +357,7 @@ func test_blind_attack_on_the_right_cell_has_disadvantage() -> void:
 	assert_int(result.d20.mode).is_equal(Dice.RollMode.DISADVANTAGE)
 	assert_array(result.advantage.disadvantages).contains([AdvantageResolver.TARGET_UNSEEN])
 	assert_bool(result.is_hit).is_true()
-	# Touché, mais pas trouvé : il reste caché (lecture littérale).
+	# Touché, mais pas trouvé : il reste caché.
 	assert_bool(_state.is_hidden(_goblin)).is_true()
 
 
