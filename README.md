@@ -127,7 +127,35 @@ godot --headless --path . --export-release "Windows Desktop" build/windows/Proje
 godot --headless --path . --export-release "Linux" build/linux/ProjetPhenix.x86_64
 ```
 
-L'exécutable Windows porte l'icône du jeu, la version 1.1.0 et ses métadonnées (nom, éditeur, mentions). Il n'est pas signé : SmartScreen peut afficher un avertissement au premier lancement (« Informations complémentaires » puis « Exécuter quand même »).
+L'exécutable Windows porte l'icône du jeu, sa version (`config/version` de `project.godot`) et ses métadonnées (nom, éditeur, mentions). Il n'est pas signé : SmartScreen peut afficher un avertissement au premier lancement (« Informations complémentaires » puis « Exécuter quand même »).
+
+## Publier une version
+
+Le workflow `.github/workflows/release.yml` exporte le jeu pour Windows et Linux et publie les archives dans une Release GitHub, à chaque tag de version :
+
+1. Mettre la même version dans `project.godot` (`config/version="1.2.0"`) et dans `export_presets.cfg` (`application/file_version` et `application/product_version`, avec un `.0` de plus : `1.2.0.0`). Un test vérifie qu'elles concordent.
+2. Fusionner dans `main`, puis poser et pousser le tag :
+
+```sh
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+La Release « Projet Phénix 1.2.0 » apparaît avec `ProjetPhenix-1.2.0-windows.zip` et `ProjetPhenix-1.2.0-linux.tar.gz`, et des notes tirées des PR fusionnées. Le workflow refuse un tag qui ne correspond pas à la version du projet.
+
+Pour vérifier l'export sans rien publier : onglet **Actions**, workflow **Release**, **Run workflow**. Les archives sont alors téléchargeables dans les artefacts du lancement.
+
+## Rejouer un combat
+
+Chaque combat est enregistré au fil des choix du joueur dans `user://replays/last_combat.json` (sous Windows : `%APPDATA%\Godot\app_userdata\Projet Phénix\replays\`). Le fichier contient la graine des dés, la situation de départ du Guerrier et ses choix ; l'IA et les dés étant déterministes, cela suffit à reproduire tout le combat. Il est écrit après chaque choix : il reste utilisable si le jeu est quitté en plein combat.
+
+Pour rejouer le dernier combat :
+
+```sh
+godot --path . -- --replay=user://replays/last_combat.json --speed=2
+```
+
+Le combat se rejoue sous les yeux, puis la console dit s'il aboutit au même résultat que l'enregistrement (`[démo] rejeu : conforme…`) avant de quitter. Si les règles ou l'IA ont changé depuis, le rejeu s'arrête au premier choix qui ne correspond plus et le signale. Joint à un rapport de bug, ce fichier permet de reproduire exactement la partie.
 
 ## Enchaînement des écrans
 

@@ -20,13 +20,7 @@ func test_ignores_bad_values_and_bounds_the_speed() -> void:
 	assert_float(options["speed"]).is_equal(16.0)
 
 
-func test_demo_dice_follow_the_seed() -> void:
-	var saved := [Autoplay.enabled, Autoplay.seed_value]
-	Autoplay.enabled = true
-	Autoplay.seed_value = 7
-	var first := Autoplay.make_dice().roll_die(20)
-	var second := Autoplay.make_dice().roll_die(20)
-	Autoplay.enabled = saved[0]
-	Autoplay.seed_value = saved[1]
-	assert_int(first).is_equal(second)
-	assert_int(first).is_equal(Dice.seeded(7).roll_die(20))
+func test_reads_the_replay_file() -> void:
+	var options := Autoplay.parse(PackedStringArray(["--replay=user://replays/last_combat.json"]))
+	assert_str(options["replay"]).is_equal("user://replays/last_combat.json")
+	assert_bool(options["enabled"]).is_false()

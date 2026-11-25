@@ -16,6 +16,8 @@ const GOBLIN_FIRST: Array[int] = [1, 1, 20]
 ## caché (1 et 1). Le Guerrier commence quand même.
 const AMBUSHED_FIGHTER_FIRST: Array[int] = [12, 20, 20, 1, 1]
 
+const TEST_RECORD_PATH := "user://test_last_combat.json"
+
 var _runner: GdUnitSceneRunner
 var _scene: Node
 var _saved_step: StringName
@@ -32,6 +34,9 @@ func before_test() -> void:
 func after_test() -> void:
 	get_tree().paused = false
 	Autoplay.enabled = false
+	Autoplay.replay = null
+	if FileAccess.file_exists(TEST_RECORD_PATH):
+		DirAccess.remove_absolute(TEST_RECORD_PATH)
 	GameState.current_step_id = _saved_step
 	GameState.player_hp = _saved_hp
 
@@ -427,3 +432,38 @@ func test_demo_mode_plays_the_same_fight_as_the_simulator() -> void:
 	assert_int(_fighter().hp).is_equal(sim.state.combatants[0].hp)
 	assert_int(_goblin().hp).is_equal(sim.state.combatants[1].hp)
 	assert_int(_state().winner).is_equal(sim.state.winner)
+
+
+func test_player_choices_are_recorded_with_the_seed() -> void:
+	_scene = auto_free(load(COMBAT_SCENE).instantiate())
+	_scene.set("seed_value", 5)
+	_scene.set("record_path", TEST_RECORD_PATH)
+	_scene.set("enemy_action_delay", 0.0)
+	_scene.set("end_delay", 0.0)
+	_runner = scene_runner(_scene)
+	await _settle()
+	if _state().active() == _fighter() and not _state().is_over:
+		_scene.call("_on_end_turn_pressed")
+		await _settle()
+	var recorded := CombatRecord.from_json(FileAccess.get_file_as_string(TEST_RECORD_PATH))
+	assert_object(recorded).is_not_null()
+	assert_int(recorded.seed_value).is_equal(5)
+	assert_str(recorded.encounter_id).is_equal(&"goblin_ambush")
+	assert_int(recorded.player_hp).is_equal(12)
+	assert_bool(recorded.entries.has({"type": CombatRecord.END_TURN})).is_true()
+
+
+func test_replay_mode_reproduces_the_recorded_combat() -> void:
+	const RecordedGames := preload("res://tests/helpers/recorded_games.gd")
+	var recorded := RecordedGames.record(4)
+	Autoplay.replay = recorded
+	_scene = auto_free(load(COMBAT_SCENE).instantiate())
+	_scene.set("enemy_action_delay", 0.0)
+	_scene.set("end_delay", 100.0)
+	_runner = scene_runner(_scene)
+	for _frame: int in 900:
+		await _runner.simulate_frames(1, 50)
+		if _state().is_over:
+			break
+	assert_bool(_state().is_over).is_true()
+	assert_dict(CombatRecord.outcome_of(_state())).is_equal(recorded.outcome)
