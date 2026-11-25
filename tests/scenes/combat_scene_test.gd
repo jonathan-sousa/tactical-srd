@@ -31,6 +31,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	get_tree().paused = false
+	Autoplay.enabled = false
 	GameState.current_step_id = _saved_step
 	GameState.player_hp = _saved_hp
 
@@ -405,3 +406,24 @@ func test_combat_plays_its_music_and_hit_sounds() -> void:
 	_scene.call("_on_cell_clicked", _goblin().position)
 	await _settle()
 	assert_str(AudioManager.last_effect).is_equal(AudioManager.HIT)
+
+
+func test_demo_mode_plays_the_same_fight_as_the_simulator() -> void:
+	const Scenarios := preload("res://tests/helpers/combat_scenarios.gd")
+	Autoplay.enabled = true
+	Autoplay.seed_value = 1
+	_scene = auto_free(load(COMBAT_SCENE).instantiate())
+	_scene.set("enemy_action_delay", 0.0)
+	_scene.set("end_delay", 0.0)
+	_runner = scene_runner(_scene)
+	for _frame: int in 600:
+		await _runner.simulate_frames(1, 50)
+		if _state().is_over:
+			break
+	assert_bool(_state().is_over).is_true()
+	# Même graine : la scène et le simulateur jouent le même combat.
+	var sim := Scenarios.play(1)
+	assert_int(_state().round).is_equal(sim.state.round)
+	assert_int(_fighter().hp).is_equal(sim.state.combatants[0].hp)
+	assert_int(_goblin().hp).is_equal(sim.state.combatants[1].hp)
+	assert_int(_state().winner).is_equal(sim.state.winner)

@@ -18,3 +18,5 @@ func _ready() -> void:
 	_retry_button.pressed.connect(func() -> void: GameState.go_to_current_step())
 	_menu_button.pressed.connect(func() -> void: SceneRouter.go_to(SceneRouter.MENU))
 	_retry_button.grab_focus()
+	if Autoplay.enabled:
+		Autoplay.later(self, func() -> void: SceneRouter.go_to(SceneRouter.MENU))

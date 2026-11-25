@@ -18,6 +18,8 @@ func _ready() -> void:
 
 
 func add_line(text: String, color: Color = TEXT_COLOR) -> void:
+	if Autoplay.enabled:
+		Autoplay.report(text)
 	push_color(color)
 	add_text(text)
 	pop()
@@ -26,6 +28,8 @@ func add_line(text: String, color: Color = TEXT_COLOR) -> void:
 
 ## Détail des jets, sous la ligne principale.
 func add_detail(text: String) -> void:
+	if Autoplay.enabled:
+		Autoplay.report("   " + text)
 	push_font_size(Settings.font_size(13, 16))
 	push_color(DETAIL_COLOR)
 	add_text("   " + text)
@@ -36,6 +40,8 @@ func add_detail(text: String) -> void:
 
 ## En-tête de round, séparé du round précédent par une ligne vide.
 func add_header(text: String) -> void:
+	if Autoplay.enabled:
+		Autoplay.report("— %s —" % text)
 	if get_line_count() > 1:
 		newline()
 	push_bold()

@@ -24,6 +24,7 @@ GameState="*res://autoload/game_state.gd"
 Settings="*res://autoload/settings.gd"
 SaveManager="*res://autoload/save_manager.gd"
 AudioManager="*res://autoload/audio_manager.gd"
+Autoplay="*res://autoload/autoplay.gd"
 
 [debug]
 
