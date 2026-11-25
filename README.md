@@ -14,7 +14,7 @@ Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officie
 - **Attaques** : au corps à corps, à distance et lancées, portées normale et longue, désavantage avec un ennemi au contact, ligne de vue (un obstacle est un abri total), avantage et désavantage qui s'annulent, coups critiques, attaques d'opportunité (le joueur est consulté à chaque fois).
 - **Guerrier humain niveau 1, historique Soldat** : Great Weapon Fighting, Second Wind, Weapon Mastery (épée à deux mains : Graze, fléau : Sap, javelots : Slow), Savage Attacker, Inspiration héroïque.
 - **Gobelin guerrier** : cimeterre et arc court, +1d4 dégâts avec l'avantage, Nimble Escape (se désengager ou se cacher par une action bonus).
-- **Se cacher et chercher** : condition Invisible, attaque à l'aveugle d'une case, embuscade et surprise au début du combat.
+- **Se cacher et chercher** : condition Invisible, attaque à l'aveugle d'une case, embuscade et surprise au début du combat. Un caché est trouvé par l'action Chercher, s'il finit son tour en vue d'un ennemi, si un ennemi finit son déplacement en vue de lui, par une Perception passive suffisante ou si on le heurte (règles de MJ, voir `docs/rules-deviations.md`).
 - **0 PV** : mort du monstre, Guerrier inconscient et à terre, jets contre la mort, dégâts massifs, critique automatique au contact.
 - **IA** : une action à la fois ; elle se cache, tire de loin, se désengage avant de reculer à l'abri, achève un Guerrier inconscient.
 

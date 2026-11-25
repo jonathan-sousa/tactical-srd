@@ -508,8 +508,16 @@ static func hide_line(event: HideAttemptedEvent) -> String:
 
 static func revealed_line(event: RevealedEvent) -> String:
 	var name := event.combatant.definition.display_name
-	if event.reason == RevealedEvent.ATTACKED:
-		return "%s sort de sa cachette pour attaquer !" % name
+	var observer := event.observer.definition.display_name if event.observer != null else ""
+	match event.reason:
+		RevealedEvent.ATTACKED:
+			return "%s sort de sa cachette pour attaquer !" % name
+		RevealedEvent.SEEN:
+			return "%s voit %s à découvert : il n'est plus caché." % [observer, name]
+		RevealedEvent.NOTICED:
+			return "%s remarque %s qui se faufile (Perception passive) : il n'est plus caché." % [observer, name]
+		RevealedEvent.BUMPED:
+			return "%s heurte %s, caché sur son chemin !" % [observer, name]
 	return "%s est trouvé : il n'est plus caché." % name
 
 

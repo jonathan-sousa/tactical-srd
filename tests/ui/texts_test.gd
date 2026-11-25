@@ -183,3 +183,18 @@ func test_target_line() -> void:
 func test_every_effect_has_a_badge() -> void:
 	for id: StringName in Texts.EFFECT_NAMES:
 		assert_bool(Texts.EFFECT_BADGES.has(id)).override_failure_message("Effet sans pastille : %s" % id).is_true()
+
+
+func test_every_reveal_reason_has_its_own_line() -> void:
+	var goblin := Combatant.new(Fixtures.goblin(), Combatant.Side.ENEMY)
+	var fighter := Combatant.new(Fixtures.fighter(), Combatant.Side.PLAYER)
+	var lines: Array[String] = []
+	for constant: String in (RevealedEvent as Script).get_script_constant_map():
+		var reason: StringName = (RevealedEvent as Script).get_script_constant_map()[constant]
+		var line := Texts.revealed_line(RevealedEvent.new(goblin, Vector2i.ZERO, reason, fighter))
+		assert_str(line).contains(goblin.definition.display_name)
+		assert_array(lines).override_failure_message("Même ligne pour %s" % reason).not_contains([line])
+		lines.append(line)
+	assert_int(lines.size()).is_equal(5)
+	var seen := Texts.revealed_line(RevealedEvent.new(goblin, Vector2i.ZERO, RevealedEvent.SEEN, fighter))
+	assert_str(seen).contains(fighter.definition.display_name)
