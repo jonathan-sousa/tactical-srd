@@ -35,7 +35,8 @@ const SHAKE_DURATION := 0.25
 # Note Godot : @export rend la variable réglable dans l'inspecteur, pour
 # chaque instance de la scène.
 @export var encounter_id: StringName = &"goblin_ambush"
-@export var player_id: StringName = &"fighter_lvl1"
+## Fiches du groupe, dans l'ordre des cases de départ de la rencontre.
+@export var party_ids: Array[StringName] = [&"fighter_lvl1"]
 ## Pause avant chaque action de l'adversaire, en secondes.
 @export var enemy_action_delay := 0.45
 ## Pause avant de quitter le combat, le temps de lire la dernière ligne.
@@ -52,9 +53,14 @@ var seed_value := -1
 ## Fichier où le combat est enregistré au fil des choix du joueur (voir
 ## CombatRecord). Les tests en donnent un autre.
 var record_path := "user://replays/last_combat.json"
+## Rencontre imposée par un test, à la place de `encounter_id` (hors
+## histoire et hors rejeu).
+var encounter_override: EncounterDef
 ## Ce qui se passe à la fin d'un combat de l'histoire. Par défaut,
 ## GameState.finish_step ; les tests le remplacent pour ne pas changer de scène.
 var on_story_end: Callable
+## Personnage joueur que l'on commande : celui dont c'est le tour, ou le
+## dernier à avoir joué pendant le tour d'un ennemi.
 var _player: Combatant
 var _tokens: Dictionary[Combatant, TokenView] = {}
 ## Vrai pendant qu'une action se joue : les clics sont ignorés.
@@ -95,8 +101,10 @@ var _replay_index := 0
 ## propose (une fonction qui la construit).
 var _action_buttons: Dictionary[StringName, Button] = {}
 var _action_factories: Dictionary[StringName, Callable] = {}
-## Arme choisie pour attaquer, et les boutons des armes.
+## Arme choisie pour attaquer par le personnage commandé, et les boutons
+## des armes. Chaque personnage retrouve l'arme qu'il avait choisie.
 var _weapon: WeaponDef
+var _chosen_weapons: Dictionary[Combatant, WeaponDef] = {}
 var _weapon_buttons: Dictionary[WeaponDef, Button] = {}
 ## Lettre de la touche de chaque arme, calculée une fois.
 var _weapon_key_labels: Array[String] = []
@@ -107,34 +115,43 @@ var _hovered_enemy: Combatant
 var _logged_round := 0
 ## Position de repos du plateau, que la secousse retrouve.
 var _board_origin: Vector2
+## Liste du groupe (PV et état de chaque personnage), au-dessus de la fiche
+## du personnage commandé. Cachée quand il est seul.
+var _party_list: PartyList
 
 
 func _ready() -> void:
 	var encounter: EncounterDef
-	var player_definition: CharacterDef
-	var player_hp := -1
+	var registry := GameState.registry
+	var ids: Array[StringName] = party_ids
+	# Situation de départ du groupe : PV et ressources de leurs fiches, sauf
+	# dans l'histoire (ressources sans repos) et en rejeu (celle du fichier).
+	var members: Array[PartyMember] = []
 	var step := GameState.current_step()
 	_replay = Autoplay.replay
 	if _replay != null:
-		# Rejeu : la rencontre et la situation de départ viennent du fichier.
-		var replay_registry := GameState.registry
-		encounter = replay_registry.encounter(_replay.encounter_id)
-		player_definition = replay_registry.character(_replay.player_id)
-		player_hp = _replay.player_hp
+		encounter = registry.encounter(_replay.encounter_id)
+		members = _replay.party
+		ids = []
+		for member in members:
+			ids.append(member.id)
 	elif step != null and step.kind == StoryStep.Kind.ENCOUNTER:
 		_story_mode = true
 		encounter = step.encounter
-		player_definition = GameState.player_definition()
-		player_hp = GameState.player_hp
+		members = GameState.party
+		ids = GameState.PARTY_IDS
 	else:
-		var registry := GameState.registry
-		encounter = registry.encounter(encounter_id)
-		player_definition = registry.character(player_id)
-	if encounter == null or player_definition == null:
+		encounter = encounter_override if encounter_override != null else registry.encounter(encounter_id)
+	var definitions: Array[CharacterDef] = []
+	for id in ids:
+		if registry.character(id) != null:
+			definitions.append(registry.character(id))
+	if encounter == null or definitions.size() != ids.size() or ids.is_empty() \
+			or encounter.player_starts.size() < ids.size():
 		if _story_mode:
-			push_error("Combat : l'étape « %s » n'a pas de rencontre ou la fiche du joueur est introuvable." % GameState.current_step_id)
+			push_error("Combat : l'étape « %s » n'a pas de rencontre, ou une fiche du groupe est introuvable." % GameState.current_step_id)
 		else:
-			push_error("Combat : rencontre « %s » ou personnage « %s » introuvable." % [encounter_id, player_id])
+			push_error("Combat : rencontre « %s » introuvable, sans assez de cases de départ, ou fiche introuvable parmi %s." % [encounter_id, ids])
 		return
 	if not on_story_end.is_valid():
 		on_story_end = GameState.finish_step
@@ -149,26 +166,26 @@ func _ready() -> void:
 		dice = Dice.seeded(seed_value)
 	_register_event_handlers()
 
-	state = CombatState.create(encounter, player_definition, player_hp)
-	_player = state.combatants[0]
-	if _story_mode:
-		# Ressources sans repos dans l'histoire : on reprend celles qui restent.
-		_player.second_wind_uses = GameState.player_second_wind_uses
-		_player.heroic_inspiration = GameState.player_heroic_inspiration
+	state = CombatState.create_party(encounter, definitions, members)
+	_player = state.party()[0]
 	if _replay != null:
-		_player.second_wind_uses = _replay.second_wind_uses
-		_player.heroic_inspiration = _replay.heroic_inspiration
 		Autoplay.report("rejeu : graine %d, %d choix du joueur." % [_replay.seed_value, _replay.entries.size()])
 	if record_choices:
 		_record = CombatRecord.new()
 		_record.seed_value = seed_value
 		_record.encounter_id = encounter.id
-		_record.player_id = player_definition.id
-		_record.player_hp = _player.hp
-		_record.second_wind_uses = _player.second_wind_uses
-		_record.heroic_inspiration = _player.heroic_inspiration
+		for member in state.party():
+			_record.party.append(PartyMember.of(member))
 		_save_record()
-	_weapon = _player.melee_weapon()
+	for member in state.party():
+		_chosen_weapons[member] = member.melee_weapon()
+	_weapon = _chosen_weapons[_player]
+	_party_list = PartyList.new()
+	# Note Godot : add_child ajoute le nœud en dernier ; move_child le place
+	# juste au-dessus de la fiche du personnage commandé.
+	_panel.get_parent().add_child(_party_list)
+	_panel.get_parent().move_child(_party_list, _panel.get_index())
+	_party_list.visible = state.party().size() > 1
 	_board.setup(encounter)
 	# Le plateau (un Node2D) suit la place que lui réserve l'interface.
 	# Note Godot : `item_rect_changed` est émis quand un Control change de
@@ -222,20 +239,21 @@ func _start_combat() -> void:
 	await _continue()
 
 
-## Après chaque action : fin de combat, tour de l'IA, tour d'un joueur
-## inconscient, ou main au joueur.
+## Après chaque action : fin de combat, tour de l'IA, rejeu, tour d'un
+## personnage inconscient, ou main au joueur. En rejeu, la fin du tour d'un
+## inconscient est lue dans l'enregistrement, qui l'a notée comme un choix.
 func _continue() -> void:
 	_refresh()
 	if state.is_over:
 		_show_result()
 	elif state.active().side == Combatant.Side.ENEMY:
 		await _play_enemy_turn()
-	elif state.active() == _player and _player.is_down():
-		await _play_unconscious_turn()
 	elif _replay != null:
 		await _play_replay_turn()
+	elif state.active().is_down():
+		await _play_unconscious_turn()
 	elif Autoplay.enabled:
-		# Mode démo : l'IA joue aussi le Guerrier.
+		# Mode démo : l'IA joue aussi les personnages joueurs.
 		await _play_ai_turn()
 
 
@@ -245,7 +263,8 @@ func _play_enemy_turn() -> void:
 	await _play_ai_turn()
 
 
-## Tour joué par l'IA : celui du Gobelin, ou du Guerrier en mode démo.
+## Tour joué par l'IA : celui d'un ennemi, ou d'un personnage joueur en mode
+## démo.
 func _play_ai_turn() -> void:
 	_busy = true
 	_refresh()
@@ -291,7 +310,8 @@ func _next_replay_action() -> Action:
 		return null
 	var entry := _replay.entries[_replay_index]
 	_replay_index += 1
-	var action := CombatRecord.decode(entry, _player, state)
+	var deciding := state.pending.decider if state.pending != null else state.active()
+	var action := CombatRecord.decode(entry, deciding, state)
 	var reason := "choix illisible" if action == null else Texts.reason(action.validate(state))
 	if action == null or not action.validate(state).is_empty():
 		Autoplay.report("rejeu : le choix %d (%s) ne correspond plus au combat : %s." % [_replay_index, entry, reason])
@@ -323,14 +343,14 @@ func _save_record() -> void:
 	file.store_string(_record.to_json())
 
 
-## Inconscient, le joueur ne peut rien faire : son jet contre la mort a
-## déjà eu lieu au début du tour, qui se termine tout seul.
+## Inconscient, un personnage joueur ne peut rien faire : son jet contre la
+## mort a déjà eu lieu au début du tour, qui se termine tout seul.
 func _play_unconscious_turn() -> void:
 	_busy = true
 	_hint_label.text = Texts.UNCONSCIOUS_TURN
 	await _wait(enemy_action_delay)
 	_busy = false
-	await _perform(EndTurnAction.new(_player))
+	await _perform(EndTurnAction.new(state.active()))
 
 
 ## Tant qu'une décision est en attente : le joueur choisit si elle le
@@ -340,13 +360,14 @@ func _resolve_decisions() -> void:
 	while state.pending != null and not state.is_over:
 		var decision := state.pending
 		var answer: Action
-		if decision.decider == _player and _replay != null:
+		var players_choice := decision.decider.side == Combatant.Side.PLAYER
+		if players_choice and _replay != null:
 			await _wait(enemy_action_delay)
 			answer = _next_replay_action()
 			if answer == null:
 				_stop_replay()
 				return
-		elif decision.decider == _player and not Autoplay.enabled:
+		elif players_choice and not Autoplay.enabled:
 			answer = await _ask_player(decision)
 			_remember(answer)
 		else:
@@ -356,19 +377,22 @@ func _resolve_decisions() -> void:
 
 
 ## Pose au joueur la question qui correspond à la décision, et renvoie
-## l'action qui traduit sa réponse.
+## l'action qui traduit sa réponse. La question nomme le personnage qui
+## décide quand le groupe en compte plusieurs.
 func _ask_player(decision: PendingDecision) -> Action:
+	var decider := decision.decider
+	var prefix := "%s : " % decider.definition.display_name if state.party().size() > 1 else ""
 	if decision is InspirationWindow:
 		var window := decision as InspirationWindow
 		var question := Texts.death_save_inspiration_prompt(window.death_save) if window.result == null \
 			else Texts.inspiration_prompt(window.result)
-		if await _ask(question):
-			return UseInspirationAction.new(_player)
-		return DeclineInspirationAction.new(_player)
+		if await _ask(prefix + question):
+			return UseInspirationAction.new(decider)
+		return DeclineInspirationAction.new(decider)
 	var mover := (decision as ReactionWindow).mover
-	if await _ask(Texts.reaction_prompt(mover)):
-		return OpportunityAttackAction.new(_player)
-	return DeclineReactionAction.new(_player)
+	if await _ask(prefix + Texts.reaction_prompt(mover)):
+		return OpportunityAttackAction.new(decider)
+	return DeclineReactionAction.new(decider)
 
 
 ## Affiche une question Oui / Non et attend la réponse du joueur.
@@ -394,7 +418,7 @@ func _perform(action: Action) -> void:
 	_board.path_preview = []
 	_hint_label.text = ""
 	_refresh()
-	if action.actor == _player:
+	if action.actor.side == Combatant.Side.PLAYER:
 		_remember(action)
 	await _play(action.execute(state, dice))
 	await _resolve_decisions()
@@ -444,6 +468,7 @@ func _register_event_handlers() -> void:
 		AttackedEmptyCellEvent: _on_attacked_empty_cell,
 		DeathSaveEvent: _on_death_save,
 		CombatantStabilizedEvent: _on_combatant_stabilized,
+		CombatantRecoveredEvent: _on_combatant_recovered,
 		CombatantDiedEvent: _on_combatant_died,
 	}
 
@@ -460,13 +485,25 @@ func _on_turn_started(event: TurnStartedEvent) -> void:
 	_log.add_line(Texts.turn_line(event), LOG_TURN_COLOR)
 	for combatant: Combatant in _tokens:
 		_tokens[combatant].is_active = combatant == event.combatant
+	if event.combatant.side == Combatant.Side.PLAYER and event.combatant != _player:
+		_command(event.combatant)
 	_refresh()
+
+
+## Passe la main à un autre personnage joueur : ses armes et ses actions
+## remplacent celles du précédent, qui garde l'arme qu'il avait choisie.
+func _command(member: Combatant) -> void:
+	_chosen_weapons[_player] = _weapon
+	_player = member
+	_weapon = _chosen_weapons[member]
+	_build_weapon_bar()
+	_build_action_bar()
 
 
 func _on_moved(event: MovedEvent) -> void:
 	# Un ennemi caché se déplace sans être vu : son pion reste à sa
 	# dernière position connue.
-	if event.unseen and event.combatant.side != _player.side:
+	if event.unseen and event.combatant.side != Combatant.Side.PLAYER:
 		return
 	_log.add_line(Texts.move_line(event))
 	var points: Array[Vector2] = []
@@ -546,6 +583,14 @@ func _on_combatant_stabilized(event: CombatantStabilizedEvent) -> void:
 	_refresh()
 
 
+func _on_combatant_recovered(event: CombatantRecoveredEvent) -> void:
+	_log.add_line(Texts.recovered_line(event), LOG_HEAL_COLOR)
+	AudioManager.play(AudioManager.HEAL)
+	await _tokens[event.combatant].rise()
+	_tokens[event.combatant].refresh()
+	_refresh()
+
+
 func _on_death_save(event: DeathSaveEvent) -> void:
 	var revived := event.revived
 	_log.add_line(Texts.death_save_line(event), LOG_HEAL_COLOR if revived else LOG_DOWN_COLOR)
@@ -609,10 +654,12 @@ func _on_reaction_declined(event: ReactionDeclinedEvent) -> void:
 
 func _on_combat_ended(event: CombatEndedEvent) -> void:
 	if Autoplay.enabled:
-		Autoplay.report("Résumé : %s au round %d, Guerrier %d / %d PV, Gobelin %d / %d PV." % [
+		var standings: Array[String] = []
+		for combatant in state.combatants:
+			standings.append("%s %d / %d PV" % [combatant.definition.display_name, combatant.hp, combatant.definition.max_hp])
+		Autoplay.report("Résumé : %s au round %d, %s." % [
 			(Texts.VICTORY if event.winner == Combatant.Side.PLAYER else Texts.DEFEAT).to_lower(), state.round,
-			_player.hp, _player.definition.max_hp,
-			state.combatants[1].hp, state.combatants[1].definition.max_hp,
+			", ".join(standings),
 		])
 	if _record != null:
 		_record.outcome = CombatRecord.outcome_of(state)
@@ -710,6 +757,9 @@ func _attack_hint(attack: AttackAction) -> String:
 ## Un bouton par arme du personnage, avec sa touche. L'arme choisie sert à
 ## attaquer ; en changer ne coûte rien (voir docs/rules-deviations.md).
 func _build_weapon_bar() -> void:
+	_clear_bar(_weapon_bar)
+	_weapon_buttons.clear()
+	_weapon_key_labels.clear()
 	var group := ButtonGroup.new()
 	var weapons := _player.definition.weapons
 	for i in weapons.size():
@@ -732,6 +782,9 @@ func _build_weapon_bar() -> void:
 ## Barre d'actions : Foncer, Se désengager, Esquiver, Second Wind si le
 ## personnage l'a, Chercher et Se relever. Chaque bouton a sa touche (1 à 6).
 func _build_action_bar() -> void:
+	_clear_bar(_action_bar)
+	_action_buttons.clear()
+	_action_factories.clear()
 	for kind in StandardAction.ALL:
 		_action_factories[kind] = func() -> Action: return StandardAction.new(_player, kind)
 	if _player.definition.second_wind_uses > 0:
@@ -748,6 +801,17 @@ func _build_action_bar() -> void:
 		_action_bar.add_child(button)
 		_action_buttons[id] = button
 		i += 1
+
+
+## Vide une barre de boutons avant de la reconstruire pour un autre
+## personnage.
+##
+## Note Godot : queue_free libère le nœud à la fin de l'image en cours ; on
+## le retire d'abord de la barre pour qu'il n'y prenne plus de place.
+static func _clear_bar(bar: Container) -> void:
+	for child in bar.get_children():
+		bar.remove_child(child)
+		child.queue_free()
 
 
 func _make_bar_button() -> Button:
@@ -805,6 +869,8 @@ func _on_end_turn_pressed() -> void:
 
 func _refresh() -> void:
 	_panel.refresh(_player, state)
+	if _party_list.visible:
+		_party_list.refresh(state, _player)
 	_initiative_bar.refresh(state.active())
 	for combatant: Combatant in _tokens:
 		_tokens[combatant].conditions = state.effects_on(combatant)
@@ -938,9 +1004,10 @@ func _leave_combat() -> void:
 	_set_pulse(false)
 	await _wait(end_delay)
 	if state.winner == Combatant.Side.PLAYER:
-		on_story_end.call(GameState.Outcome.VICTORY, _player)
+		on_story_end.call(GameState.Outcome.VICTORY, state.party())
 	else:
-		on_story_end.call(GameState.Outcome.DEFEAT, null)
+		var nobody: Array[Combatant] = []
+		on_story_end.call(GameState.Outcome.DEFEAT, nobody)
 
 
 func _on_replay_pressed() -> void:

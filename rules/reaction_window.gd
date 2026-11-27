@@ -15,11 +15,16 @@ var remaining_path: Array[Vector2i] = []
 ## Combattants déjà sollicités pour le pas en cours : ils ne le sont pas une
 ## seconde fois quand le déplacement reprend.
 var asked: Array[Combatant] = []
+## Si `mover` est dans la case d'un allié : les cases quittées depuis la
+## dernière case libre, celle-ci en premier (voir CombatState.walk). Vide
+## sinon.
+var shared: Array[Vector2i] = []
 
 
-func _init(p_reactor: Combatant, p_mover: Combatant, p_remaining_path: Array[Vector2i], p_asked: Array[Combatant]) -> void:
+func _init(p_reactor: Combatant, p_mover: Combatant, p_remaining_path: Array[Vector2i], p_asked: Array[Combatant], p_shared: Array[Vector2i] = []) -> void:
 	reactor = p_reactor
 	decider = p_reactor
 	mover = p_mover
 	remaining_path = p_remaining_path
 	asked = p_asked
+	shared = p_shared.duplicate()

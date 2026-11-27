@@ -13,7 +13,9 @@ extends Resource
 @export var grid_size: Vector2i = Vector2i(12, 8)
 ## Obstacles : cases infranchissables.
 @export var blocked_cells: Array[Vector2i] = []
-@export var player_start: Vector2i
+## Cases de départ des personnages joueurs, dans l'ordre du groupe : la
+## première pour le premier personnage, etc.
+@export var player_starts: Array[Vector2i] = []
 ## Embuscade : au début du combat, chaque ennemi hors de vue du joueur tente
 ## de se cacher. S'il y parvient, le joueur est surpris (SRD « Surprise »).
 @export var ambush: bool = false

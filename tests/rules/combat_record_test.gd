@@ -71,7 +71,10 @@ func test_json_round_trip_keeps_everything() -> void:
 	assert_object(loaded).is_not_null()
 	assert_int(loaded.seed_value).is_equal(3)
 	assert_str(loaded.encounter_id).is_equal(&"goblin_ambush")
-	assert_int(loaded.player_hp).is_equal(recorded.player_hp)
+	assert_int(loaded.party.size()).is_equal(1)
+	assert_str(loaded.party[0].id).is_equal("fighter_lvl1")
+	assert_int(loaded.party[0].hp).is_equal(recorded.party[0].hp)
+	assert_int(loaded.party[0].second_wind_uses).is_equal(recorded.party[0].second_wind_uses)
 	assert_int(loaded.entries.size()).is_equal(recorded.entries.size())
 	assert_dict(loaded.outcome).is_equal(recorded.outcome)
 
@@ -81,7 +84,8 @@ func test_invalid_files_are_rejected() -> void:
 	for broken: String in ["pas du json", "[]", "{}"]:
 		assert_object(CombatRecord.from_json(broken)).is_null()
 	var changes: Array[Array] = [
-		["version", 99], ["seed", "abc"], ["seed", 1.5], ["encounter", 3], ["entries", "x"], ["heroic_inspiration", 1],
+		["version", 99], ["seed", "abc"], ["seed", 1.5], ["encounter", 3], ["entries", "x"], ["party", []],
+		["party", [{"def_id": "fighter_lvl1", "hp_current": 0, "second_wind_uses": 2, "heroic_inspiration": true}]],
 	]
 	for change in changes:
 		var copy := good.duplicate(true)
@@ -105,3 +109,20 @@ func test_a_different_choice_changes_or_breaks_the_replay() -> void:
 	var replayed := RecordedGames.replay(recorded)
 	var same := replayed != null and CombatRecord.outcome_of(replayed) == recorded.outcome
 	assert_bool(same).is_false()
+
+
+func test_version_1_record_is_read_as_a_party_of_one() -> void:
+	var v1 := {
+		"version": 1, "seed": 7, "encounter": "goblin_ambush", "player": "fighter_lvl1", "player_hp": 9,
+		"second_wind_uses": 1, "heroic_inspiration": false, "entries": [{"type": CombatRecord.END_TURN}], "outcome": {},
+	}
+	var loaded := CombatRecord.from_json(JSON.stringify(v1))
+	assert_object(loaded).is_not_null()
+	assert_int(loaded.party.size()).is_equal(1)
+	assert_str(loaded.party[0].id).is_equal("fighter_lvl1")
+	assert_int(loaded.party[0].hp).is_equal(9)
+	assert_int(loaded.party[0].second_wind_uses).is_equal(1)
+	assert_bool(loaded.party[0].heroic_inspiration).is_false()
+	assert_int(loaded.entries.size()).is_equal(1)
+	v1.erase("player_hp")
+	assert_object(CombatRecord.from_json(JSON.stringify(v1))).is_null()

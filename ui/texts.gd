@@ -372,6 +372,22 @@ static func target_line(combatant: Combatant, effect_ids: Array[StringName]) -> 
 	return " · ".join(parts)
 
 
+## Liste du groupe : « ▶ Guerrier · PV 7 / 12 », puis l'état s'il est à
+## terre. La flèche marque le personnage commandé.
+static func party_line(member: Combatant, commanded: bool) -> String:
+	var parts: PackedStringArray = [
+		("▶ " if commanded else "   ") + member.definition.display_name,
+		"%s %d / %d" % [HIT_POINTS, member.hp, member.definition.max_hp],
+	]
+	if member.is_dead:
+		parts.append("mort")
+	elif member.is_stable:
+		parts.append("stabilisé")
+	elif member.is_down():
+		parts.append("mourant")
+	return " · ".join(parts)
+
+
 ## En-tête d'un nouveau round dans le journal.
 static func round_header(round: int) -> String:
 	return "Round %d" % round
@@ -554,6 +570,10 @@ static func death_save_line(event: DeathSaveEvent) -> String:
 
 static func stabilized_line(event: CombatantStabilizedEvent) -> String:
 	return "Trois réussites : %s est stabilisé, mais reste inconscient." % event.combatant.definition.display_name
+
+
+static func recovered_line(event: CombatantRecoveredEvent) -> String:
+	return "Le combat terminé, ses compagnons stabilisent %s : il se relève avec 1 PV." % event.combatant.definition.display_name
 
 
 static func died_line(event: CombatantDiedEvent) -> String:

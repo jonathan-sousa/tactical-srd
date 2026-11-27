@@ -1,8 +1,10 @@
 ## Recherche de chemin sur la grille de combat.
 ##
 ## Règles (brief) : 8 directions, une diagonale coûte 1 case comme un pas
-## droit, pas de coupe de coin le long d'un obstacle, cases occupées
-## infranchissables.
+## droit, pas de coupe de coin le long d'un obstacle. Deux sortes de cases
+## occupées : celles qu'on ne traverse pas (`blocking`, les ennemis) et
+## celles qu'on traverse sans pouvoir s'y arrêter (`no_stop`, les alliés :
+## SRD « Moving Around Other Creatures »).
 ##
 ## Note Godot : AStarGrid2D est un RefCounted, il a donc sa place dans le
 ## moteur de règles. Avec l'heuristique Chebyshev, la distance entre deux
@@ -48,14 +50,15 @@ func is_blocked(cell: Vector2i) -> bool:
 
 ## Plus court chemin de `from` à `to`, sans la case de départ. Vide si `to`
 ## est hors grille, bloquée, occupée ou inaccessible. Avec un coût de 1 par
-## pas, la longueur du tableau est le coût en cases.
-func find_path(from: Vector2i, to: Vector2i, occupied: Array[Vector2i]) -> Array[Vector2i]:
+## pas, la longueur du tableau est le coût en cases. Le chemin peut passer
+## par les cases `no_stop`, mais pas y finir.
+func find_path(from: Vector2i, to: Vector2i, blocking: Array[Vector2i], no_stop: Array[Vector2i] = []) -> Array[Vector2i]:
 	var path: Array[Vector2i] = []
-	if not is_inside(to) or is_blocked(to) or occupied.has(to) or from == to:
+	if not is_inside(to) or is_blocked(to) or blocking.has(to) or no_stop.has(to) or from == to:
 		return path
 
-	# Les combattants bloquent le passage le temps du calcul seulement.
-	var marked := _mark_solid(occupied)
+	# Les ennemis bloquent le passage le temps du calcul seulement.
+	var marked := _mark_solid(blocking)
 	var id_path := _astar.get_id_path(from, to)
 	for cell in marked:
 		_astar.set_point_solid(cell, false)
@@ -71,8 +74,9 @@ func find_path(from: Vector2i, to: Vector2i, occupied: Array[Vector2i]) -> Array
 ## Parcours en largeur : chaque pas coûte 1, la première visite d'une case
 ## donne donc son plus court chemin, comme `find_path`, en un seul passage.
 ## Mêmes règles de déplacement : diagonale seulement si les deux cases
-## qu'elle longe sont libres (obstacles et combattants).
-func reachable_cells(from: Vector2i, max_steps: int, occupied: Array[Vector2i]) -> Dictionary[Vector2i, int]:
+## qu'elle longe sont libres (obstacles et ennemis). Les cases `no_stop` se
+## traversent mais ne figurent pas dans le résultat.
+func reachable_cells(from: Vector2i, max_steps: int, blocking: Array[Vector2i], no_stop: Array[Vector2i] = []) -> Dictionary[Vector2i, int]:
 	var reachable: Dictionary[Vector2i, int] = {}
 	if max_steps <= 0:
 		return reachable
@@ -85,20 +89,21 @@ func reachable_cells(from: Vector2i, max_steps: int, occupied: Array[Vector2i]) 
 			continue
 		for offset in NEIGHBOUR_OFFSETS:
 			var next := cell + offset
-			if costs.has(next) or not _is_free(next, occupied):
+			if costs.has(next) or not _is_free(next, blocking):
 				continue
 			if offset.x != 0 and offset.y != 0:
-				if not _is_free(cell + Vector2i(offset.x, 0), occupied) or not _is_free(cell + Vector2i(0, offset.y), occupied):
+				if not _is_free(cell + Vector2i(offset.x, 0), blocking) or not _is_free(cell + Vector2i(0, offset.y), blocking):
 					continue
 			costs[next] = cost + 1
-			reachable[next] = cost + 1
+			if not no_stop.has(next):
+				reachable[next] = cost + 1
 			frontier.append(next)
 	return reachable
 
 
 
-func _is_free(cell: Vector2i, occupied: Array[Vector2i]) -> bool:
-	return is_inside(cell) and not is_blocked(cell) and not occupied.has(cell)
+func _is_free(cell: Vector2i, blocking: Array[Vector2i]) -> bool:
+	return is_inside(cell) and not is_blocked(cell) and not blocking.has(cell)
 
 
 ## Marque comme infranchissables les cases libres de `cells` et renvoie
