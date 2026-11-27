@@ -181,7 +181,7 @@ static func _can_shoot_from(state: CombatState, actor: Combatant, target: Combat
 ## case d'attaque la plus proche (en longueur de chemin), au plus loin que
 ## permet le déplacement.
 static func _approach_cell(state: CombatState, actor: Combatant, target: Combatant) -> Vector2i:
-	var all_cells := state.pathfinder.reachable_cells(actor.position, state.encounter.grid_size.x * state.encounter.grid_size.y, state.occupied_cells(actor))
+	var all_cells := state.reachable_from(actor, actor.position, state.encounter.grid_size.x * state.encounter.grid_size.y)
 	var goal := _best_attack_cell(state, actor, target, all_cells)
 	if goal == NO_CELL:
 		return NO_CELL
@@ -282,7 +282,7 @@ static func _cover_within(state: CombatState, actor: Combatant, from: Vector2i, 
 		return true
 	if budget <= 0:
 		return false
-	for cell: Vector2i in state.pathfinder.reachable_cells(from, budget, state.occupied_cells(actor)):
+	for cell: Vector2i in state.reachable_from(actor, from, budget):
 		if state.is_out_of_sight_at(actor, cell):
 			return true
 	return false

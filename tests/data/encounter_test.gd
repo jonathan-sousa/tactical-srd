@@ -28,8 +28,12 @@ func test_blocked_cells_are_inside_the_grid() -> void:
 		assert_bool(_grid.is_inside(cell)).override_failure_message("Obstacle hors grille : %s" % cell).is_true()
 
 
+func test_has_at_least_one_player_start() -> void:
+	assert_array(_encounter.player_starts).is_not_empty()
+
+
 func test_starting_cells_are_free_and_distinct() -> void:
-	var starts: Array[Vector2i] = [_encounter.player_start]
+	var starts: Array[Vector2i] = _encounter.player_starts.duplicate()
 	for placement in _encounter.enemies:
 		starts.append(placement.cell)
 
@@ -42,7 +46,7 @@ func test_starting_cells_are_free_and_distinct() -> void:
 func test_player_can_reach_every_enemy() -> void:
 	# Parcours en largeur sur 4 directions : plus strict que le déplacement du
 	# jeu (8 directions), donc un chemin trouvé ici existe aussi en jeu.
-	var reachable := _reachable_from(_encounter.player_start)
+	var reachable := _reachable_from(_encounter.player_starts[0])
 	for placement in _encounter.enemies:
 		assert_bool(reachable.has(placement.cell)) \
 			.override_failure_message("Gobelin inaccessible en %s" % placement.cell) \
@@ -68,4 +72,4 @@ func test_goblin_ambush_starts_hidden_behind_the_rock() -> void:
 	var encounter := DataRegistry.load_from().encounter(&"goblin_ambush")
 	assert_bool(encounter.ambush).is_true()
 	var line_of_sight := LineOfSight.new(encounter.blocked_cells)
-	assert_bool(line_of_sight.is_clear(encounter.player_start, encounter.enemies[0].cell)).is_false()
+	assert_bool(line_of_sight.is_clear(encounter.player_starts[0], encounter.enemies[0].cell)).is_false()

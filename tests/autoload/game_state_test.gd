@@ -15,19 +15,23 @@ func before_test() -> void:
 
 ## Le Guerrier à la fin d'un combat gagné.
 func _survivor(hp: int, second_wind_uses: int = 2, inspiration: bool = true) -> Combatant:
-	var fighter := Combatant.new(_game.player_definition(), Combatant.Side.PLAYER)
+	var fighter := Combatant.new(_game.party_definitions()[0], Combatant.Side.PLAYER)
 	fighter.hp = hp
 	fighter.second_wind_uses = second_wind_uses
 	fighter.heroic_inspiration = inspiration
 	return fighter
 
 
+func _survivors(fighter: Combatant) -> Array[Combatant]:
+	return [fighter]
+
+
 func test_new_game_starts_at_first_step_with_full_hp() -> void:
 	_game.new_game()
 	assert_str(_game.current_step_id).is_equal("intro")
-	assert_int(_game.player_hp).is_equal(12)
-	assert_int(_game.player_second_wind_uses).is_equal(2)
-	assert_bool(_game.player_heroic_inspiration).is_true()
+	assert_int(_game.party[0].hp).is_equal(12)
+	assert_int(_game.party[0].second_wind_uses).is_equal(2)
+	assert_bool(_game.party[0].heroic_inspiration).is_true()
 	assert_bool(_game.story_completed).is_false()
 	assert_bool(_game.has_game()).is_true()
 
@@ -49,24 +53,24 @@ func test_defeat_without_defeat_step_shows_defeat_screen_and_stays() -> void:
 	assert_int(_game.complete_step(GameStateScript.Outcome.DEFEAT)).is_equal(GameStateScript.Next.DEFEAT_SCREEN)
 	# On reste sur le combat : « Réessayer » le relance à l'identique.
 	assert_str(_game.current_step_id).is_equal("goblin_ambush")
-	assert_int(_game.player_hp).is_equal(12)
+	assert_int(_game.party[0].hp).is_equal(12)
 
 
 func test_victory_keeps_remaining_hp() -> void:
 	_game.new_game()
 	_game.complete_step(GameStateScript.Outcome.DONE)
-	assert_int(_game.complete_step(GameStateScript.Outcome.VICTORY, _survivor(7, 1, false))).is_equal(GameStateScript.Next.STEP)
+	assert_int(_game.complete_step(GameStateScript.Outcome.VICTORY, _survivors(_survivor(7, 1, false)))).is_equal(GameStateScript.Next.STEP)
 	assert_str(_game.current_step_id).is_equal("victory")
-	assert_int(_game.player_hp).is_equal(7)
+	assert_int(_game.party[0].hp).is_equal(7)
 	# Pas de repos : les ressources dépensées le restent.
-	assert_int(_game.player_second_wind_uses).is_equal(1)
-	assert_bool(_game.player_heroic_inspiration).is_false()
+	assert_int(_game.party[0].second_wind_uses).is_equal(1)
+	assert_bool(_game.party[0].heroic_inspiration).is_false()
 
 
 func test_last_step_ends_the_story() -> void:
 	_game.new_game()
 	_game.complete_step(GameStateScript.Outcome.DONE)
-	_game.complete_step(GameStateScript.Outcome.VICTORY, _survivor(7))
+	_game.complete_step(GameStateScript.Outcome.VICTORY, _survivors(_survivor(7)))
 	assert_int(_game.complete_step(GameStateScript.Outcome.DONE)).is_equal(GameStateScript.Next.END)
 	assert_bool(_game.story_completed).is_true()
 	assert_str(_game.current_step_id).is_empty()
@@ -94,3 +98,13 @@ func test_progress_changed_is_emitted_on_each_new_step() -> void:
 	_game.complete_step(GameStateScript.Outcome.DEFEAT)
 	# La défaite sans étape de défaite ne change rien : pas de sauvegarde.
 	assert_int(count[0]).is_equal(2)
+
+
+func test_restore_refuses_a_party_that_is_not_the_game_party() -> void:
+	var stranger := PartyMember.fresh(_game.party_definitions()[0])
+	stranger.id = &"rogue_lvl1"
+	var members: Array[PartyMember] = [stranger]
+	assert_bool(_game.restore(&"goblin_ambush", members, false)).is_false()
+	var empty: Array[PartyMember] = []
+	assert_bool(_game.restore(&"goblin_ambush", empty, false)).is_false()
+

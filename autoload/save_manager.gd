@@ -15,7 +15,7 @@ extends Node
 
 enum Status { NONE, OK, CORRUPT, UNKNOWN_VERSION }
 
-const CURRENT_VERSION := 2
+const CURRENT_VERSION := 3
 const DEFAULT_PATH := "user://save_1.json"
 
 ## En v1, seul le Guerrier niveau 1 existait, avec 2 utilisations de Second
@@ -29,7 +29,7 @@ var data: Dictionary = {}
 
 ## Fonctions de migration, indexées par la version qu'elles mettent à jour :
 ## _migrations[1] transforme une sauvegarde v1 en v2.
-var _migrations: Dictionary[int, Callable] = {1: _migrate_v1_to_v2}
+var _migrations: Dictionary[int, Callable] = {1: _migrate_v1_to_v2, 2: _migrate_v2_to_v3}
 
 
 func _ready() -> void:
@@ -122,29 +122,27 @@ func _migrate_v1_to_v2(raw: Dictionary) -> Dictionary:
 	return migrated
 
 
+## v3 : un groupe de personnages. Le Guerrier seul de la v2 devient un
+## groupe d'un personnage.
+func _migrate_v2_to_v3(raw: Dictionary) -> Dictionary:
+	var migrated := raw.duplicate(true)
+	migrated["party"] = [migrated.get("player")]
+	migrated.erase("player")
+	migrated["version"] = 3
+	return migrated
+
+
 ## Renvoie une copie propre et typée, ou un dictionnaire vide si un champ
-## manque ou n'a pas le bon type.
+## manque ou n'a pas le bon type. Un personnage sauvegardé est toujours
+## debout : on sauvegarde entre deux étapes (voir PartyMember.from_dict).
 func _validate(raw: Dictionary) -> Dictionary:
 	if typeof(raw.get("story_step")) != TYPE_STRING:
 		return {}
 	var completed: Variant = raw.get("story_completed", false)
 	if typeof(completed) != TYPE_BOOL:
 		return {}
-	var player: Variant = raw.get("player")
-	if typeof(player) != TYPE_DICTIONARY:
-		return {}
-	var player_dict: Dictionary = player
-	if typeof(player_dict.get("def_id")) != TYPE_STRING:
-		return {}
-	var hp: Variant = player_dict.get("hp_current")
-	# Un Guerrier sauvegardé est toujours debout : on sauvegarde entre deux étapes.
-	if not _is_whole_number(hp) or int(hp) < 1:
-		return {}
-	var uses: Variant = player_dict.get("second_wind_uses")
-	if not _is_whole_number(uses) or int(uses) < 0:
-		return {}
-	var inspiration: Variant = player_dict.get("heroic_inspiration")
-	if typeof(inspiration) != TYPE_BOOL:
+	var members := PartyMember.list_from(raw.get("party"))
+	if members.is_empty():
 		return {}
 	var saved_at: Variant = raw.get("saved_at", "")
 	return {
@@ -152,12 +150,7 @@ func _validate(raw: Dictionary) -> Dictionary:
 		"saved_at": saved_at if typeof(saved_at) == TYPE_STRING else "",
 		"story_step": raw["story_step"],
 		"story_completed": completed,
-		"player": {
-			"def_id": player_dict["def_id"],
-			"hp_current": int(hp),
-			"second_wind_uses": int(uses),
-			"heroic_inspiration": inspiration,
-		},
+		"party": PartyMember.list_to(members),
 	}
 
 
@@ -170,18 +163,14 @@ static func _is_whole_number(value: Variant) -> bool:
 
 
 ## Remet la partie sauvegardée dans GameState. Faux si la sauvegarde ne
-## correspond plus aux données du jeu (étape ou personnage disparus).
+## correspond plus aux données du jeu (étape disparue, groupe différent).
 func restore_into(game: Node) -> bool:
 	if status != Status.OK:
 		return false
-	var player: Dictionary = data["player"]
-	var known_player: bool = game.registry.character(StringName(player["def_id"])) != null
-	var restored: bool = known_player and game.restore(
+	var restored: bool = game.restore(
 		StringName(data["story_step"]),
-		player["hp_current"],
+		PartyMember.list_from(data["party"]),
 		data["story_completed"],
-		player["second_wind_uses"],
-		player["heroic_inspiration"],
 	)
 	if not restored:
 		status = Status.CORRUPT
@@ -199,12 +188,7 @@ static func snapshot(game: Node) -> Dictionary:
 		"saved_at": Time.get_datetime_string_from_system(true) + "Z",
 		"story_step": str(game.current_step_id),
 		"story_completed": game.story_completed,
-		"player": {
-			"def_id": str(game.PLAYER_ID),
-			"hp_current": game.player_hp,
-			"second_wind_uses": game.player_second_wind_uses,
-			"heroic_inspiration": game.player_heroic_inspiration,
-		},
+		"party": PartyMember.list_to(game.party),
 	}
 
 

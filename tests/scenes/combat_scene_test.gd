@@ -7,6 +7,7 @@
 extends GdUnitTestSuite
 
 const FixedDice := preload("res://tests/helpers/fixed_dice.gd")
+const Fixtures := preload("res://tests/helpers/fixtures.gd")
 const COMBAT_SCENE := "res://scenes/combat/combat.tscn"
 ## Embuscade : le Gobelin tente d'abord de se cacher (1 + 6 = 7, raté, pas
 ## de surprise). Puis l'initiative : le d20 du Guerrier, puis celui du Gobelin.
@@ -21,13 +22,13 @@ const TEST_RECORD_PATH := "user://test_last_combat.json"
 var _runner: GdUnitSceneRunner
 var _scene: Node
 var _saved_step: StringName
-var _saved_hp: int
+var _saved_party: Array[PartyMember]
 
 
 func before_test() -> void:
 	# Sans étape d'histoire en cours, la scène se lance en mode autonome.
 	_saved_step = GameState.current_step_id
-	_saved_hp = GameState.player_hp
+	_saved_party = GameState.party
 	GameState.current_step_id = &""
 
 
@@ -38,7 +39,7 @@ func after_test() -> void:
 	if FileAccess.file_exists(TEST_RECORD_PATH):
 		DirAccess.remove_absolute(TEST_RECORD_PATH)
 	GameState.current_step_id = _saved_step
-	GameState.player_hp = _saved_hp
+	GameState.party = _saved_party
 
 
 ## Instancie la scène avec ces dés, sans délais, et attend la main du joueur
@@ -159,14 +160,17 @@ func test_standalone_victory_shows_result_panel() -> void:
 
 func test_story_victory_reports_remaining_hp_without_result_panel() -> void:
 	GameState.current_step_id = &"goblin_ambush"
-	GameState.player_hp = 7
-	GameState.player_second_wind_uses = 1
-	GameState.player_heroic_inspiration = false
+	var fighter := PartyMember.fresh(GameState.party_definitions()[0])
+	fighter.hp = 7
+	fighter.second_wind_uses = 1
+	fighter.heroic_inspiration = false
+	var party: Array[PartyMember] = [fighter]
+	GameState.party = party
 	var reported: Array = []
 	_scene = auto_free(load(COMBAT_SCENE).instantiate())
 	_scene.set("dice", _fixed_dice(FIGHTER_FIRST + [20, 6, 6, 6, 6, 6, 6, 6, 6]))
 	_scene.set("end_delay", 0.0)
-	_scene.set("on_story_end", func(outcome: int, survivor: Combatant) -> void: reported.append([outcome, survivor.hp]))
+	_scene.set("on_story_end", func(outcome: int, survivors: Array[Combatant]) -> void: reported.append([outcome, survivors[0].hp]))
 	_runner = scene_runner(_scene)
 	await _settle()
 	# Les PV et ressources restants de l'histoire sont repris.
@@ -449,7 +453,8 @@ func test_player_choices_are_recorded_with_the_seed() -> void:
 	assert_object(recorded).is_not_null()
 	assert_int(recorded.seed_value).is_equal(5)
 	assert_str(recorded.encounter_id).is_equal(&"goblin_ambush")
-	assert_int(recorded.player_hp).is_equal(12)
+	assert_int(recorded.party.size()).is_equal(1)
+	assert_int(recorded.party[0].hp).is_equal(12)
 	assert_bool(recorded.entries.has({"type": CombatRecord.END_TURN})).is_true()
 
 
@@ -467,3 +472,61 @@ func test_replay_mode_reproduces_the_recorded_combat() -> void:
 			break
 	assert_bool(_state().is_over).is_true()
 	assert_dict(CombatRecord.outcome_of(_state())).is_equal(recorded.outcome)
+
+
+# --- Groupe de plusieurs personnages -------------------------------------------
+
+
+## Deux Guerriers en (0, 0) et (1, 0), un gobelin sans arc ni cachette au
+## loin. Initiative : 20 et 15 pour les Guerriers, 1 pour le gobelin.
+func _start_party() -> void:
+	var starts: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+	var enemies: Array[Vector2i] = [Vector2i(11, 7)]
+	var ids: Array[StringName] = [&"fighter_lvl1", &"fighter_lvl1"]
+	_scene = auto_free(load(COMBAT_SCENE).instantiate())
+	_scene.set("encounter_override", Fixtures.party_encounter(Vector2i(12, 8), starts, enemies))
+	_scene.set("party_ids", ids)
+	_scene.set("dice", _fixed_dice([20, 15, 1]))
+	_scene.set("enemy_action_delay", 0.0)
+	_scene.set("end_delay", 0.0)
+	_runner = scene_runner(_scene)
+	await _settle()
+
+
+func test_party_members_take_turns_under_the_players_command() -> void:
+	await _start_party()
+	var party := _state().party()
+	assert_int(party.size()).is_equal(2)
+	assert_object(_scene.get("_player")).is_same(party[0])
+	var party_list: PartyList = _scene.get("_party_list")
+	assert_bool(party_list.visible).is_true()
+	assert_int(party_list.get_child_count()).is_equal(2)
+
+	_scene.call("_on_end_turn_pressed")
+	await _settle()
+	assert_object(_state().active()).is_same(party[1])
+	assert_object(_scene.get("_player")).is_same(party[1])
+
+	# Le gobelin joue (il approche), puis la main revient au premier.
+	_scene.call("_on_end_turn_pressed")
+	await _settle()
+	assert_int(_state().round).is_equal(2)
+	assert_object(_state().active()).is_same(party[0])
+	assert_object(_scene.get("_player")).is_same(party[0])
+
+
+func test_clicking_past_an_ally_walks_through_it() -> void:
+	await _start_party()
+	var party := _state().party()
+	_scene.call("_on_cell_clicked", Vector2i(1, 0))
+	await _runner.simulate_frames(1)
+	assert_that(party[0].position).is_equal(Vector2i(0, 0))
+	_scene.call("_on_cell_clicked", Vector2i(2, 0))
+	await _settle()
+	assert_that(party[0].position).is_equal(Vector2i(2, 0))
+
+
+func test_single_character_hides_the_party_list() -> void:
+	await _start(FIGHTER_FIRST)
+	var party_list: PartyList = _scene.get("_party_list")
+	assert_bool(party_list.visible).is_false()

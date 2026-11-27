@@ -18,7 +18,8 @@ enum AttackKind { NONE, MELEE, RANGED }
 var encounter: EncounterDef
 var pathfinder: GridPathfinder
 var line_of_sight: LineOfSight
-## Ordre de création : le joueur, puis les ennemis de la rencontre.
+## Ordre de création : les personnages joueurs dans l'ordre du groupe, puis
+## les ennemis de la rencontre.
 var combatants: Array[Combatant] = []
 var initiative: Array[InitiativeEntry] = []
 ## Effets temporaires en cours sur les combattants (voir Effect).
@@ -46,20 +47,42 @@ var winner: Combatant.Side = Combatant.Side.PLAYER
 var _active_index: int = -1
 
 
-## `player_hp` : PV du joueur au début du combat (ceux qui lui restent dans
-## l'histoire). Par défaut, ses PV maximum.
+## Combat d'un seul personnage joueur. `player_hp` : ses PV au début du
+## combat (ceux qui lui restent dans l'histoire). Par défaut, ses PV maximum.
 static func create(p_encounter: EncounterDef, player: CharacterDef, player_hp: int = -1) -> CombatState:
+	var party_defs: Array[CharacterDef] = [player]
+	var state := create_party(p_encounter, party_defs)
+	if player_hp >= 0:
+		state.combatants[0].hp = mini(player_hp, player.max_hp)
+	return state
+
+
+## Combat d'un groupe : chaque personnage part de la case de départ de même
+## rang dans la rencontre, avec les PV et ressources de sa fiche, ou ceux de
+## `members` (même ordre) quand il les a dépensés plus tôt dans l'histoire.
+static func create_party(p_encounter: EncounterDef, party_defs: Array[CharacterDef], members: Array[PartyMember] = []) -> CombatState:
+	assert(party_defs.size() <= p_encounter.player_starts.size(), "Rencontre « %s » : pas assez de cases de départ pour le groupe." % p_encounter.id)
 	var state := CombatState.new()
 	state.encounter = p_encounter
 	state.pathfinder = GridPathfinder.new(p_encounter.grid_size, p_encounter.blocked_cells)
 	state.line_of_sight = LineOfSight.new(p_encounter.blocked_cells)
-	var hero := Combatant.new(player, Combatant.Side.PLAYER, p_encounter.player_start)
-	if player_hp >= 0:
-		hero.hp = mini(player_hp, player.max_hp)
-	state.combatants.append(hero)
+	for i in party_defs.size():
+		var member := Combatant.new(party_defs[i], Combatant.Side.PLAYER, p_encounter.player_starts[i])
+		if i < members.size():
+			members[i].apply_to(member)
+		state.combatants.append(member)
 	for placement in p_encounter.enemies:
 		state.combatants.append(Combatant.new(placement.character, Combatant.Side.ENEMY, placement.cell))
 	return state
+
+
+## Personnages joueurs, morts compris, dans l'ordre du groupe.
+func party() -> Array[Combatant]:
+	var members: Array[Combatant] = []
+	for combatant in combatants:
+		if combatant.side == Combatant.Side.PLAYER:
+			members.append(combatant)
+	return members
 
 
 ## DD de l'action Se cacher (SRD « Hide »).
@@ -125,25 +148,45 @@ func combatant_at(cell: Vector2i) -> Combatant:
 	return null
 
 
-## Cases que `except` sait occupées par les autres combattants vivants. Un
-## ennemi caché n'y figure pas : on ignore où il est, et on peut le heurter
-## en entrant dans sa case (voir `walk`).
-func occupied_cells(except: Combatant) -> Array[Vector2i]:
+## Cases que `mover` ne peut pas traverser : celles des ennemis vivants
+## qu'il sait là. Un ennemi caché n'y figure pas : on ignore où il est, et on
+## peut le heurter en entrant dans sa case (voir `walk`).
+##
+## Écart (docs/rules-deviations.md) : le SRD permet aussi de traverser un
+## ennemi neutralisé, en terrain difficile ; on ne le propose pas.
+func blocking_cells(mover: Combatant) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for combatant in combatants:
-		if combatant != except and not combatant.is_dead and not is_hidden_from(combatant, except):
+		if combatant != mover and not combatant.is_dead and combatant.side != mover.side \
+				and not is_hidden_from(combatant, mover):
+			cells.append(combatant.position)
+	return cells
+
+
+## Cases que `mover` traverse sans pouvoir s'y arrêter : celles de ses
+## alliés vivants (SRD « Moving Around Other Creatures »).
+func ally_cells(mover: Combatant) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for combatant in combatants:
+		if combatant != mover and not combatant.is_dead and combatant.side == mover.side:
 			cells.append(combatant.position)
 	return cells
 
 
 func find_path(mover: Combatant, destination: Vector2i) -> Array[Vector2i]:
-	return pathfinder.find_path(mover.position, destination, occupied_cells(mover))
+	return pathfinder.find_path(mover.position, destination, blocking_cells(mover), ally_cells(mover))
 
 
 ## Cases où le combattant actif peut aller avec son déplacement restant.
 func reachable_cells() -> Dictionary[Vector2i, int]:
 	var mover := active()
-	return pathfinder.reachable_cells(mover.position, movement_left, occupied_cells(mover))
+	return reachable_from(mover, mover.position, movement_left)
+
+
+## Cases où `mover` pourrait finir un déplacement d'au plus `budget` cases
+## parti de `from`, avec leur coût.
+func reachable_from(mover: Combatant, from: Vector2i, budget: int) -> Dictionary[Vector2i, int]:
+	return pathfinder.reachable_cells(from, budget, blocking_cells(mover), ally_cells(mover))
 
 
 ## Allonge de l'arme en cases : 5 ft = cases adjacentes, diagonales comprises.
@@ -356,22 +399,31 @@ func apply_effect(effect: Effect) -> Array[CombatEvent]:
 ## réaction s'ouvre (voir ReactionWindow). `already_asked` : combattants
 ## déjà sollicités pour le premier pas, quand un déplacement reprend.
 ##
+## On traverse la case d'un allié sans pouvoir s'y arrêter. Arrêté de force
+## dans une telle case (heurt, mise à terre en chemin), le combattant revient
+## sur la dernière case libre de son trajet (docs/rules-deviations.md).
+## `shared` : cases d'alliés traversées depuis cette case libre, la case libre
+## en premier, quand un déplacement reprend.
+##
 ## Règles de MJ sur les cachés (docs/rules-deviations.md) :
 ## - entrer dans la case d'un ennemi caché le heurte : le déplacement
 ##   s'arrête sur la case d'avant, et il est trouvé ;
 ## - un caché qui passe en vue d'un ennemi à la Perception passive
 ##   suffisante est remarqué sur cette case, et la suite du trajet est vue ;
 ## - à la fin du déplacement, les cachés que `mover` voit sont trouvés.
-func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatant] = []) -> Array[CombatEvent]:
+func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatant] = [], shared: Array[Vector2i] = []) -> Array[CombatEvent]:
 	var events: Array[CombatEvent] = []
 	var from := mover.position
 	var walked: Array[Vector2i] = []
 	var unseen := is_hidden(mover)
+	# Cases quittées depuis la dernière case libre, celle-ci en premier.
+	var since_free: Array[Vector2i] = shared.duplicate()
 	for i in path.size():
-		var blocker := combatant_at(path[i])
+		var blocker := _hidden_enemy_at(mover, path[i])
 		if blocker != null:
 			if not walked.is_empty():
 				events.append(MovedEvent.new(mover, from, walked, unseen))
+			events.append_array(_step_back(mover, since_free, unseen))
 			events.append_array(reveal(blocker, RevealedEvent.BUMPED, mover))
 			events.append_array(reveal_exposed(mover))
 			return events
@@ -384,12 +436,15 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 				events.append(MovedEvent.new(mover, from, walked, unseen))
 			var asked := skip.duplicate()
 			asked.append(reactor)
-			pending = ReactionWindow.new(reactor, mover, path.slice(i), asked)
+			pending = ReactionWindow.new(reactor, mover, path.slice(i), asked, since_free)
 			events.append(ReactionTriggeredEvent.new(reactor, mover))
 			return events
+		since_free.append(mover.position)
 		mover.position = path[i]
 		movement_left -= 1
 		walked.append(path[i])
+		if not _shares_cell(mover):
+			since_free.clear()
 		if unseen:
 			var noticer := _noticer(mover, path[i])
 			if noticer != null:
@@ -405,11 +460,48 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 
 
 ## Reprend le déplacement suspendu par `window` une fois la réaction jouée,
-## si celui qui se déplaçait tient encore debout.
+## si celui qui se déplaçait tient encore debout. Mis à terre dans la case
+## d'un allié, il retombe sur la dernière case libre de son trajet.
 func resume_movement(window: ReactionWindow) -> Array[CombatEvent]:
-	if window == null or window.mover.is_down() or is_over:
+	if window == null or window.mover.is_dead:
 		return []
-	return walk(window.mover, window.remaining_path, window.asked)
+	if window.mover.is_down():
+		return _step_back(window.mover, window.shared, false, false)
+	if is_over:
+		return []
+	return walk(window.mover, window.remaining_path, window.asked, window.shared)
+
+
+## Ennemi caché de `mover` sur cette case, ou `null`.
+func _hidden_enemy_at(mover: Combatant, cell: Vector2i) -> Combatant:
+	for combatant in combatants:
+		if not combatant.is_dead and combatant.position == cell and is_hidden_from(combatant, mover):
+			return combatant
+	return null
+
+
+## Un autre combattant vivant occupe-t-il la case de `combatant` ?
+func _shares_cell(combatant: Combatant) -> bool:
+	for other in combatants:
+		if other != combatant and not other.is_dead and other.position == combatant.position:
+			return true
+	return false
+
+
+## Arrêté de force dans la case d'un allié, `mover` revient sur ses pas
+## jusqu'à la dernière case libre. `since_free` : les cases quittées depuis
+## cette case libre, celle-ci en premier. Le déplacement non fait lui est
+## rendu si `refund`.
+func _step_back(mover: Combatant, since_free: Array[Vector2i], unseen: bool, refund: bool = true) -> Array[CombatEvent]:
+	if since_free.is_empty() or not _shares_cell(mover):
+		return []
+	var back: Array[Vector2i] = since_free.duplicate()
+	back.reverse()
+	var from := mover.position
+	mover.position = back.back()
+	if refund:
+		movement_left += back.size()
+	return [MovedEvent.new(mover, from, back, unseen)]
 
 
 ## Ennemis qui auraient droit à une attaque d'opportunité si `mover`
@@ -495,6 +587,9 @@ func _expire_effects(source: Combatant, expiry: Effect.Expiry) -> Array[CombatEv
 ## mourant y est encore : ses jets contre la mort peuvent le relever. Un
 ## mort ou un stabilisé n'y est plus : sans allié pour le soigner, un
 ## stabilisé ne se relèvera pas pendant le combat.
+##
+## Après une victoire, les personnages restés à terre se relèvent à 1 PV
+## (voir CombatantRecoveredEvent).
 func check_end() -> Array[CombatEvent]:
 	if is_over:
 		return []
@@ -512,7 +607,14 @@ func check_end() -> Array[CombatEvent]:
 		return []
 	is_over = true
 	winner = Combatant.Side.PLAYER if player_in_fight else Combatant.Side.ENEMY
-	return [CombatEndedEvent.new(winner)]
+	var events: Array[CombatEvent] = []
+	if winner == Combatant.Side.PLAYER:
+		for member in party():
+			if member.is_down() and not member.is_dead:
+				member.heal(1)
+				events.append(CombatantRecoveredEvent.new(member))
+	events.append(CombatEndedEvent.new(winner))
+	return events
 
 
 func _reset_turn_budget() -> void:

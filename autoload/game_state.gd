@@ -17,18 +17,18 @@ signal progress_changed
 enum Outcome { DONE, VICTORY, DEFEAT }
 enum Next { STEP, DEFEAT_SCREEN, END }
 
-const PLAYER_ID := &"fighter_lvl1"
+## Fiches du groupe, dans l'ordre (celui des cases de départ des rencontres).
+const PARTY_IDS: Array[StringName] = [&"fighter_lvl1"]
 
 var registry: DataRegistry
 var story: StoryDef
 ## Étape en cours. Vide quand aucune partie n'est en cours.
 var current_step_id: StringName = &""
 var story_completed := false
-var player_hp := 0
-## Ressources du Guerrier qui ne reviennent qu'avec un repos, absent du jeu :
-## elles sont comptées sur toute la partie.
-var player_second_wind_uses := 0
-var player_heroic_inspiration := false
+## PV et ressources de chaque personnage, dans l'ordre du groupe. Les
+## ressources ne reviennent qu'avec un repos, absent du jeu : elles sont
+## comptées sur toute la partie.
+var party: Array[PartyMember] = []
 
 
 func _ready() -> void:
@@ -42,12 +42,20 @@ func setup(p_registry: DataRegistry) -> void:
 		push_error("Données : %s" % error)
 	# Garde-fou : dans un jeu exporté, un registre vide passerait sinon
 	# inaperçu jusqu'au premier combat.
-	if player_definition() == null:
-		push_error("Données : fiche du joueur « %s » introuvable." % PLAYER_ID)
+	for id in PARTY_IDS:
+		if registry.character(id) == null:
+			push_error("Données : fiche du joueur « %s » introuvable." % id)
 
 
-func player_definition() -> CharacterDef:
-	return registry.character(PLAYER_ID)
+## Fiches du groupe, dans l'ordre. Vide si l'une d'elles manque.
+func party_definitions() -> Array[CharacterDef]:
+	var definitions: Array[CharacterDef] = []
+	for id in PARTY_IDS:
+		var definition := registry.character(id)
+		if definition == null:
+			return []
+		definitions.append(definition)
+	return definitions
 
 
 func has_game() -> bool:
@@ -63,30 +71,36 @@ func current_step() -> StoryStep:
 func new_game() -> void:
 	current_step_id = story.first_step
 	story_completed = false
-	var definition := player_definition()
-	player_hp = definition.max_hp
-	player_second_wind_uses = definition.second_wind_uses
-	player_heroic_inspiration = definition.heroic_inspiration
+	party.clear()
+	for definition in party_definitions():
+		party.append(PartyMember.fresh(definition))
 	progress_changed.emit()
 
 
-## Reprend une partie sauvegardée. Renvoie faux si l'étape n'existe plus.
-func restore(step_id: StringName, hp: int, completed: bool, second_wind_uses: int, heroic_inspiration: bool) -> bool:
+## Reprend une partie sauvegardée. Renvoie faux si l'étape n'existe plus ou
+## si le groupe sauvegardé n'est pas celui du jeu (mêmes fiches, même ordre).
+## Les valeurs sont ramenées dans ce que permettent les fiches.
+func restore(step_id: StringName, members: Array[PartyMember], completed: bool) -> bool:
 	if not step_id.is_empty() and story.get_step(step_id) == null:
 		return false
-	var definition := player_definition()
+	var definitions := party_definitions()
+	if members.size() != definitions.size():
+		return false
+	for i in members.size():
+		if members[i].id != definitions[i].id:
+			return false
+	for i in members.size():
+		members[i].clamp_to(definitions[i])
 	current_step_id = step_id
-	player_hp = clampi(hp, 1, definition.max_hp)
-	player_second_wind_uses = clampi(second_wind_uses, 0, definition.second_wind_uses)
-	player_heroic_inspiration = heroic_inspiration and definition.heroic_inspiration
+	party = members
 	story_completed = completed
 	return true
 
 
 ## L'étape courante est terminée avec ce résultat. Renvoie ce qu'il faut
-## afficher ensuite, sans changer de scène. Après une victoire, `survivor`
-## est le Guerrier à la fin du combat : on garde ses PV et ses ressources.
-func complete_step(outcome: Outcome, survivor: Combatant = null) -> Next:
+## afficher ensuite, sans changer de scène. Après une victoire, `survivors`
+## est le groupe à la fin du combat : chacun garde ses PV et ses ressources.
+func complete_step(outcome: Outcome, survivors: Array[Combatant] = []) -> Next:
 	var step := current_step()
 	assert(step != null, "Aucune étape en cours.")
 
@@ -98,10 +112,11 @@ func complete_step(outcome: Outcome, survivor: Combatant = null) -> Next:
 		progress_changed.emit()
 		return Next.STEP
 
-	if outcome == Outcome.VICTORY and survivor != null and survivor.hp > 0:
-		player_hp = survivor.hp
-		player_second_wind_uses = survivor.second_wind_uses
-		player_heroic_inspiration = survivor.heroic_inspiration
+	if outcome == Outcome.VICTORY:
+		for survivor in survivors:
+			for i in party.size():
+				if party[i].id == survivor.definition.id and survivor.hp > 0:
+					party[i] = PartyMember.of(survivor)
 
 	if step.is_end():
 		current_step_id = &""
@@ -118,8 +133,8 @@ func complete_step(outcome: Outcome, survivor: Combatant = null) -> Next:
 
 
 ## Termine l'étape puis affiche la suite.
-func finish_step(outcome: Outcome, survivor: Combatant = null) -> void:
-	enter(complete_step(outcome, survivor))
+func finish_step(outcome: Outcome, survivors: Array[Combatant] = []) -> void:
+	enter(complete_step(outcome, survivors))
 
 
 func enter(next: Next) -> void:

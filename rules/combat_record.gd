@@ -10,7 +10,9 @@
 class_name CombatRecord
 extends RefCounted
 
-const VERSION := 1
+## v2 : un groupe de personnages (`party`). Un enregistrement v1, d'avant
+## les groupes, se lit encore : un groupe d'un seul Guerrier.
+const VERSION := 2
 
 # Types de choix enregistrés.
 const MOVE := "move"
@@ -28,12 +30,12 @@ const DECLINE_INSPIRATION := "decline_inspiration"
 
 var seed_value: int = 0
 var encounter_id: StringName
-var player_id: StringName
-## Situation du Guerrier au début du combat (elle dépend de l'histoire).
-var player_hp: int = 0
-var second_wind_uses: int = 0
-var heroic_inspiration: bool = false
-## Choix du joueur, encodés par `encode`.
+## Situation des personnages au début du combat (elle dépend de l'histoire),
+## dans l'ordre du groupe.
+var party: Array[PartyMember] = []
+## Choix du joueur, tous personnages confondus, encodés par `encode`. Le
+## personnage qui joue un choix est celui dont c'est le tour, ou celui qui
+## doit répondre à une décision : on ne l'écrit pas.
 var entries: Array[Dictionary] = []
 ## Résultat constaté à la fin du combat, vide tant qu'il n'est pas fini :
 ## {"winner": int, "round": int, "hp": [int, …]}.
@@ -127,10 +129,7 @@ func to_json() -> String:
 		"version": VERSION,
 		"seed": seed_value,
 		"encounter": str(encounter_id),
-		"player": str(player_id),
-		"player_hp": player_hp,
-		"second_wind_uses": second_wind_uses,
-		"heroic_inspiration": heroic_inspiration,
+		"party": PartyMember.list_to(party),
 		"entries": entries,
 		"outcome": outcome,
 	}, "  ")
@@ -142,30 +141,38 @@ static func from_json(text: String) -> CombatRecord:
 	if typeof(raw) != TYPE_DICTIONARY:
 		return null
 	var data: Dictionary = raw
-	if data.get("version") != float(VERSION):
+	if data.get("version") == 1.0:
+		data = _upgrade_v1(data)
+	elif data.get("version") != float(VERSION):
 		return null
-	for key: String in ["seed", "player_hp", "second_wind_uses"]:
-		if not _is_whole_number(data.get(key)):
-			return null
-	for key: String in ["encounter", "player"]:
-		if typeof(data.get(key)) != TYPE_STRING:
-			return null
-	if typeof(data.get("heroic_inspiration")) != TYPE_BOOL or typeof(data.get("entries")) != TYPE_ARRAY \
-			or typeof(data.get("outcome")) != TYPE_DICTIONARY:
+	if not _is_whole_number(data.get("seed")) or typeof(data.get("encounter")) != TYPE_STRING \
+			or typeof(data.get("entries")) != TYPE_ARRAY or typeof(data.get("outcome")) != TYPE_DICTIONARY:
+		return null
+	var members := PartyMember.list_from(data.get("party"))
+	if members.is_empty():
 		return null
 	var record := CombatRecord.new()
 	record.seed_value = int(data["seed"])
 	record.encounter_id = StringName(data["encounter"])
-	record.player_id = StringName(data["player"])
-	record.player_hp = int(data["player_hp"])
-	record.second_wind_uses = int(data["second_wind_uses"])
-	record.heroic_inspiration = data["heroic_inspiration"]
+	record.party = members
 	for entry: Variant in data["entries"]:
 		if typeof(entry) != TYPE_DICTIONARY:
 			return null
 		record.entries.append(entry)
 	record.outcome = _normalize_outcome(data["outcome"])
 	return record
+
+
+## v1 : le Guerrier seul, décrit par des champs à part.
+static func _upgrade_v1(data: Dictionary) -> Dictionary:
+	var upgraded := data.duplicate()
+	upgraded["party"] = [{
+		"def_id": data.get("player"),
+		"hp_current": data.get("player_hp"),
+		"second_wind_uses": data.get("second_wind_uses"),
+		"heroic_inspiration": data.get("heroic_inspiration"),
+	}]
+	return upgraded
 
 
 # Le JSON lit tous les nombres en flottants : on remet des entiers.

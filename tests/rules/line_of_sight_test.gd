@@ -46,4 +46,4 @@ func test_ambush_starts_out_of_sight() -> void:
 	# Dans la vraie rencontre, le rocher en (4,3) cache le Gobelin au départ.
 	var encounter := DataRegistry.load_from().encounter(&"goblin_ambush")
 	var los := LineOfSight.new(encounter.blocked_cells)
-	assert_bool(los.is_clear(encounter.player_start, encounter.enemies[0].cell)).is_false()
+	assert_bool(los.is_clear(encounter.player_starts[0], encounter.enemies[0].cell)).is_false()

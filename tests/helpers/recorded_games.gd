@@ -10,20 +10,17 @@ static func record(seed_value: int) -> CombatRecord:
 	var registry := DataRegistry.load_from()
 	var state := CombatState.create(registry.encounter(&"goblin_ambush"), registry.character(&"fighter_lvl1"))
 	var dice := Dice.seeded(seed_value)
-	var player := state.combatants[0]
 	var recorded := CombatRecord.new()
 	recorded.seed_value = seed_value
 	recorded.encounter_id = &"goblin_ambush"
-	recorded.player_id = &"fighter_lvl1"
-	recorded.player_hp = player.hp
-	recorded.second_wind_uses = player.second_wind_uses
-	recorded.heroic_inspiration = player.heroic_inspiration
+	for member in state.party():
+		recorded.party.append(PartyMember.of(member))
 	state.start(dice)
 	var steps := 0
 	while not state.is_over and steps < CombatSimulator.MAX_ACTIONS:
-		_play(state, dice, EnemyAI.next_action(state, state.active()), player, recorded)
+		_play(state, dice, EnemyAI.next_action(state, state.active()), recorded)
 		while state.pending != null and not state.is_over:
-			_play(state, dice, EnemyAI.decide(state), player, recorded)
+			_play(state, dice, EnemyAI.decide(state), recorded)
 		steps += 1
 	recorded.outcome = CombatRecord.outcome_of(state)
 	return recorded
@@ -34,10 +31,10 @@ static func record(seed_value: int) -> CombatRecord:
 ## correspond plus.
 static func replay(recorded: CombatRecord) -> CombatState:
 	var registry := DataRegistry.load_from()
-	var state := CombatState.create(registry.encounter(recorded.encounter_id), registry.character(recorded.player_id), recorded.player_hp)
-	var player := state.combatants[0]
-	player.second_wind_uses = recorded.second_wind_uses
-	player.heroic_inspiration = recorded.heroic_inspiration
+	var definitions: Array[CharacterDef] = []
+	for member in recorded.party:
+		definitions.append(registry.character(member.id))
+	var state := CombatState.create_party(registry.encounter(recorded.encounter_id), definitions, recorded.party)
 	var dice := Dice.seeded(recorded.seed_value)
 	state.start(dice)
 	var index := 0
@@ -45,10 +42,10 @@ static func replay(recorded: CombatRecord) -> CombatState:
 	while not state.is_over and steps < CombatSimulator.MAX_ACTIONS:
 		var deciding := state.pending.decider if state.pending != null else state.active()
 		var action: Action
-		if deciding == player:
+		if deciding.side == Combatant.Side.PLAYER:
 			if index >= recorded.entries.size():
 				return null
-			action = CombatRecord.decode(recorded.entries[index], player, state)
+			action = CombatRecord.decode(recorded.entries[index], deciding, state)
 			index += 1
 		elif state.pending != null:
 			action = EnemyAI.decide(state)
@@ -61,7 +58,7 @@ static func replay(recorded: CombatRecord) -> CombatState:
 	return state
 
 
-static func _play(state: CombatState, dice: Dice, action: Action, player: Combatant, recorded: CombatRecord) -> void:
-	if action.actor == player:
+static func _play(state: CombatState, dice: Dice, action: Action, recorded: CombatRecord) -> void:
+	if action.actor.side == Combatant.Side.PLAYER:
 		recorded.entries.append(CombatRecord.encode(action))
 	action.execute(state, dice)

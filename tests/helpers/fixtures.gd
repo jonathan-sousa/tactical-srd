@@ -145,11 +145,25 @@ static func encounter(
 	var def := EncounterDef.new()
 	def.id = &"test_encounter"
 	def.grid_size = grid_size
-	def.player_start = player_start
+	def.player_starts = [player_start]
 	def.blocked_cells = blocked
 	for cell in enemy_cells:
 		var placement := EnemyPlacement.new()
 		placement.character = enemy if enemy != null else goblin()
 		placement.cell = cell
 		def.enemies.append(placement)
+	return def
+
+
+## Rencontre d'un groupe : une case de départ par personnage joueur, et des
+## ennemis (gobelins de base par défaut).
+static func party_encounter(
+	grid_size: Vector2i,
+	player_starts: Array[Vector2i],
+	enemy_cells: Array[Vector2i],
+	blocked: Array[Vector2i] = [],
+	enemy: CharacterDef = null,
+) -> EncounterDef:
+	var def := encounter(grid_size, player_starts[0], enemy_cells, blocked, enemy)
+	def.player_starts = player_starts
 	return def
