@@ -405,7 +405,14 @@ static func attack_hint(target: Combatant, weapon: WeaponDef, estimate: AttackEs
 		line += " (toujours critique)"
 	if estimate.graze_damage > 0:
 		line += " ; Graze : %d si raté" % estimate.graze_damage
+	if estimate.cover_bonus > 0:
+		line += " ; %s" % cover_text(estimate.cover_bonus)
 	return line + _advantage_detail(estimate.advantage)
+
+
+## « abri partiel, +2 CA ».
+static func cover_text(bonus: int) -> String:
+	return "abri partiel, +%d %s" % [bonus, ARMOR_CLASS]
 
 
 ## « 55 % ».
@@ -472,6 +479,8 @@ static func attack_detail(result: AttackResult) -> String:
 	if result.d20.rolls.size() > 1:
 		roll = "%d [%s]" % [result.d20.natural, ", ".join(result.d20.rolls.map(str))]
 	var line := "%s %s = %d contre %s %d" % [roll, signed(result.attack_bonus), result.attack_total, ARMOR_CLASS, result.target_armor_class]
+	if result.cover_bonus > 0:
+		line += " (%s)" % cover_text(result.cover_bonus)
 	if result.is_hit:
 		line += " ; %s" % _damage_detail(result.damage_roll)
 		if result.discarded_damage_roll != null:

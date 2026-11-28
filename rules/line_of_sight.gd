@@ -20,14 +20,21 @@ func _init(blocked_cells: Array[Vector2i]) -> void:
 
 
 func is_clear(from: Vector2i, to: Vector2i) -> bool:
+	return not crosses_any(from, to, _blocked)
+
+
+## Le segment entre les centres de `from` et `to` traverse-t-il l'intérieur
+## d'une des cases `cells` (hors `from` et `to`) ? Sert aussi à l'abri
+## partiel (murets et créatures).
+static func crosses_any(from: Vector2i, to: Vector2i, cells: Array[Vector2i]) -> bool:
 	var start := Vector2(from) + Vector2(0.5, 0.5)
 	var end := Vector2(to) + Vector2(0.5, 0.5)
-	for cell in _blocked:
+	for cell in cells:
 		if cell == from or cell == to:
 			continue
 		if _segment_crosses_square(start, end, cell):
-			return false
-	return true
+			return true
+	return false
 
 
 ## Le segment traverse-t-il l'intérieur de la case `cell` ? Méthode des

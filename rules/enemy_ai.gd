@@ -142,7 +142,8 @@ static func _ranged_weapon(actor: Combatant) -> WeaponDef:
 ## 2. pas d'attaque d'opportunité en chemin ;
 ## 3. tir à portée normale (pas de désavantage) ;
 ## 4. un abri reste atteignable après l'attaque ;
-## 5. le chemin le plus court, puis la case la plus haute et la plus à gauche
+## 5. un abri partiel (muret, créature) contre la riposte de la cible ;
+## 6. le chemin le plus court, puis la case la plus haute et la plus à gauche
 ##    (choix reproductible).
 static func _best_attack_cell(state: CombatState, actor: Combatant, target: Combatant, reachable: Dictionary[Vector2i, int]) -> Vector2i:
 	var melee := actor.melee_weapon()
@@ -164,6 +165,7 @@ static func _best_attack_cell(state: CombatState, actor: Combatant, target: Comb
 			1 if _provokes(state, actor, state.find_path(actor, cell)) else 0,
 			1 if long_range else 0,
 			0 if _cover_within(state, actor, cell, state.movement_left - cost) else 1,
+			0 if state.cover_between(target, target.position, actor, cell) > 0 else 1,
 			cost,
 			cell.y,
 			cell.x,

@@ -25,7 +25,7 @@ static func begin(
 	_spend_thrown_weapon(attacker, weapon, kind)
 
 	var advantage := AdvantageResolver.for_attack(state, attacker, target, weapon)
-	var result := AttackResolver.roll_attack(attacker, target, weapon, dice, advantage.mode, critical_on_hit(state, attacker, target))
+	var result := AttackResolver.roll_attack(attacker, target, weapon, dice, advantage.mode, critical_on_hit(state, attacker, target), state.cover_bonus(attacker, target))
 	result.advantage = advantage
 	result.is_opportunity = is_opportunity
 	result.is_ranged = kind == CombatState.AttackKind.RANGED

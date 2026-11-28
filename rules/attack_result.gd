@@ -10,7 +10,10 @@ var weapon: WeaponDef
 var d20: D20Roll
 var attack_bonus: int
 var attack_total: int
+## CA de la cible, abri compris.
 var target_armor_class: int
+## Bonus d'abri ajouté à la CA de la cible (0 ou +2).
+var cover_bonus: int = 0
 
 ## Avantage ou désavantage appliqué, avec ses raisons. `null` si l'attaque
 ## a été résolue directement par AttackResolver (tests).

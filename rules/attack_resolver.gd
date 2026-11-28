@@ -26,7 +26,8 @@ static func resolve(
 
 
 ## Jet d'attaque seul : d20, total, touché ou raté. Pas de dégâts.
-## `critical_on_hit` : toute touche est un coup critique.
+## `critical_on_hit` : toute touche est un coup critique. `cover_bonus` :
+## abri de la cible, ajouté à sa CA.
 static func roll_attack(
 	attacker: Combatant,
 	target: Combatant,
@@ -34,6 +35,7 @@ static func roll_attack(
 	dice: Dice,
 	mode: Dice.RollMode = Dice.RollMode.NORMAL,
 	critical_on_hit: bool = false,
+	cover_bonus: int = 0,
 ) -> AttackResult:
 	var result := AttackResult.new()
 	result.attacker = attacker
@@ -43,7 +45,8 @@ static func roll_attack(
 	result.critical_on_hit = critical_on_hit
 	# Jet d'attaque : d20 + modificateur de caractéristique + maîtrise.
 	result.attack_bonus = attacker.attack_bonus(weapon)
-	result.target_armor_class = target.armor_class()
+	result.cover_bonus = cover_bonus
+	result.target_armor_class = target.armor_class() + cover_bonus
 	_apply_d20(result, dice.roll_d20(mode))
 	return result
 
@@ -57,6 +60,7 @@ static func with_d20(previous: AttackResult, d20: D20Roll) -> AttackResult:
 	result.damage_type = previous.damage_type
 	result.attack_bonus = previous.attack_bonus
 	result.target_armor_class = previous.target_armor_class
+	result.cover_bonus = previous.cover_bonus
 	result.advantage = previous.advantage
 	result.is_opportunity = previous.is_opportunity
 	result.is_ranged = previous.is_ranged

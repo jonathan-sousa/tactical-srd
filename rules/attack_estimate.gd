@@ -18,6 +18,8 @@ var damage_min: int
 var damage_max: int
 ## Dégâts de la maîtrise Graze sur un échec, 0 sinon.
 var graze_damage: int
+## Bonus d'abri de la cible (0 ou +2), compté dans `hit_chance`.
+var cover_bonus: int
 var advantage: AdvantageResult
 
 
@@ -25,7 +27,8 @@ static func of(state: CombatState, attacker: Combatant, target: Combatant, weapo
 	var estimate := AttackEstimate.new()
 	estimate.advantage = AdvantageResolver.for_attack(state, attacker, target, weapon)
 	var mode := estimate.advantage.mode
-	var single := _single_hit_chance(attacker.attack_bonus(weapon), target.armor_class())
+	estimate.cover_bonus = state.cover_bonus(attacker, target)
+	var single := _single_hit_chance(attacker.attack_bonus(weapon), target.armor_class() + estimate.cover_bonus)
 	estimate.hit_chance = _with_mode(single, mode)
 	var always_critical := AttackSequence.critical_on_hit(state, attacker, target)
 	estimate.critical_chance = estimate.hit_chance if always_critical else _with_mode(1.0 / 20.0, mode)
