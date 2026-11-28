@@ -1,6 +1,6 @@
-## Ce qu'un personnage joueur garde d'un combat à l'autre : ses PV et les
+## Ce qu'un personnage joueur garde d'un combat à l'autre : ses PV, les
 ## ressources qui ne reviennent qu'avec un repos, absent du jeu (Second Wind,
-## Inspiration héroïque).
+## Inspiration héroïque), et ses munitions (flèches).
 ##
 ## Sert à la progression de l'histoire (GameState), à la sauvegarde
 ## (SaveManager) et aux enregistrements de combat (CombatRecord). Lu depuis un
@@ -13,6 +13,9 @@ var id: StringName
 var hp: int
 var second_wind_uses: int
 var heroic_inspiration: bool
+## Munitions restantes, par id d'arme (propriété Ammunition : l'arc court et
+## ses flèches). Une arme absente a toutes celles de sa fiche.
+var ammunition: Dictionary[StringName, int] = {}
 
 
 ## Personnage frais : PV et ressources de sa fiche.
@@ -22,6 +25,7 @@ static func fresh(definition: CharacterDef) -> PartyMember:
 	member.hp = definition.max_hp
 	member.second_wind_uses = definition.second_wind_uses
 	member.heroic_inspiration = definition.heroic_inspiration
+	member.clamp_to(definition)
 	return member
 
 
@@ -32,7 +36,29 @@ static func of(combatant: Combatant) -> PartyMember:
 	member.hp = combatant.hp
 	member.second_wind_uses = combatant.second_wind_uses
 	member.heroic_inspiration = combatant.heroic_inspiration
+	for id in _ammunition_ids(combatant.definition):
+		member.ammunition[id] = combatant.quantity_of(id)
 	return member
+
+
+## Situation après un combat (SRD « Ammunition ») : on récupère la moitié
+## des munitions tirées, arrondie vers le bas. `before` : la situation au
+## début du combat.
+static func after_combat(before: PartyMember, combatant: Combatant) -> PartyMember:
+	var member := of(combatant)
+	for id in member.ammunition:
+		var spent := maxi(before.ammunition.get(id, member.ammunition[id]) - member.ammunition[id], 0)
+		member.ammunition[id] += spent / 2
+	return member
+
+
+## Armes à munitions de la fiche qui en comptent (arc court : 20 flèches).
+static func _ammunition_ids(definition: CharacterDef) -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for weapon in definition.weapons:
+		if weapon.has_property(WeaponDef.AMMUNITION) and definition.weapon_quantities.has(weapon.id):
+			ids.append(weapon.id)
+	return ids
 
 
 ## Ramène les valeurs dans ce que permet la fiche : de 1 PV au maximum,
@@ -41,6 +67,11 @@ func clamp_to(definition: CharacterDef) -> void:
 	hp = clampi(hp, 1, definition.max_hp)
 	second_wind_uses = clampi(second_wind_uses, 0, definition.second_wind_uses)
 	heroic_inspiration = heroic_inspiration and definition.heroic_inspiration
+	var kept: Dictionary[StringName, int] = {}
+	for id in _ammunition_ids(definition):
+		var full: int = definition.weapon_quantities[id]
+		kept[id] = clampi(ammunition.get(id, full), 0, full)
+	ammunition = kept
 
 
 ## Reprend cette situation pour un combattant tout juste créé.
@@ -48,6 +79,9 @@ func apply_to(combatant: Combatant) -> void:
 	combatant.hp = mini(hp, combatant.definition.max_hp)
 	combatant.second_wind_uses = second_wind_uses
 	combatant.heroic_inspiration = heroic_inspiration
+	for id in ammunition:
+		if combatant.quantities.has(id):
+			combatant.quantities[id] = mini(ammunition[id], combatant.definition.weapon_quantities[id])
 
 
 func to_dict() -> Dictionary:
@@ -56,12 +90,22 @@ func to_dict() -> Dictionary:
 		"hp_current": hp,
 		"second_wind_uses": second_wind_uses,
 		"heroic_inspiration": heroic_inspiration,
+		"ammunition": _ammunition_to_dict(),
 	}
+
+
+func _ammunition_to_dict() -> Dictionary:
+	var dict := {}
+	for id in ammunition:
+		dict[str(id)] = ammunition[id]
+	return dict
 
 
 ## Lit un personnage écrit par `to_dict`. `null` si un champ manque ou n'a
 ## pas le bon type. Un personnage enregistré est toujours debout (1 PV ou
 ## plus) : on enregistre entre deux étapes, ou au début d'un combat.
+## `ammunition` est facultatif (fichiers d'avant les flèches) : absent, le
+## carquois est plein.
 static func from_dict(raw: Variant) -> PartyMember:
 	if typeof(raw) != TYPE_DICTIONARY:
 		return null
@@ -77,6 +121,14 @@ static func from_dict(raw: Variant) -> PartyMember:
 	member.hp = int(hp_value)
 	member.second_wind_uses = int(uses)
 	member.heroic_inspiration = inspiration
+	var ammunition: Variant = dict.get("ammunition", {})
+	if typeof(ammunition) != TYPE_DICTIONARY:
+		return null
+	for key: Variant in ammunition:
+		var count: Variant = ammunition[key]
+		if typeof(key) != TYPE_STRING or not _is_whole_number(count) or int(count) < 0:
+			return null
+		member.ammunition[StringName(key)] = int(count)
 	return member
 
 

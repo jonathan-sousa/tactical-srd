@@ -34,6 +34,7 @@ const BADGE_COLORS: Dictionary[StringName, Color] = {
 	Effect.SLOWED: Color(0.35, 0.7, 0.85),
 	Effect.HIDDEN: Color(0.4, 0.4, 0.45),
 	Effect.PRONE: Color(0.75, 0.55, 0.3),
+	Effect.VEXED: Color(0.9, 0.45, 0.2),
 }
 const STEP_DURATION := 0.12
 ## Sprite agrandi ×3, posé sur l'anneau.

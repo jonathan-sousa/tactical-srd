@@ -240,6 +240,8 @@ func _start_combat() -> void:
 	AudioManager.play_music(AudioManager.COMBAT_MUSIC)
 	_busy = true
 	await _play(state.start(dice))
+	# Alert : l'échange d'initiative se décide avant le premier tour.
+	await _resolve_decisions()
 	_busy = false
 	await _continue()
 
@@ -387,6 +389,16 @@ func _resolve_decisions() -> void:
 func _ask_player(decision: PendingDecision) -> Action:
 	var decider := decision.decider
 	var prefix := "%s : " % decider.display_name if state.party().size() > 1 else ""
+	if decision is InitiativeSwapWindow:
+		# Avant le premier tour : on montre la fiche de celui qui décide. Un
+		# allié à la fois, dans l'ordre d'initiative.
+		if decider != _player:
+			_command(decider)
+		_refresh()
+		for ally in (decision as InitiativeSwapWindow).allies:
+			if await _ask(prefix + Texts.initiative_swap_prompt(decider, ally, state)):
+				return SwapInitiativeAction.new(decider, ally)
+		return DeclineSwapAction.new(decider)
 	if decision is InspirationWindow:
 		var window := decision as InspirationWindow
 		var question := Texts.death_save_inspiration_prompt(window.death_save) if window.result == null \
@@ -475,12 +487,17 @@ func _register_event_handlers() -> void:
 		CombatantStabilizedEvent: _on_combatant_stabilized,
 		CombatantRecoveredEvent: _on_combatant_recovered,
 		CombatantDiedEvent: _on_combatant_died,
+		InitiativeSwappedEvent: _on_initiative_swapped,
 	}
 
 
 func _on_initiative_rolled(event: InitiativeRolledEvent) -> void:
 	_initiative_bar.set_order(event.entries)
 	_log.add_line(Texts.initiative_line(event.entries), LOG_MUTED_COLOR)
+
+
+func _on_initiative_swapped(event: InitiativeSwappedEvent) -> void:
+	_log.add_line(Texts.initiative_swapped_line(event), LOG_MUTED_COLOR)
 
 
 func _on_turn_started(event: TurnStartedEvent) -> void:
@@ -699,11 +716,31 @@ func _action_for_cell(cell: Vector2i) -> Action:
 		return null
 	var shown := _enemy_token_at(cell)
 	if shown != null and not state.is_hidden_from(shown, _player):
-		return AttackAction.new(_player, shown, _weapon)
+		return _off_hand_or(AttackAction.new(_player, shown, _weapon))
 	var hidden_enemy := not state.hidden_enemies_of(_player).is_empty()
 	if shown != null or (hidden_enemy and Input.is_key_pressed(KEY_SHIFT)):
-		return AttackAction.at_cell(_player, cell, _weapon)
+		return _off_hand_or(AttackAction.at_cell(_player, cell, _weapon))
 	return MoveAction.new(_player, cell)
+
+
+## Action déjà utilisée : la même attaque, de la main libre (propriété
+## Light), avec l'arme choisie si elle convient, sinon la première autre
+## arme Légère possible. Sinon `attack`, refusée avec sa raison.
+func _off_hand_or(attack: AttackAction) -> AttackAction:
+	if not state.action_used or state.light_attack_weapon == null:
+		return attack
+	var candidates: Array[WeaponDef] = [_weapon]
+	candidates.append_array(_player.definition.weapons)
+	var first: AttackAction = null
+	for weapon in candidates:
+		var off_hand := AttackAction.new(_player, attack.target, weapon)
+		off_hand.cell = attack.cell
+		off_hand.off_hand = true
+		if first == null:
+			first = off_hand
+		if off_hand.validate(state).is_empty():
+			return off_hand
+	return first
 
 
 ## Ennemi vivant dont le pion est affiché sur cette case (éventuellement à
@@ -756,7 +793,8 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 ## raisons d'avantage ou de désavantage. Tout vient de la prévision du
 ## moteur (AttackEstimate).
 func _attack_hint(attack: AttackAction) -> String:
-	return Texts.attack_hint(attack.target, attack.weapon, AttackEstimate.of(state, _player, attack.target, attack.weapon))
+	var hint := Texts.attack_hint(attack.target, attack.weapon, AttackEstimate.of(state, _player, attack.target, attack.weapon, attack.off_hand))
+	return Texts.OFF_HAND_HINT + hint if attack.off_hand else hint
 
 
 ## Un bouton par arme du personnage, avec sa touche. L'arme choisie sert à
@@ -925,7 +963,7 @@ func _refresh() -> void:
 	_end_turn_button.tooltip_text = Texts.reason(end_turn_reason) if not end_turn_reason.is_empty() else ""
 
 	# Plus rien à faire : le bouton pulse pour inviter à finir le tour.
-	var nothing_left := player_turn and state.action_used and state.movement_left == 0
+	var nothing_left := player_turn and state.action_used and state.movement_left == 0 and attackable.is_empty()
 	_set_pulse(nothing_left)
 	if nothing_left:
 		_hint_label.text = Texts.NOTHING_LEFT

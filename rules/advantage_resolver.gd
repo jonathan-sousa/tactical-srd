@@ -29,6 +29,8 @@ const TARGET_PRONE := &"target_prone"
 const TARGET_PRONE_FAR := &"target_prone_far"
 ## L'attaquant est à terre.
 const ATTACKER_PRONE := &"attacker_prone"
+## L'attaquant a touché la cible avec une arme à maîtrise Vex.
+const TARGET_VEXED := &"target_vexed"
 
 
 static func for_attack(state: CombatState, attacker: Combatant, target: Combatant, weapon: WeaponDef) -> AdvantageResult:
@@ -50,6 +52,8 @@ static func for_attack(state: CombatState, attacker: Combatant, target: Combatan
 	# est neutralisée.
 	if state.has_effect(target, Effect.DODGING) and state.can_see(target, attacker):
 		result.disadvantages.append(TARGET_DODGING)
+	if state.has_effect_from(target, Effect.VEXED, attacker):
+		result.advantages.append(TARGET_VEXED)
 	if state.has_effect(attacker, Effect.SAPPED):
 		result.disadvantages.append(ATTACKER_SAPPED)
 	if state.attack_kind(attacker, target, weapon) == CombatState.AttackKind.RANGED:

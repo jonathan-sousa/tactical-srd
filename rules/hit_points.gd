@@ -65,11 +65,17 @@ static func apply_damage(
 ## Jet contre la mort au début du tour d'un combattant mourant. Avec
 ## l'Inspiration héroïque, un échec ouvre une décision : relancer ou non.
 static func roll_death_save(state: CombatState, combatant: Combatant, dice: Dice) -> Array[CombatEvent]:
-	var natural := dice.roll_die(20)
+	var roll := dice.roll_d20(Dice.RollMode.NORMAL, combatant.is_lucky())
+	var natural := roll.natural
 	if natural < DEATH_SAVE_DC and combatant.heroic_inspiration:
 		state.pending = InspirationWindow.for_death_save(combatant, natural)
 		return []
-	return resolve_death_save(state, combatant, natural)
+	var events := resolve_death_save(state, combatant, natural)
+	if roll.luck_rerolls > 0:
+		for event in events:
+			if event is DeathSaveEvent:
+				(event as DeathSaveEvent).lucky = true
+	return events
 
 
 ## Applique le résultat définitif d'un jet contre la mort.

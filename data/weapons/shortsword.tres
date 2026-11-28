@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="1_shortsword"]
+
+[resource]
+script = ExtResource("1_shortsword")
+id = &"shortsword"
+display_name = "Épée courte"
+damage_dice = "1d6"
+damage_type = 7
+ability = 1
+properties = Array[StringName]([&"finesse", &"light"])
+mastery = &"vex"

@@ -17,6 +17,9 @@ const BONUS_ACTION_AVAILABLE := "Action bonus : disponible"
 const BONUS_ACTION_USED := "Action bonus : utilisée"
 const SECOND_WIND := "Second souffle"
 const HEROIC_INSPIRATION := "Inspiration héroïque"
+const SNEAK_ATTACK := "Attaque sournoise"
+const LUCK_NOTE := " (Chance : 1 relancé)"
+const OFF_HAND_HINT := "Main libre (action bonus) : "
 const DEATH_SAVES := "Jets contre la mort"
 const UNCONSCIOUS_TURN := "Inconscient : jet contre la mort au début de chaque tour."
 const EFFECTS := "Effets"
@@ -127,6 +130,8 @@ const REASONS: Dictionary[StringName, String] = {
 	Action.NO_TARGET: "Aucune cible à attaquer ici.",
 	Action.PRONE: "À terre : relevez-vous d'abord.",
 	Action.NOT_PRONE: "Vous n'êtes pas à terre.",
+	Action.NO_OFF_HAND_ATTACK: "Attaque de la main libre : attaquez d'abord avec une arme Légère (action Attaque).",
+	Action.OFF_HAND_WEAPON: "Main libre : il faut une autre arme Légère que celle qui a déjà frappé.",
 }
 
 ## Identifiant de Second Wind dans la barre d'actions.
@@ -167,6 +172,7 @@ const EFFECT_NAMES: Dictionary[StringName, String] = {
 	Effect.SLOWED: "Ralenti",
 	Effect.HIDDEN: "Caché",
 	Effect.PRONE: "À terre",
+	Effect.VEXED: "Exposé (Vex)",
 }
 
 const EFFECT_APPLIED_LOG: Dictionary[StringName, String] = {
@@ -176,6 +182,7 @@ const EFFECT_APPLIED_LOG: Dictionary[StringName, String] = {
 	Effect.SLOWED: "%s est ralenti (Slow) : 10 ft (2 cases) de vitesse en moins.",
 	Effect.HIDDEN: "%s se cache.",
 	Effect.PRONE: "%s tombe à terre.",
+	Effect.VEXED: "%s est exposé (Vex) : avantage à la prochaine attaque de celui qui l'a touché.",
 }
 
 const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
@@ -185,6 +192,7 @@ const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
 	Effect.SLOWED: "%s n'est plus ralenti.",
 	Effect.HIDDEN: "%s n'est plus caché.",
 	Effect.PRONE: "%s se relève.",
+	Effect.VEXED: "%s n'est plus exposé (Vex).",
 }
 
 ## Maîtrises d'arme, nommées comme dans le SRD 5.2.1 (en anglais).
@@ -214,6 +222,7 @@ const EFFECT_BADGES: Dictionary[StringName, String] = {
 	Effect.SLOWED: "R",
 	Effect.HIDDEN: "C",
 	Effect.PRONE: "T",
+	Effect.VEXED: "V",
 }
 
 ## Raisons d'avantage ou de désavantage, affichées après le jet.
@@ -228,6 +237,7 @@ const ADVANTAGE_REASONS: Dictionary[StringName, String] = {
 	AdvantageResolver.TARGET_PRONE: "cible à terre au contact",
 	AdvantageResolver.TARGET_PRONE_FAR: "cible à terre, de loin",
 	AdvantageResolver.ATTACKER_PRONE: "attaquant à terre",
+	AdvantageResolver.TARGET_VEXED: "Vex",
 }
 
 ## Causes de mort, pour le journal.
@@ -298,9 +308,13 @@ static func bonus_action_line(used: bool) -> String:
 	return BONUS_ACTION_USED if used else BONUS_ACTION_AVAILABLE
 
 
-## « Second souffle : 2 / 2 · Inspiration héroïque : oui ».
-static func resources_line(combatant: Combatant) -> String:
+## « Second souffle : 2 / 2 · Inspiration héroïque : oui ». Pour le
+## Roublard : « Attaque sournoise : disponible ». `sneak_attack_used` : déjà
+## servie ce tour-ci.
+static func resources_line(combatant: Combatant, sneak_attack_used: bool = false) -> String:
 	var parts: PackedStringArray = []
+	if not combatant.definition.sneak_attack_dice.is_empty():
+		parts.append("%s (%s) : %s" % [SNEAK_ATTACK, combatant.definition.sneak_attack_dice, "utilisée ce tour-ci" if sneak_attack_used else "disponible"])
 	if combatant.definition.second_wind_uses > 0:
 		parts.append("%s : %d / %d" % [SECOND_WIND, combatant.second_wind_uses, combatant.definition.second_wind_uses])
 	if combatant.definition.heroic_inspiration:
@@ -405,6 +419,8 @@ static func attack_hint(target: Combatant, weapon: WeaponDef, estimate: AttackEs
 		line += " (toujours critique)"
 	if estimate.graze_damage > 0:
 		line += " ; Graze : %d si raté" % estimate.graze_damage
+	if estimate.sneak_attack:
+		line += " ; %s comprise" % SNEAK_ATTACK
 	if estimate.cover_bonus > 0:
 		line += " ; %s" % cover_text(estimate.cover_bonus)
 	return line + _advantage_detail(estimate.advantage)
@@ -439,8 +455,31 @@ static func initiative_line(entries: Array[InitiativeEntry]) -> String:
 		if entry.roll.rolls.size() > 1:
 			var why := "caché, avantage" if entry.roll.mode == Dice.RollMode.ADVANTAGE else "surpris, désavantage"
 			roll = "%d [%s ; %s]" % [entry.d20, ", ".join(entry.roll.rolls.map(str)), why]
-		parts.append("%s %d (%s %s)" % [entry.combatant.display_name, entry.total, roll, signed(entry.bonus)])
+		if entry.roll.luck_rerolls > 0:
+			roll += LUCK_NOTE
+		if entry.swapped:
+			parts.append("%s %d (échange Alert)" % [entry.combatant.display_name, entry.total])
+		else:
+			parts.append("%s %d (%s %s)" % [entry.combatant.display_name, entry.total, roll, signed(entry.bonus)])
 	return "Initiative : %s." % ", ".join(parts)
+
+
+## Question d'Alert, juste après l'initiative.
+static func initiative_swap_prompt(decider: Combatant, ally: Combatant, state: CombatState) -> String:
+	return "Échanger votre initiative (%d) avec celle de %s (%d) ? (Alert)" % [
+		_initiative_of(decider, state), ally.display_name, _initiative_of(ally, state),
+	]
+
+
+static func _initiative_of(combatant: Combatant, state: CombatState) -> int:
+	for entry in state.initiative:
+		if entry.combatant == combatant:
+			return entry.total
+	return 0
+
+
+static func initiative_swapped_line(event: InitiativeSwappedEvent) -> String:
+	return "Alert : %s échange son initiative avec %s." % [event.combatant.display_name, event.ally.display_name]
 
 
 static func turn_line(event: TurnStartedEvent) -> String:
@@ -460,6 +499,8 @@ static func attack_summary(result: AttackResult) -> String:
 		verb = "attaque à l'aveugle"
 	elif result.is_opportunity:
 		verb = "attaque d'opportunité"
+	elif result.off_hand:
+		verb = "attaque de la main libre"
 	elif result.is_ranged:
 		verb = "lance" if result.weapon.has_property(WeaponDef.THROWN) else "tire"
 	var outcome := "raté"
@@ -478,6 +519,8 @@ static func attack_detail(result: AttackResult) -> String:
 	var roll := str(result.d20.natural)
 	if result.d20.rolls.size() > 1:
 		roll = "%d [%s]" % [result.d20.natural, ", ".join(result.d20.rolls.map(str))]
+	if result.d20.luck_rerolls > 0:
+		roll += LUCK_NOTE
 	var line := "%s %s = %d contre %s %d" % [roll, signed(result.attack_bonus), result.attack_total, ARMOR_CLASS, result.target_armor_class]
 	if result.cover_bonus > 0:
 		line += " (%s)" % cover_text(result.cover_bonus)
@@ -487,6 +530,8 @@ static func attack_detail(result: AttackResult) -> String:
 			line += " ; meilleur de deux jets, l'autre faisait %d" % result.discarded_damage_roll.total
 		if result.advantage_damage_roll != null:
 			line += " ; avec l'avantage, %s" % _damage_detail(result.advantage_damage_roll)
+		if result.sneak_attack_roll != null:
+			line += " ; %s, %s" % [SNEAK_ATTACK, _damage_detail(result.sneak_attack_roll)]
 	return line + _advantage_detail(result.advantage)
 
 
@@ -526,8 +571,8 @@ static func hide_line(event: HideAttemptedEvent) -> String:
 	var how := " (Nimble Escape)" if event.bonus_action else ""
 	if event.success:
 		return "%s se cache%s : invisible tant qu'on ne l'a pas trouvé." % [name, how]
-	return "%s tente de se cacher%s : Discrétion %d %s = %d contre DD %d, raté." % [
-		name, how, event.d20, signed(event.bonus), event.total, CombatState.HIDE_DC,
+	return "%s tente de se cacher%s : Discrétion %d%s %s = %d contre DD %d, raté." % [
+		name, how, event.d20, LUCK_NOTE if event.lucky else "", signed(event.bonus), event.total, CombatState.HIDE_DC,
 	]
 
 
@@ -548,7 +593,7 @@ static func revealed_line(event: RevealedEvent) -> String:
 
 static func search_line(event: SearchedEvent) -> String:
 	var name := event.combatant.display_name
-	var roll := "Perception %d %s = %d" % [event.d20, signed(event.bonus), event.total]
+	var roll := "Perception %d%s %s = %d" % [event.d20, LUCK_NOTE if event.lucky else "", signed(event.bonus), event.total]
 	if event.found.is_empty():
 		return "%s cherche (%s) : rien." % [name, roll]
 	var found: PackedStringArray = []
@@ -574,7 +619,7 @@ static func death_save_line(event: DeathSaveEvent) -> String:
 		outcome = "1 naturel, deux échecs"
 	elif event.natural < HitPoints.DEATH_SAVE_DC:
 		outcome = "échec"
-	return "Jet contre la mort de %s : %d, %s (%s)." % [name, event.natural, outcome, tally]
+	return "Jet contre la mort de %s : %d%s, %s (%s)." % [name, event.natural, LUCK_NOTE if event.lucky else "", outcome, tally]
 
 
 static func stabilized_line(event: CombatantStabilizedEvent) -> String:

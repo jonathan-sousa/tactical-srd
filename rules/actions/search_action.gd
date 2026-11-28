@@ -17,7 +17,9 @@ func _validate(state: CombatState) -> StringName:
 
 func _execute(state: CombatState, dice: Dice) -> Array[CombatEvent]:
 	state.action_used = true
-	var event := SearchedEvent.new(actor, dice.roll_die(20), actor.definition.skill_bonus(CharacterDef.PERCEPTION))
+	var roll := dice.roll_d20(Dice.RollMode.NORMAL, actor.is_lucky())
+	var event := SearchedEvent.new(actor, roll.natural, actor.definition.skill_bonus(CharacterDef.PERCEPTION))
+	event.lucky = roll.luck_rerolls > 0
 	var events: Array[CombatEvent] = [event]
 	for enemy in state.hidden_enemies_of(actor):
 		var dc := state.hide_dc(enemy)

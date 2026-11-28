@@ -10,6 +10,8 @@ var total: int
 var success: bool
 ## Par une action bonus (Nimble Escape du Gobelin) plutôt qu'une action.
 var bonus_action: bool
+## Un 1 a été relancé grâce à la Chance du Halfelin (`d20` est le nouveau jet).
+var lucky: bool = false
 
 
 func _init(p_combatant: Combatant, p_d20: int, p_bonus: int, p_success: bool, p_bonus_action: bool) -> void:

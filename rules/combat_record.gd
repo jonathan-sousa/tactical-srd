@@ -27,6 +27,8 @@ const OPPORTUNITY_ATTACK := "opportunity_attack"
 const DECLINE_REACTION := "decline_reaction"
 const USE_INSPIRATION := "use_inspiration"
 const DECLINE_INSPIRATION := "decline_inspiration"
+const SWAP_INITIATIVE := "swap_initiative"
+const DECLINE_SWAP := "decline_swap"
 
 var seed_value: int = 0
 var encounter_id: StringName
@@ -57,7 +59,7 @@ static func encode(action: Action) -> Dictionary:
 		return {"type": MOVE, "cell": _cell_to_array((action as MoveAction).destination)}
 	if action is AttackAction:
 		var attack := action as AttackAction
-		return {"type": ATTACK, "cell": _cell_to_array(attack.cell), "weapon": str(attack.weapon.id), "blind": attack.is_blind()}
+		return {"type": ATTACK, "cell": _cell_to_array(attack.cell), "weapon": str(attack.weapon.id), "blind": attack.is_blind(), "off_hand": attack.off_hand}
 	if action is StandardAction:
 		var standard := action as StandardAction
 		return {"type": STANDARD, "kind": str(standard.kind), "bonus": standard.bonus_action}
@@ -79,6 +81,10 @@ static func encode(action: Action) -> Dictionary:
 		return {"type": USE_INSPIRATION}
 	if action is DeclineInspirationAction:
 		return {"type": DECLINE_INSPIRATION}
+	if action is SwapInitiativeAction:
+		return {"type": SWAP_INITIATIVE, "ally": _cell_to_array((action as SwapInitiativeAction).ally.position)}
+	if action is DeclineSwapAction:
+		return {"type": DECLINE_SWAP}
 	return {}
 
 
@@ -92,12 +98,20 @@ static func decode(entry: Dictionary, actor: Combatant, state: CombatState) -> A
 		ATTACK:
 			var cell: Variant = _array_to_cell(entry.get("cell"))
 			var weapon := _weapon(actor, entry.get("weapon"))
-			if cell == null or weapon == null or typeof(entry.get("blind")) != TYPE_BOOL:
+			# `off_hand` : absent des enregistrements d'avant le Roublard.
+			var off_hand: Variant = entry.get("off_hand", false)
+			if cell == null or weapon == null or typeof(entry.get("blind")) != TYPE_BOOL or typeof(off_hand) != TYPE_BOOL:
 				return null
+			var attack: AttackAction
 			if entry["blind"]:
-				return AttackAction.at_cell(actor, cell, weapon)
-			var target := state.combatant_at(cell)
-			return AttackAction.new(actor, target, weapon) if target != null else null
+				attack = AttackAction.at_cell(actor, cell, weapon)
+			else:
+				var target := state.combatant_at(cell)
+				if target == null:
+					return null
+				attack = AttackAction.new(actor, target, weapon)
+			attack.off_hand = off_hand
+			return attack
 		STANDARD:
 			var kind: Variant = entry.get("kind")
 			if typeof(kind) != TYPE_STRING or not StandardAction.ALL.has(StringName(kind)) or typeof(entry.get("bonus")) != TYPE_BOOL:
@@ -121,6 +135,14 @@ static func decode(entry: Dictionary, actor: Combatant, state: CombatState) -> A
 			return UseInspirationAction.new(actor)
 		DECLINE_INSPIRATION:
 			return DeclineInspirationAction.new(actor)
+		SWAP_INITIATIVE:
+			# L'allié est désigné par sa case : au début du combat, chacun est
+			# sur sa case de départ.
+			var ally_cell: Variant = _array_to_cell(entry.get("ally"))
+			var ally := state.combatant_at(ally_cell) if ally_cell != null else null
+			return SwapInitiativeAction.new(actor, ally) if ally != null else null
+		DECLINE_SWAP:
+			return DeclineSwapAction.new(actor)
 	return null
 
 

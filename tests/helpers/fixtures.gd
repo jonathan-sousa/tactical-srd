@@ -66,6 +66,18 @@ static func scimitar() -> WeaponDef:
 	return weapon
 
 
+static func shortsword() -> WeaponDef:
+	var weapon := WeaponDef.new()
+	weapon.id = &"shortsword"
+	weapon.display_name = "Épée courte"
+	weapon.damage_dice = "1d6"
+	weapon.damage_type = DamageType.Type.PIERCING
+	weapon.ability = Abilities.Ability.DEXTERITY
+	weapon.properties = [WeaponDef.FINESSE, WeaponDef.LIGHT]
+	weapon.mastery = WeaponDef.VEX
+	return weapon
+
+
 static func dagger() -> WeaponDef:
 	var weapon := WeaponDef.new()
 	weapon.id = &"dagger"
@@ -116,6 +128,7 @@ static func goblin() -> CharacterDef:
 	def.initiative_bonus = 2
 	def.weapons = [scimitar()]
 	def.is_monster = true
+	def.size = CharacterDef.Size.SMALL
 	return def
 
 
@@ -160,6 +173,37 @@ static func full_fighter() -> CharacterDef:
 	def.second_wind_uses = 2
 	def.heroic_inspiration = true
 	def.skill_bonuses = {CharacterDef.PERCEPTION: 3}
+	return def
+
+
+## Roublard halfelin, conforme à data/characters/rogue_lvl1.tres : épée
+## courte, arc court (20 flèches), 2 dagues, Attaque sournoise 1d6, Vex,
+## Chance, Discrétion naturelle et Alert.
+static func rogue() -> CharacterDef:
+	var def := CharacterDef.new()
+	def.id = &"rogue_lvl1"
+	def.display_name = "Roublard"
+	def.strength = 8
+	def.dexterity = 17
+	def.constitution = 15
+	def.intelligence = 12
+	def.wisdom = 13
+	def.charisma = 10
+	def.size = CharacterDef.Size.SMALL
+	def.max_hp = 10
+	def.armor_class = 14
+	def.speed_feet = 30
+	def.proficiency_bonus = 2
+	def.initiative_bonus = 5
+	def.weapons = [shortsword(), shortbow(), dagger()]
+	def.weapon_quantities = {&"dagger": 2, &"shortbow": 20}
+	def.species = "Halfelin"
+	def.background = "Criminel"
+	def.feats = [CharacterDef.ALERT]
+	def.weapon_masteries = [&"shortsword", &"shortbow"]
+	def.traits = [CharacterDef.HALFLING_LUCK, CharacterDef.NATURALLY_STEALTHY]
+	def.sneak_attack_dice = "1d6"
+	def.skill_bonuses = {CharacterDef.STEALTH: 7, CharacterDef.PERCEPTION: 5}
 	return def
 
 

@@ -12,6 +12,9 @@ var successes: int
 var failures: int
 ## 20 naturel : le combattant regagne 1 PV et reprend connaissance.
 var revived: bool
+## Un 1 a été relancé grâce à la Chance du Halfelin (`natural` est le
+## nouveau jet).
+var lucky: bool = false
 
 
 func _init(p_combatant: Combatant, p_natural: int, p_critical: bool = false, p_revived: bool = false) -> void:

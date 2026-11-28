@@ -22,6 +22,9 @@ var advantage: AdvantageResult
 var is_opportunity: bool = false
 ## Attaque à distance (tir ou lancer) plutôt qu'au corps à corps.
 var is_ranged: bool = false
+## Attaque de la main libre (propriété Light), en action bonus : sans le
+## modificateur de caractéristique aux dégâts, sauf s'il est négatif.
+var off_hand: bool = false
 
 var is_hit: bool = false
 var is_critical: bool = false
@@ -38,6 +41,8 @@ var damage_type: DamageType.Type
 var discarded_damage_roll: DiceRoll
 ## Dés en plus quand l'attaque a l'avantage (+1d4 du Gobelin), ou `null`.
 var advantage_damage_roll: DiceRoll
+## Attaque sournoise du Roublard, ou `null`.
+var sneak_attack_roll: DiceRoll
 ## Great Weapon Fighting appliqué aux dés de dégâts ?
 var great_weapon_fighting: bool = false
 ## Maîtrise Graze : dégâts infligés malgré l'échec (0 sinon).

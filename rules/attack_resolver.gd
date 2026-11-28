@@ -47,7 +47,7 @@ static func roll_attack(
 	result.attack_bonus = attacker.attack_bonus(weapon)
 	result.cover_bonus = cover_bonus
 	result.target_armor_class = target.armor_class() + cover_bonus
-	_apply_d20(result, dice.roll_d20(mode))
+	_apply_d20(result, dice.roll_d20(mode, attacker.is_lucky()))
 	return result
 
 
@@ -64,6 +64,7 @@ static func with_d20(previous: AttackResult, d20: D20Roll) -> AttackResult:
 	result.advantage = previous.advantage
 	result.is_opportunity = previous.is_opportunity
 	result.is_ranged = previous.is_ranged
+	result.off_hand = previous.off_hand
 	result.critical_on_hit = previous.critical_on_hit
 	_apply_d20(result, d20)
 	return result
@@ -77,7 +78,11 @@ static func with_d20(previous: AttackResult, d20: D20Roll) -> AttackResult:
 static func roll_damage(result: AttackResult, dice: Dice, great_weapon_fighting: bool = false, savage_attacker: bool = false) -> void:
 	var weapon_dice := DiceExpression.parse(result.weapon.damage_dice)
 	assert(weapon_dice != null, "Dés de dégâts invalides pour %s : %s" % [result.weapon.id, result.weapon.damage_dice])
-	var expression := weapon_dice.with_modifier(result.attacker.damage_modifier(result.weapon))
+	var modifier := result.attacker.damage_modifier(result.weapon)
+	# Main libre : pas de modificateur, sauf s'il est négatif.
+	if result.off_hand:
+		modifier = mini(modifier, 0)
+	var expression := weapon_dice.with_modifier(modifier)
 	if result.is_critical:
 		expression = expression.with_doubled_dice()
 
@@ -101,6 +106,17 @@ static func roll_damage(result: AttackResult, dice: Dice, great_weapon_fighting:
 			extra = extra.with_doubled_dice()
 		result.advantage_damage_roll = dice.roll(extra)
 		result.damage += result.advantage_damage_roll.total
+
+
+## Attaque sournoise : ses dés s'ajoutent aux dégâts d'une touche (doublés
+## au critique, comme tous les dés de l'attaque).
+static func roll_sneak_attack(result: AttackResult, dice: Dice) -> void:
+	var sneak := DiceExpression.parse(result.attacker.definition.sneak_attack_dice)
+	assert(sneak != null, "Dés d'Attaque sournoise invalides pour %s" % result.attacker.definition.id)
+	if result.is_critical:
+		sneak = sneak.with_doubled_dice()
+	result.sneak_attack_roll = dice.roll(sneak)
+	result.damage += result.sneak_attack_roll.total
 
 
 static func _apply_d20(result: AttackResult, d20: D20Roll) -> void:

@@ -20,6 +20,7 @@ static func begin(
 	dice: Dice,
 	is_opportunity: bool = false,
 	resume: ReactionWindow = null,
+	off_hand: bool = false,
 ) -> Array[CombatEvent]:
 	var kind := state.attack_kind(attacker, target, weapon)
 	_spend_thrown_weapon(attacker, weapon, kind)
@@ -29,15 +30,19 @@ static func begin(
 	result.advantage = advantage
 	result.is_opportunity = is_opportunity
 	result.is_ranged = kind == CombatState.AttackKind.RANGED
+	result.off_hand = off_hand
 
 	# Un attaquant caché trahit sa position par son jet, qu'il touche ou
 	# non (SRD « Unseen Attackers and Targets ») : on l'annonce d'abord.
 	var events := state.reveal(attacker, RevealedEvent.ATTACKED)
 	events.append(AttackRolledEvent.new(result))
 
-	# Sap : le désavantage ne vaut que pour une attaque.
+	# Sap : le désavantage ne vaut que pour une attaque. Vex : l'avantage non
+	# plus, et seulement pour celui qui a touché.
 	if state.remove_effect(attacker, Effect.SAPPED):
 		events.append(EffectEndedEvent.new(attacker, Effect.SAPPED))
+	if state.remove_effect_from(target, Effect.VEXED, attacker):
+		events.append(EffectEndedEvent.new(target, Effect.VEXED))
 
 	if not result.is_hit and attacker.heroic_inspiration:
 		state.pending = InspirationWindow.for_attack(result, resume)
@@ -77,6 +82,9 @@ static func finish(state: CombatState, result: AttackResult, dice: Dice) -> Arra
 	if savage_attacker:
 		attacker.savage_attacker_turn = state.turn_count
 	AttackResolver.roll_damage(result, dice, great_weapon_fighting, savage_attacker)
+	if sneak_attack_applies(state, attacker, target, weapon, result.d20.mode):
+		attacker.sneak_attack_turn = state.turn_count
+		AttackResolver.roll_sneak_attack(result, dice)
 	events.append_array(HitPoints.apply_damage(state, target, result.damage, result.damage_type, false, result.is_critical))
 	if target.is_down():
 		return events
@@ -87,7 +95,29 @@ static func finish(state: CombatState, result: AttackResult, dice: Dice) -> Arra
 		WeaponDef.SLOW:
 			if result.damage > 0:
 				events.append_array(state.apply_effect(Effect.new(Effect.SLOWED, target, attacker, Effect.Expiry.START_OF_SOURCE_TURN)))
+		WeaponDef.VEX:
+			if result.damage > 0:
+				events.append_array(state.apply_effect(Effect.new(Effect.VEXED, target, attacker, Effect.Expiry.END_OF_SOURCE_NEXT_TURN)))
 	return events
+
+
+## Attaque sournoise (Roublard), une fois par tour : arme Finesse ou à
+## distance, et l'avantage, ou bien un allié non neutralisé à 5 ft de la
+## cible sans désavantage. `mode` : avantage ou désavantage du jet.
+static func sneak_attack_applies(state: CombatState, attacker: Combatant, target: Combatant, weapon: WeaponDef, mode: Dice.RollMode) -> bool:
+	if attacker.definition.sneak_attack_dice.is_empty() or attacker.sneak_attack_turn == state.turn_count:
+		return false
+	if not weapon.has_property(WeaponDef.FINESSE) and weapon.kind != WeaponDef.Kind.RANGED:
+		return false
+	if mode == Dice.RollMode.ADVANTAGE:
+		return true
+	if mode == Dice.RollMode.DISADVANTAGE:
+		return false
+	for ally in state.combatants:
+		if ally != attacker and ally.side == attacker.side and not ally.is_down() \
+				and GridPathfinder.chebyshev(ally.position, target.position) <= 1:
+			return true
+	return false
 
 
 ## Condition Unconscious : toute touche à 5 ft ou moins est un critique.

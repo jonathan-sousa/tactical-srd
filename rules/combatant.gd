@@ -27,6 +27,8 @@ var heroic_inspiration: bool
 var quantities: Dictionary[StringName, int] = {}
 ## Numéro du dernier tour où Savage Attacker a servi (une fois par tour).
 var savage_attacker_turn: int = -1
+## Numéro du dernier tour où l'Attaque sournoise a servi (une fois par tour).
+var sneak_attack_turn: int = -1
 
 # À 0 PV (SRD « Dropping to 0 Hit Points ») : un monstre meurt aussitôt, un
 # personnage perd connaissance et fait des jets contre la mort.
@@ -82,6 +84,11 @@ func take_damage(amount: int) -> int:
 	return lost
 
 
+## Chance du Halfelin : ses 1 au d20 sont relancés.
+func is_lucky() -> bool:
+	return definition.has_trait(CharacterDef.HALFLING_LUCK)
+
+
 ## Nom court (CharacterDef.short_name), numéroté comme `display_name`.
 func short_name() -> String:
 	var base := definition.short_name if not definition.short_name.is_empty() else definition.display_name
@@ -109,8 +116,13 @@ func reset_death_saves() -> void:
 
 
 ## Exemplaires restants de cette arme (1 pour une arme qui ne s'épuise pas).
+## Pour une arme à munitions (arc court), ce sont ses munitions.
 func quantity(weapon: WeaponDef) -> int:
-	return quantities.get(weapon.id, 1)
+	return quantity_of(weapon.id)
+
+
+func quantity_of(id: StringName) -> int:
+	return quantities.get(id, 1)
 
 
 ## Arme de corps à corps par défaut, pour attaquer comme pour les attaques

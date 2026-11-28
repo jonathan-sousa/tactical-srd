@@ -15,7 +15,7 @@ static func roll_order(
 ) -> Array[InitiativeEntry]:
 	var entries: Array[InitiativeEntry] = []
 	for combatant in combatants:
-		var roll := dice.roll_d20(modes.get(combatant, Dice.RollMode.NORMAL))
+		var roll := dice.roll_d20(modes.get(combatant, Dice.RollMode.NORMAL), combatant.is_lucky())
 		entries.append(InitiativeEntry.new(combatant, roll, combatant.definition.initiative_bonus))
 
 	# sort_custom n'est pas un tri stable : on garde la position d'origine

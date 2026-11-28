@@ -20,7 +20,7 @@ func _ready() -> void:
 	var tween := create_tween().set_loops()
 	tween.tween_property(_press_key_label, "modulate:a", 0.3, 0.8)
 	tween.tween_property(_press_key_label, "modulate:a", 1.0, 0.8)
-	if Autoplay.enabled:
+	if Autoplay.drives_menus():
 		Autoplay.later(self, _leave)
 
 
