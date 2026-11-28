@@ -64,7 +64,8 @@ static func create_party(p_encounter: EncounterDef, party_defs: Array[CharacterD
 	assert(party_defs.size() <= p_encounter.player_starts.size(), "Rencontre « %s » : pas assez de cases de départ pour le groupe." % p_encounter.id)
 	var state := CombatState.new()
 	state.encounter = p_encounter
-	state.pathfinder = GridPathfinder.new(p_encounter.grid_size, p_encounter.blocked_cells)
+	# Un muret bloque le passage comme un obstacle, mais pas la vue.
+	state.pathfinder = GridPathfinder.new(p_encounter.grid_size, p_encounter.blocked_cells + p_encounter.low_walls)
 	state.line_of_sight = LineOfSight.new(p_encounter.blocked_cells)
 	for i in party_defs.size():
 		var member := Combatant.new(party_defs[i], Combatant.Side.PLAYER, p_encounter.player_starts[i])
@@ -100,6 +101,9 @@ func party() -> Array[Combatant]:
 			members.append(combatant)
 	return members
 
+
+## Abri partiel (SRD « Cover ») : +2 à la CA.
+const HALF_COVER_BONUS := 2
 
 ## DD de l'action Se cacher (SRD « Hide »).
 const HIDE_DC := 15
@@ -153,6 +157,26 @@ func speed_in_squares(combatant: Combatant) -> int:
 	if has_effect(combatant, Effect.SLOWED):
 		squares -= SLOW_SQUARES
 	return maxi(squares, 0)
+
+
+## Bonus d'abri de `target` contre une attaque de `attacker` depuis sa case.
+func cover_bonus(attacker: Combatant, target: Combatant) -> int:
+	return cover_between(attacker, attacker.position, target, target.position)
+
+
+## Bonus d'abri de `target` en `to` contre `attacker` en `from` : abri
+## partiel si le segment entre les centres des deux cases traverse un muret
+## ou la case d'une autre créature vivante, alliée ou ennemie (SRD « Cover »).
+## Une créature cachée de l'attaquant ne compte pas : il ignore qu'elle est
+## là. Les obstacles, eux, sont un abri total : on ne peut pas viser à
+## travers (voir `has_line_of_sight_to`). Écart : voir docs/rules-deviations.md.
+func cover_between(attacker: Combatant, from: Vector2i, target: Combatant, to: Vector2i) -> int:
+	var screens: Array[Vector2i] = encounter.low_walls.duplicate()
+	for combatant in combatants:
+		if combatant == attacker or combatant == target or combatant.is_dead or is_hidden_from(combatant, attacker):
+			continue
+		screens.append(combatant.position)
+	return HALF_COVER_BONUS if LineOfSight.crosses_any(from, to, screens) else 0
 
 
 ## Combattant vivant sur cette case (même inconscient ou caché), ou `null`.

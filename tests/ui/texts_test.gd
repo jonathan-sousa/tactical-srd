@@ -198,3 +198,10 @@ func test_every_reveal_reason_has_its_own_line() -> void:
 	assert_int(lines.size()).is_equal(5)
 	var seen := Texts.revealed_line(RevealedEvent.new(goblin, Vector2i.ZERO, RevealedEvent.SEEN, fighter))
 	assert_str(seen).contains(fighter.definition.display_name)
+
+
+func test_cover_is_shown_next_to_the_armor_class() -> void:
+	var goblin := Combatant.new(Fixtures.goblin(), Combatant.Side.ENEMY)
+	var fighter := Combatant.new(Fixtures.fighter(), Combatant.Side.PLAYER)
+	var result := AttackResolver.roll_attack(goblin, fighter, Fixtures.scimitar(), FixedDice.new([13]), Dice.RollMode.NORMAL, false, CombatState.HALF_COVER_BONUS)
+	assert_str(Texts.attack_detail(result)).is_equal("13 + 4 = 17 contre CA 18 (abri partiel, +2 CA)")

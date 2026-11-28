@@ -22,8 +22,9 @@ func _encounters() -> Array[EncounterDef]:
 	return found
 
 
+## Grille du déplacement : obstacles et murets bloquent le passage.
 func _grid(encounter: EncounterDef) -> GridPathfinder:
-	return GridPathfinder.new(encounter.grid_size, encounter.blocked_cells)
+	return GridPathfinder.new(encounter.grid_size, encounter.blocked_cells + encounter.low_walls)
 
 
 func test_grids_fit_the_board() -> void:
@@ -39,9 +40,9 @@ func test_each_has_at_least_one_enemy_with_a_definition() -> void:
 			assert_object(placement.character).is_not_null()
 
 
-func test_blocked_cells_are_inside_the_grid() -> void:
+func test_blocked_cells_and_low_walls_are_inside_the_grid() -> void:
 	for encounter in _encounters():
-		for cell in encounter.blocked_cells:
+		for cell in encounter.blocked_cells + encounter.low_walls:
 			assert_bool(_grid(encounter).is_inside(cell)).override_failure_message("%s : obstacle hors grille %s" % [encounter.id, cell]).is_true()
 
 
@@ -103,3 +104,23 @@ func test_goblin_band_is_two_warriors_and_two_minions_against_two_characters() -
 	for placement in encounter.enemies:
 		ids.append(placement.character.id)
 	assert_array(ids).contains_exactly_in_any_order([&"goblin_minion", &"goblin_minion", &"goblin_warrior", &"goblin_warrior"])
+
+
+func test_low_walls_are_not_also_obstacles() -> void:
+	for encounter in _encounters():
+		for cell in encounter.low_walls:
+			assert_bool(encounter.blocked_cells.has(cell)).override_failure_message("%s : %s est obstacle et muret" % [encounter.id, cell]).is_false()
+
+
+func test_goblin_band_archers_start_behind_low_walls() -> void:
+	# Abri partiel des gobelins guerriers contre les tirs venus des cases de
+	# départ du groupe.
+	var registry := DataRegistry.load_from()
+	var fighter := registry.character(&"fighter_lvl1")
+	var party: Array[CharacterDef] = [fighter, fighter]
+	var state := CombatState.create_party(registry.encounter(&"goblin_band"), party)
+	for archer in state.combatants:
+		if archer.definition.id != &"goblin_warrior":
+			continue
+		for member in state.party():
+			assert_int(state.cover_bonus(member, archer)).override_failure_message("%s sans abri contre %s" % [archer.display_name, member.display_name]).is_equal(CombatState.HALF_COVER_BONUS)

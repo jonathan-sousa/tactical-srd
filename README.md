@@ -11,7 +11,7 @@ Le jeu enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (G
 Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officielle en regard, dans `docs/rules-deviations.md`.
 
 - **Tour de combat** : déplacement case par case, action, action bonus, réaction ; Foncer, Se désengager, Esquiver, Chercher, Se relever.
-- **Attaques** : au corps à corps, à distance et lancées, portées normale et longue, désavantage avec un ennemi au contact, ligne de vue (un obstacle est un abri total), avantage et désavantage qui s'annulent, coups critiques, attaques d'opportunité (le joueur est consulté à chaque fois).
+- **Attaques** : au corps à corps, à distance et lancées, portées normale et longue, désavantage avec un ennemi au contact, ligne de vue (un obstacle est un abri total), abri partiel (+2 CA derrière un muret ou une autre créature), avantage et désavantage qui s'annulent, coups critiques, attaques d'opportunité (le joueur est consulté à chaque fois).
 - **Guerrier humain niveau 1, historique Soldat** : Great Weapon Fighting, Second Wind, Weapon Mastery (épée à deux mains : Graze, fléau : Sap, javelots : Slow), Savage Attacker, Inspiration héroïque.
 - **Gobelin guerrier** : cimeterre et arc court, +1d4 dégâts avec l'avantage, Nimble Escape (se désengager ou se cacher par une action bonus).
 - **Se cacher et chercher** : condition Invisible, attaque à l'aveugle d'une case, embuscade et surprise au début du combat. Un caché est trouvé par l'action Chercher, s'il finit son tour en vue d'un ennemi, si un ennemi finit son déplacement en vue de lui, par une Perception passive suffisante ou si on le heurte (règles de MJ, voir `docs/rules-deviations.md`).
