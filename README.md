@@ -8,6 +8,20 @@ Le jeu enchaîne un écran titre, un menu, une intro narrative, deux combats et 
 
 Le sprint 2 a peaufiné le combat 1v1 du départ (règles complètes du Guerrier et du Gobelin, prévisions, graphismes, son, export Windows). Le sprint 3 « Escouade » a ajouté le groupe, le Roublard, la bande, l'abri partiel et l'action Aider.
 
+## Aperçu
+
+![Tour du Roublard : au survol d'un sbire au contact du Guerrier, la prévision donne les chances de toucher et les dégâts, Attaque sournoise comprise.](docs/screenshots/combat-prevision.png)
+
+*Le tour de Tobin, le Roublard : survoler un ennemi affiche les chances de toucher et les dégâts possibles. Le sbire est au contact du Guerrier, donc l'Attaque sournoise est comptée.*
+
+![Combat contre la bande : un sbire est mort, le Guerrier est à terre, le gobelin guerrier tire depuis sa palissade.](docs/screenshots/combat-bande.png)
+
+*La bande, derrière ses palissades : le gobelin guerrier tire avec l'avantage depuis sa cachette, et le journal détaille chaque jet, abri partiel compris.*
+
+![Dialogue : Tobin, le Roublard halfelin, relève des traces de pas.](docs/screenshots/dialogue.png)
+
+*Les dialogues de l'histoire, avec le portrait de chaque personnage.*
+
 ## Règles implémentées
 
 Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officielle en regard, dans `docs/rules-deviations.md`.
