@@ -15,7 +15,7 @@ signal combat_finished(winner: Combatant.Side)
 signal decision_answered(accepted: bool)
 
 ## Touches de la barre d'actions, dans l'ordre des boutons.
-const ACTION_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6]
+const ACTION_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8]
 ## Touches des armes, par position physique (les trois premières lettres de
 ## la rangée du haut : A Z E en AZERTY, Q W E en QWERTY).
 const WEAPON_KEYS: Array[Key] = [KEY_Q, KEY_W, KEY_E]
@@ -118,6 +118,9 @@ var _board_origin: Vector2
 ## Liste du groupe (PV et état de chaque personnage), au-dessus de la fiche
 ## du personnage commandé. Cachée quand il est seul.
 var _party_list: PartyList
+## Bouton Aider pressé : le prochain clic désigne l'ennemi à distraire ou
+## l'allié à stabiliser.
+var _help_armed := false
 
 
 func _ready() -> void:
@@ -487,6 +490,7 @@ func _register_event_handlers() -> void:
 		CombatantStabilizedEvent: _on_combatant_stabilized,
 		CombatantRecoveredEvent: _on_combatant_recovered,
 		CombatantDiedEvent: _on_combatant_died,
+		StabilizeAttemptedEvent: _on_stabilize_attempted,
 		InitiativeSwappedEvent: _on_initiative_swapped,
 	}
 
@@ -496,11 +500,20 @@ func _on_initiative_rolled(event: InitiativeRolledEvent) -> void:
 	_log.add_line(Texts.initiative_line(event.entries), LOG_MUTED_COLOR)
 
 
+func _on_stabilize_attempted(event: StabilizeAttemptedEvent) -> void:
+	_log.add_line(Texts.stabilize_line(event), LOG_HEAL_COLOR if event.success else LOG_MUTED_COLOR)
+	if event.success:
+		AudioManager.play(AudioManager.HEAL)
+	_tokens[event.patient].refresh()
+	_refresh()
+
+
 func _on_initiative_swapped(event: InitiativeSwappedEvent) -> void:
 	_log.add_line(Texts.initiative_swapped_line(event), LOG_MUTED_COLOR)
 
 
 func _on_turn_started(event: TurnStartedEvent) -> void:
+	_help_armed = false
 	if event.round != _logged_round:
 		_logged_round = event.round
 		_log.add_header(Texts.round_header(event.round))
@@ -703,6 +716,14 @@ func _is_player_turn() -> bool:
 func _on_cell_clicked(cell: Vector2i) -> void:
 	if not _is_player_turn():
 		return
+	if _help_armed:
+		_help_armed = false
+		var occupant := state.combatant_at(cell)
+		if occupant != null and not state.is_hidden_from(occupant, _player):
+			_perform(HelpAction.new(_player, occupant))
+		else:
+			_hint_label.text = ""
+		return
 	var action := _action_for_cell(cell)
 	if action != null:
 		_perform(action)
@@ -714,6 +735,10 @@ func _on_cell_clicked(cell: Vector2i) -> void:
 func _action_for_cell(cell: Vector2i) -> Action:
 	if cell == _player.position:
 		return null
+	# Un allié mourant au contact : on le stabilise (action Aider).
+	var ally := state.combatant_at(cell)
+	if ally != null and ally.side == _player.side and ally.is_dying():
+		return HelpAction.new(_player, ally)
 	var shown := _enemy_token_at(cell)
 	if shown != null and not state.is_hidden_from(shown, _player):
 		return _off_hand_or(AttackAction.new(_player, shown, _weapon))
@@ -765,8 +790,15 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 	if cell == BoardView.NO_CELL or cell == _player.position:
 		return
 
+	if _help_armed:
+		_hint_label.text = Texts.HELP_ARMED_HINT
+		return
 	var action := _action_for_cell(cell)
 	var reason := action.validate(state)
+	if action is HelpAction:
+		var help := action as HelpAction
+		_hint_label.text = Texts.stabilize_hint(_player, help.target) if reason.is_empty() else Texts.reason(reason)
+		return
 	if action is AttackAction:
 		var attack := action as AttackAction
 		if not reason.is_empty():
@@ -834,6 +866,8 @@ func _build_action_bar() -> void:
 		_action_factories[Texts.SECOND_WIND_ID] = func() -> Action: return SecondWindAction.new(_player)
 	_action_factories[SearchAction.ID] = func() -> Action: return SearchAction.new(_player)
 	_action_factories[StandUpAction.ID] = func() -> Action: return StandUpAction.new(_player)
+	_action_factories[HideAction.ID] = func() -> Action: return HideAction.new(_player)
+	_action_factories[HelpAction.ID] = _help_for_button
 	var i := 0
 	for id: StringName in _action_factories:
 		var button := _make_bar_button()
@@ -893,8 +927,35 @@ static func _physical_key_label(key: Key) -> String:
 
 
 func _on_action_pressed(id: StringName) -> void:
-	if _is_player_turn():
-		_perform(_action_factories[id].call())
+	if not _is_player_turn():
+		return
+	if id == HelpAction.ID:
+		# Une seule créature à aider : on l'aide. Sinon, on la désigne.
+		var targets := _help_targets()
+		if targets.size() == 1:
+			_perform(targets[0])
+		else:
+			_help_armed = not targets.is_empty()
+			_hint_label.text = Texts.HELP_ARMED_HINT if _help_armed else Texts.reason(_help_for_button().validate(state))
+		return
+	_perform(_action_factories[id].call())
+
+
+## Actions Aider possibles maintenant, une par créature au contact.
+func _help_targets() -> Array[HelpAction]:
+	var found: Array[HelpAction] = []
+	for combatant in state.combatants:
+		var help := HelpAction.new(_player, combatant)
+		if combatant != _player and help.validate(state).is_empty():
+			found.append(help)
+	return found
+
+
+## Pour le bouton Aider : une action valide s'il y en a, sinon une action
+## sans cible, refusée avec sa raison (action déjà prise, personne à aider).
+func _help_for_button() -> Action:
+	var targets := _help_targets()
+	return targets[0] if not targets.is_empty() else HelpAction.new(_player, null)
 
 
 func _on_weapon_pressed(weapon: WeaponDef) -> void:
@@ -903,6 +964,7 @@ func _on_weapon_pressed(weapon: WeaponDef) -> void:
 
 
 func _on_end_turn_pressed() -> void:
+	_help_armed = false
 	if _is_player_turn():
 		_perform(EndTurnAction.new(_player))
 

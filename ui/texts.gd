@@ -20,6 +20,7 @@ const HEROIC_INSPIRATION := "Inspiration héroïque"
 const SNEAK_ATTACK := "Attaque sournoise"
 const LUCK_NOTE := " (Chance : 1 relancé)"
 const OFF_HAND_HINT := "Main libre (action bonus) : "
+const HELP_ARMED_HINT := "Aider : cliquez un ennemi ou un allié mourant au contact (clic ailleurs pour annuler)."
 const DEATH_SAVES := "Jets contre la mort"
 const UNCONSCIOUS_TURN := "Inconscient : jet contre la mort au début de chaque tour."
 const EFFECTS := "Effets"
@@ -132,6 +133,7 @@ const REASONS: Dictionary[StringName, String] = {
 	Action.NOT_PRONE: "Vous n'êtes pas à terre.",
 	Action.NO_OFF_HAND_ATTACK: "Attaque de la main libre : attaquez d'abord avec une arme Légère (action Attaque).",
 	Action.OFF_HAND_WEAPON: "Main libre : il faut une autre arme Légère que celle qui a déjà frappé.",
+	Action.NOT_DYING: "Aider un allié : seulement s'il est mourant (à 0 PV, pas encore stabilisé).",
 }
 
 ## Identifiant de Second Wind dans la barre d'actions.
@@ -146,6 +148,7 @@ const ACTION_NAMES: Dictionary[StringName, String] = {
 	SearchAction.ID: "Chercher",
 	StandUpAction.ID: "Se relever",
 	HideAction.ID: "Se cacher",
+	HelpAction.ID: "Aider",
 }
 
 const ACTION_DESCRIPTIONS: Dictionary[StringName, String] = {
@@ -156,6 +159,7 @@ const ACTION_DESCRIPTIONS: Dictionary[StringName, String] = {
 	SearchAction.ID: "Test de Sagesse (Perception) : un ennemi caché dont vous atteignez le jet de Discrétion est trouvé.",
 	StandUpAction.ID: "À terre, se relever coûte la moitié de votre vitesse (3 cases).",
 	HideAction.ID: "Test de Dextérité (Discrétion) contre DD 15, hors de vue de tout ennemi.",
+	HelpAction.ID: "Au contact : distraire un ennemi (la prochaine attaque d'un allié contre lui a l'avantage), ou stabiliser un allié mourant (Sagesse (Médecine) DD 10).",
 }
 
 ## Journal : « Guerrier fonce. »
@@ -163,6 +167,7 @@ const ACTION_LOG: Dictionary[StringName, String] = {
 	StandardAction.DASH: "%s fonce : son déplacement double pour ce tour.",
 	StandardAction.DISENGAGE: "%s se désengage : pas d'attaque d'opportunité contre lui ce tour-ci.",
 	StandardAction.DODGE: "%s esquive : les attaques contre lui auront le désavantage.",
+	HelpAction.ID: "%s prend l'action Aider.",
 }
 
 const EFFECT_NAMES: Dictionary[StringName, String] = {
@@ -173,6 +178,7 @@ const EFFECT_NAMES: Dictionary[StringName, String] = {
 	Effect.HIDDEN: "Caché",
 	Effect.PRONE: "À terre",
 	Effect.VEXED: "Exposé (Vex)",
+	Effect.HELPED: "Distrait",
 }
 
 const EFFECT_APPLIED_LOG: Dictionary[StringName, String] = {
@@ -183,6 +189,7 @@ const EFFECT_APPLIED_LOG: Dictionary[StringName, String] = {
 	Effect.HIDDEN: "%s se cache.",
 	Effect.PRONE: "%s tombe à terre.",
 	Effect.VEXED: "%s est exposé (Vex) : avantage à la prochaine attaque de celui qui l'a touché.",
+	Effect.HELPED: "%s est distrait : la prochaine attaque d'un allié contre lui aura l'avantage.",
 }
 
 const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
@@ -193,6 +200,7 @@ const EFFECT_ENDED_LOG: Dictionary[StringName, String] = {
 	Effect.HIDDEN: "%s n'est plus caché.",
 	Effect.PRONE: "%s se relève.",
 	Effect.VEXED: "%s n'est plus exposé (Vex).",
+	Effect.HELPED: "%s n'est plus distrait.",
 }
 
 ## Maîtrises d'arme, nommées comme dans le SRD 5.2.1 (en anglais).
@@ -223,6 +231,7 @@ const EFFECT_BADGES: Dictionary[StringName, String] = {
 	Effect.HIDDEN: "C",
 	Effect.PRONE: "T",
 	Effect.VEXED: "V",
+	Effect.HELPED: "A",
 }
 
 ## Raisons d'avantage ou de désavantage, affichées après le jet.
@@ -238,6 +247,7 @@ const ADVANTAGE_REASONS: Dictionary[StringName, String] = {
 	AdvantageResolver.TARGET_PRONE_FAR: "cible à terre, de loin",
 	AdvantageResolver.ATTACKER_PRONE: "attaquant à terre",
 	AdvantageResolver.TARGET_VEXED: "Vex",
+	AdvantageResolver.TARGET_DISTRACTED: "cible distraite (Aider)",
 }
 
 ## Causes de mort, pour le journal.
@@ -624,6 +634,24 @@ static func death_save_line(event: DeathSaveEvent) -> String:
 
 static func stabilized_line(event: CombatantStabilizedEvent) -> String:
 	return "Trois réussites : %s est stabilisé, mais reste inconscient." % event.combatant.display_name
+
+
+## « Guerrier soigne Roublard (Médecine 9 + 1 = 10 contre DD 10) : stabilisé. »
+static func stabilize_line(event: StabilizeAttemptedEvent) -> String:
+	return "%s soigne %s (Médecine %d%s %s = %d contre DD %d) : %s" % [
+		event.helper.display_name, event.patient.display_name, event.d20, LUCK_NOTE if event.lucky else "",
+		signed(event.bonus), event.total, HelpAction.STABILIZE_DC,
+		"stabilisé, il ne fait plus de jets contre la mort." if event.success else "raté, il est toujours mourant.",
+	]
+
+
+## Aide au survol d'un allié mourant au contact.
+static func stabilize_hint(helper: Combatant, patient: Combatant) -> String:
+	var bonus := helper.definition.skill_bonus(CharacterDef.MEDICINE)
+	var chance := clampf((21.0 - (HelpAction.STABILIZE_DC - bonus)) / 20.0, 0.05, 1.0)
+	return "Stabiliser %s (action Aider) : Médecine %s contre DD %d, %s de réussite." % [
+		patient.display_name, signed(bonus), HelpAction.STABILIZE_DC, percent(chance),
+	]
 
 
 static func recovered_line(event: CombatantRecoveredEvent) -> String:

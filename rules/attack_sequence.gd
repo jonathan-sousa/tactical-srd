@@ -43,6 +43,9 @@ static func begin(
 		events.append(EffectEndedEvent.new(attacker, Effect.SAPPED))
 	if state.remove_effect_from(target, Effect.VEXED, attacker):
 		events.append(EffectEndedEvent.new(target, Effect.VEXED))
+	# Aider : la distraction ne sert qu'à une attaque.
+	if advantage.advantages.has(AdvantageResolver.TARGET_DISTRACTED) and state.remove_effect(target, Effect.HELPED):
+		events.append(EffectEndedEvent.new(target, Effect.HELPED))
 
 	if not result.is_hit and attacker.heroic_inspiration:
 		state.pending = InspirationWindow.for_attack(result, resume)

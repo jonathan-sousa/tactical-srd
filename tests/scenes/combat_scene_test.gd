@@ -567,3 +567,40 @@ func test_alert_declined_keeps_the_rogue_first() -> void:
 	await _settle()
 	assert_object(_state().active()).is_same(_state().party()[1])
 	assert_object(_scene.get("_player")).is_same(_state().party()[1])
+
+
+## Deux Guerriers, le premier joue ; `extra` : dés après l'initiative.
+func _start_two_fighters(extra: Array) -> void:
+	var starts: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+	var enemies: Array[Vector2i] = [Vector2i(11, 7)]
+	var ids: Array[StringName] = [&"fighter_lvl1", &"fighter_lvl1"]
+	_scene = auto_free(load(COMBAT_SCENE).instantiate())
+	_scene.set("encounter_override", Fixtures.party_encounter(Vector2i(12, 8), starts, enemies))
+	_scene.set("party_ids", ids)
+	_scene.set("dice", _fixed_dice([20, 15, 1] + extra))
+	_scene.set("enemy_action_delay", 0.0)
+	_scene.set("end_delay", 0.0)
+	_runner = scene_runner(_scene)
+	await _settle()
+
+
+func test_clicking_a_dying_ally_next_to_you_stabilizes_it() -> void:
+	# Médecine : 15 + 1 contre DD 10.
+	await _start_two_fighters([15])
+	var party := _state().party()
+	party[1].hp = 0
+	_scene.call("_on_cell_clicked", Vector2i(1, 0))
+	await _settle()
+	assert_bool(party[1].is_stable).is_true()
+	assert_bool(_state().action_used).is_true()
+
+
+func test_help_button_distracts_the_only_enemy_in_reach() -> void:
+	await _start_two_fighters([])
+	var goblin := _state().combatants[2]
+	goblin.position = Vector2i(0, 1)
+	var token: TokenView = _scene.get("_tokens")[goblin]
+	token.cell = goblin.position
+	_scene.call("_on_action_pressed", HelpAction.ID)
+	await _settle()
+	assert_bool(_state().has_effect(goblin, Effect.HELPED)).is_true()

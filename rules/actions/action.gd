@@ -37,6 +37,7 @@ const PRONE := &"prone"
 const NOT_PRONE := &"not_prone"
 const NO_OFF_HAND_ATTACK := &"no_off_hand_attack"
 const OFF_HAND_WEAPON := &"off_hand_weapon"
+const NOT_DYING := &"not_dying"
 
 var actor: Combatant
 
