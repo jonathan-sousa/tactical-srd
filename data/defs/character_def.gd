@@ -30,9 +30,11 @@ enum Size { TINY, SMALL, MEDIUM, LARGE, HUGE, GARGANTUAN }
 # Compétences utilisées en combat, et la caractéristique de chacune.
 const STEALTH := &"stealth"
 const PERCEPTION := &"perception"
+const MEDICINE := &"medicine"
 const SKILL_ABILITIES: Dictionary[StringName, Abilities.Ability] = {
 	STEALTH: Abilities.Ability.DEXTERITY,
 	PERCEPTION: Abilities.Ability.WISDOM,
+	MEDICINE: Abilities.Ability.WISDOM,
 }
 
 ## Identifiant stable, utilisé par la sauvegarde et le registre de données.

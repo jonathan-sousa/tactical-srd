@@ -31,6 +31,10 @@ const PRONE := &"prone"
 ## Maîtrise Vex : `source` a l'avantage à sa prochaine attaque contre ce
 ## combattant, avant la fin de son prochain tour.
 const VEXED := &"vexed"
+## Action Aider : distrait par `source`. La prochaine attaque d'un allié de
+## `source` contre ce combattant a l'avantage, jusqu'au début du prochain
+## tour de `source`.
+const HELPED := &"helped"
 
 enum Expiry {
 	## Au début du prochain tour de `source`.

@@ -631,6 +631,14 @@ func add_effect(effect: Effect) -> void:
 	effects.append(effect)
 
 
+## Effet de ce nom sur ce combattant, ou `null`.
+func effect_on(combatant: Combatant, id: StringName) -> Effect:
+	for effect in effects:
+		if effect.target == combatant and effect.id == id:
+			return effect
+	return null
+
+
 ## Ce combattant a-t-il cet effet, venu de `source` ?
 func has_effect_from(combatant: Combatant, id: StringName, source: Combatant) -> bool:
 	for effect in effects:

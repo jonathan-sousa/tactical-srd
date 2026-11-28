@@ -46,6 +46,10 @@ static func next_action(state: CombatState, actor: Combatant) -> Action:
 	if actor.hp * 2 <= actor.definition.max_hp and second_wind.validate(state).is_empty():
 		return second_wind
 
+	var first_aid := _first_aid_step(state, actor)
+	if first_aid != null:
+		return first_aid
+
 	var target := _choose_target(state, actor)
 	if target == null:
 		# Tous ses ennemis sont cachés : il les cherche.
@@ -218,6 +222,35 @@ static func _approach_cell(state: CombatState, actor: Combatant, target: Combata
 	while stop >= 0 and allies.has(path[stop]):
 		stop -= 1
 	return path[stop] if stop >= 0 else NO_CELL
+
+
+# --- Premiers soins -----------------------------------------------------------------
+
+
+## Un personnage (pas un monstre) stabilise un allié mourant à un échec de
+## la mort (action Aider) : au contact, il le fait ; sinon, il va à son
+## contact s'il peut l'atteindre ce tour-ci. `null` sinon. Plus tôt, mieux
+## vaut se battre : une victoire relève de toute façon les personnages à
+## terre (voir CombatState.check_end).
+static func _first_aid_step(state: CombatState, actor: Combatant) -> Action:
+	if actor.definition.is_monster or state.action_used:
+		return null
+	for ally in state.combatants:
+		if ally.side != actor.side or ally == actor or not ally.is_dying() 				or ally.death_save_failures < HitPoints.DEATH_SAVES_NEEDED - 1:
+			continue
+		var help := HelpAction.new(actor, ally)
+		if help.validate(state).is_empty():
+			return help
+		var best := NO_CELL
+		var best_cost := 0
+		var reachable := state.reachable_cells()
+		for cell: Vector2i in reachable:
+			if GridPathfinder.chebyshev(cell, ally.position) <= 1 and (best == NO_CELL or reachable[cell] < best_cost):
+				best = cell
+				best_cost = reachable[cell]
+		if best != NO_CELL:
+			return MoveAction.new(actor, best)
+	return null
 
 
 # --- Action bonus et repli -------------------------------------------------------

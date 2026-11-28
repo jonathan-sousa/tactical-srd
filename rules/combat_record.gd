@@ -29,6 +29,7 @@ const USE_INSPIRATION := "use_inspiration"
 const DECLINE_INSPIRATION := "decline_inspiration"
 const SWAP_INITIATIVE := "swap_initiative"
 const DECLINE_SWAP := "decline_swap"
+const HELP := "help"
 
 var seed_value: int = 0
 var encounter_id: StringName
@@ -85,6 +86,8 @@ static func encode(action: Action) -> Dictionary:
 		return {"type": SWAP_INITIATIVE, "ally": _cell_to_array((action as SwapInitiativeAction).ally.position)}
 	if action is DeclineSwapAction:
 		return {"type": DECLINE_SWAP}
+	if action is HelpAction:
+		return {"type": HELP, "cell": _cell_to_array((action as HelpAction).target.position)}
 	return {}
 
 
@@ -143,6 +146,10 @@ static func decode(entry: Dictionary, actor: Combatant, state: CombatState) -> A
 			return SwapInitiativeAction.new(actor, ally) if ally != null else null
 		DECLINE_SWAP:
 			return DeclineSwapAction.new(actor)
+		HELP:
+			var help_cell: Variant = _array_to_cell(entry.get("cell"))
+			var helped := state.combatant_at(help_cell) if help_cell != null else null
+			return HelpAction.new(actor, helped) if helped != null else null
 	return null
 
 

@@ -31,6 +31,8 @@ const TARGET_PRONE_FAR := &"target_prone_far"
 const ATTACKER_PRONE := &"attacker_prone"
 ## L'attaquant a touché la cible avec une arme à maîtrise Vex.
 const TARGET_VEXED := &"target_vexed"
+## Un allié de l'attaquant a distrait la cible (action Aider).
+const TARGET_DISTRACTED := &"target_distracted"
 
 
 static func for_attack(state: CombatState, attacker: Combatant, target: Combatant, weapon: WeaponDef) -> AdvantageResult:
@@ -52,6 +54,9 @@ static func for_attack(state: CombatState, attacker: Combatant, target: Combatan
 	# est neutralisée.
 	if state.has_effect(target, Effect.DODGING) and state.can_see(target, attacker):
 		result.disadvantages.append(TARGET_DODGING)
+	var helped := state.effect_on(target, Effect.HELPED)
+	if helped != null and helped.source != attacker and helped.source.side == attacker.side:
+		result.advantages.append(TARGET_DISTRACTED)
 	if state.has_effect_from(target, Effect.VEXED, attacker):
 		result.advantages.append(TARGET_VEXED)
 	if state.has_effect(attacker, Effect.SAPPED):
