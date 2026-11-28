@@ -14,6 +14,9 @@ enum Kind { DIALOGUE, ENCOUNTER }
 ## Étape suivante après le dialogue, ou après une victoire. Vide = fin de
 ## l'histoire.
 @export var next_step: StringName
+## Le groupe prend un repos court en arrivant à cette étape (SRD « Short
+## Rest », voir ShortRest), entre deux combats.
+@export var short_rest: bool = false
 ## Étape suivante après une défaite. Vide = écran de défaite standard
 ## (« Réessayer le combat » / « Menu principal »).
 @export var defeat_step: StringName

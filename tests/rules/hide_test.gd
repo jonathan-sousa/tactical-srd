@@ -423,3 +423,12 @@ func test_no_ambush_from_a_goblin_in_plain_sight() -> void:
 	var events := _state.start(dice)
 	assert_object(events[0]).is_instanceof(InitiativeRolledEvent)
 	assert_int(dice.remaining()).is_equal(0)
+
+
+func test_chain_mail_gives_disadvantage_on_stealth() -> void:
+	var fighter := Combatant.new(DataRegistry.load_from().character(&"fighter_lvl1"), Combatant.Side.PLAYER)
+	var state := CombatState.create(Fixtures.encounter(Vector2i(12, 8), Vector2i(0, 0), [Vector2i(11, 7)] as Array[Vector2i]), fighter.definition)
+	# Désavantage : 18 et 3, on garde 3.
+	var event := state.roll_hide(state.combatants[0], FixedDice.new([18, 3] as Array[int]), false)
+	assert_int(event.d20).is_equal(3)
+	assert_bool(event.success).is_false()

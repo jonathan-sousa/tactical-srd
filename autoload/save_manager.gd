@@ -15,12 +15,15 @@ extends Node
 
 enum Status { NONE, OK, CORRUPT, UNKNOWN_VERSION }
 
-const CURRENT_VERSION := 3
+const CURRENT_VERSION := 4
 const DEFAULT_PATH := "user://save_1.json"
 
 ## En v1, seul le Guerrier niveau 1 existait, avec 2 utilisations de Second
 ## Wind et l'Inspiration héroïque : une sauvegarde v1 les reçoit intactes.
 const V1_SECOND_WIND_USES := 2
+## En v4, le Roublard niveau 1 rejoint le groupe, avec ses 10 PV.
+const V4_ROGUE_ID := "rogue_lvl1"
+const V4_ROGUE_HP := 10
 
 var path := DEFAULT_PATH
 var status: Status = Status.NONE
@@ -29,7 +32,7 @@ var data: Dictionary = {}
 
 ## Fonctions de migration, indexées par la version qu'elles mettent à jour :
 ## _migrations[1] transforme une sauvegarde v1 en v2.
-var _migrations: Dictionary[int, Callable] = {1: _migrate_v1_to_v2, 2: _migrate_v2_to_v3}
+var _migrations: Dictionary[int, Callable] = {1: _migrate_v1_to_v2, 2: _migrate_v2_to_v3, 3: _migrate_v3_to_v4}
 
 
 func _ready() -> void:
@@ -129,6 +132,25 @@ func _migrate_v2_to_v3(raw: Dictionary) -> Dictionary:
 	migrated["party"] = [migrated.get("player")]
 	migrated.erase("player")
 	migrated["version"] = 3
+	return migrated
+
+
+## v4 : le Roublard rejoint le groupe, frais (sa fiche donne PV, flèches et
+## dé de vie), et l'histoire gagne la bande. L'ancienne fin (« victory »,
+## juste après l'embuscade) devient le dialogue d'après l'embuscade.
+func _migrate_v3_to_v4(raw: Dictionary) -> Dictionary:
+	var migrated := raw.duplicate(true)
+	var party: Variant = migrated.get("party")
+	if typeof(party) == TYPE_ARRAY and not (party as Array).is_empty():
+		(party as Array).append({
+			"def_id": V4_ROGUE_ID,
+			"hp_current": V4_ROGUE_HP,
+			"second_wind_uses": 0,
+			"heroic_inspiration": false,
+		})
+	if typeof(migrated.get("story_step")) == TYPE_STRING and migrated["story_step"] == "victory":
+		migrated["story_step"] = "after_ambush"
+	migrated["version"] = 4
 	return migrated
 
 

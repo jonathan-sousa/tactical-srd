@@ -34,11 +34,14 @@ func _write_raw(text: String) -> void:
 
 func _valid_save(overrides: Dictionary = {}) -> Dictionary:
 	var save := {
-		"version": 3,
+		"version": 4,
 		"saved_at": "2026-11-17T09:30:00Z",
 		"story_step": "goblin_ambush",
 		"story_completed": false,
-		"party": [{"def_id": "fighter_lvl1", "hp_current": 9, "second_wind_uses": 1, "heroic_inspiration": false}],
+		"party": [
+			{"def_id": "fighter_lvl1", "hp_current": 9, "second_wind_uses": 1, "heroic_inspiration": false},
+			{"def_id": "rogue_lvl1", "hp_current": 10, "second_wind_uses": 0, "heroic_inspiration": false},
+		],
 	}
 	save.merge(overrides, true)
 	return save
@@ -169,13 +172,13 @@ func test_version_1_save_is_migrated_with_full_resources() -> void:
 		"player": {"def_id": "fighter_lvl1", "hp_current": 9},
 	}))
 	assert_int(_saves.reload()).is_equal(SaveManagerScript.Status.OK)
-	assert_int(_saves.data["version"]).is_equal(3)
+	assert_int(_saves.data["version"]).is_equal(4)
 	assert_int(_saves.data["party"][0]["hp_current"]).is_equal(9)
 	assert_int(_saves.data["party"][0]["second_wind_uses"]).is_equal(2)
 	assert_bool(_saves.data["party"][0]["heroic_inspiration"]).is_true()
 
 
-func test_version_2_save_becomes_a_party_of_one() -> void:
+func test_version_2_save_becomes_the_fighter_and_a_fresh_rogue() -> void:
 	_write_raw(JSON.stringify({
 		"version": 2,
 		"saved_at": "2026-11-17T09:30:00Z",
@@ -184,9 +187,10 @@ func test_version_2_save_becomes_a_party_of_one() -> void:
 		"player": {"def_id": "fighter_lvl1", "hp_current": 7, "second_wind_uses": 1, "heroic_inspiration": false},
 	}))
 	assert_int(_saves.reload()).is_equal(SaveManagerScript.Status.OK)
-	assert_int(_saves.data["version"]).is_equal(3)
+	assert_int(_saves.data["version"]).is_equal(4)
 	assert_bool(_saves.data.has("player")).is_false()
-	assert_int(_saves.data["party"].size()).is_equal(1)
+	assert_int(_saves.data["party"].size()).is_equal(2)
+	assert_str(_saves.data["party"][1]["def_id"]).is_equal("rogue_lvl1")
 	assert_str(_saves.data["party"][0]["def_id"]).is_equal("fighter_lvl1")
 	assert_int(_saves.data["party"][0]["hp_current"]).is_equal(7)
 	var game: Node = auto_free(GameStateScript.new())
@@ -196,7 +200,7 @@ func test_version_2_save_becomes_a_party_of_one() -> void:
 
 
 func test_restored_resources_never_exceed_the_character_sheet() -> void:
-	_saves.write(_valid_save({"party": [{"def_id": "fighter_lvl1", "hp_current": 9, "second_wind_uses": 9, "heroic_inspiration": true}]}))
+	_saves.write(_valid_save({"party": [{"def_id": "fighter_lvl1", "hp_current": 9, "second_wind_uses": 9, "heroic_inspiration": true}, {"def_id": "rogue_lvl1", "hp_current": 10, "second_wind_uses": 0, "heroic_inspiration": false}]}))
 	_saves.reload()
 	var game: Node = auto_free(GameStateScript.new())
 	game.setup(DataRegistry.load_from())
@@ -223,3 +227,25 @@ func test_saves_automatically_when_progress_changes() -> void:
 	game.complete_step(GameStateScript.Outcome.DONE)
 	_saves.reload()
 	assert_str(_saves.data["story_step"]).is_equal("goblin_ambush")
+
+
+func test_version_3_save_gets_the_rogue_and_the_new_story() -> void:
+	_write_raw(JSON.stringify({
+		"version": 3,
+		"saved_at": "2026-11-17T09:30:00Z",
+		"story_step": "victory",
+		"story_completed": false,
+		"party": [{"def_id": "fighter_lvl1", "hp_current": 5, "second_wind_uses": 0, "heroic_inspiration": false}],
+	}))
+	assert_int(_saves.reload()).is_equal(SaveManagerScript.Status.OK)
+	assert_int(_saves.data["version"]).is_equal(4)
+	# L'ancienne fin, juste après l'embuscade, mène maintenant à la bande.
+	assert_str(_saves.data["story_step"]).is_equal("after_ambush")
+	var game: Node = auto_free(GameStateScript.new())
+	game.setup(DataRegistry.load_from())
+	assert_bool(_saves.restore_into(game)).is_true()
+	assert_int(game.party[0].hp).is_equal(5)
+	assert_str(game.party[1].id).is_equal(&"rogue_lvl1")
+	assert_int(game.party[1].hp).is_equal(10)
+	assert_int(game.party[1].ammunition[&"shortbow"]).is_equal(20)
+	assert_int(game.party[1].hit_dice).is_equal(1)

@@ -49,10 +49,28 @@ func _ready() -> void:
 		if step != null and step.kind == StoryStep.Kind.DIALOGUE:
 			dialogue = step.dialogue
 			_story_mode = true
+			dialogue = _with_rest_report(dialogue)
 	if dialogue == null or dialogue.lines.is_empty():
 		push_error("Dialogue : aucune réplique à afficher.")
 		return
 	_show_line(0)
+
+
+## Après un repos court, le narrateur dit ce que chacun a récupéré, après
+## les répliques du dialogue. Le dialogue d'origine n'est pas modifié.
+func _with_rest_report(source: DialogueDef) -> DialogueDef:
+	var report := GameState.take_rest_report()
+	if report.is_empty():
+		return source
+	var told := source.duplicate() as DialogueDef
+	told.lines = source.lines.duplicate()
+	var definitions := GameState.party_definitions()
+	for i in report.size():
+		var narration := DialogueLine.new()
+		narration.speaker = Texts.NARRATOR
+		narration.text = Texts.short_rest_line(definitions[i].display_name, report[i])
+		told.lines.append(narration)
+	return told
 
 
 func current_index() -> int:

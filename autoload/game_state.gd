@@ -18,17 +18,22 @@ enum Outcome { DONE, VICTORY, DEFEAT }
 enum Next { STEP, DEFEAT_SCREEN, END }
 
 ## Fiches du groupe, dans l'ordre (celui des cases de départ des rencontres).
-const PARTY_IDS: Array[StringName] = [&"fighter_lvl1"]
+const PARTY_IDS: Array[StringName] = [&"fighter_lvl1", &"rogue_lvl1"]
 
 var registry: DataRegistry
 var story: StoryDef
 ## Étape en cours. Vide quand aucune partie n'est en cours.
 var current_step_id: StringName = &""
 var story_completed := false
-## PV et ressources de chaque personnage, dans l'ordre du groupe. Les
-## ressources ne reviennent qu'avec un repos, absent du jeu : elles sont
-## comptées sur toute la partie.
+## PV et ressources de chaque personnage, dans l'ordre du groupe. Il n'y a
+## pas de repos long : ce qui ne revient qu'avec lui est compté sur toute la
+## partie. Une étape peut offrir un repos court (StoryStep.short_rest).
 var party: Array[PartyMember] = []
+## Ce qu'a rapporté le dernier repos court, pour le raconter au début du
+## dialogue de l'étape. Vidé une fois lu (`take_rest_report`).
+var rest_report: Array[ShortRestResult] = []
+## Dés du repos court. Aléatoires, sauf en mode démo (graine) et en test.
+var rest_dice: Dice
 
 
 func _ready() -> void:
@@ -125,8 +130,29 @@ func complete_step(outcome: Outcome, survivors: Array[Combatant] = []) -> Next:
 		return Next.END
 
 	current_step_id = step.next_step
+	var next_step := current_step()
+	if next_step != null and next_step.short_rest:
+		_take_short_rest()
 	progress_changed.emit()
 	return Next.STEP
+
+
+## Repos court du groupe : chacun dépense son dé de vie s'il est blessé, et
+## Second Wind revient (voir ShortRest).
+func _take_short_rest() -> void:
+	if rest_dice == null:
+		rest_dice = Dice.seeded(Autoplay.seed_value) if Autoplay.enabled else Dice.new()
+	rest_report.clear()
+	var definitions := party_definitions()
+	for i in party.size():
+		rest_report.append(ShortRest.take(party[i], definitions[i], rest_dice))
+
+
+## Compte rendu du dernier repos court, une seule fois.
+func take_rest_report() -> Array[ShortRestResult]:
+	var report := rest_report.duplicate()
+	rest_report.clear()
+	return report
 
 
 # --- Navigation ----------------------------------------------------------------
