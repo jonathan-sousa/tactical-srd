@@ -64,6 +64,14 @@ var is_ghost := false:
 		is_ghost = value
 		self_modulate = Color(1, 1, 1, GHOST_ALPHA) if value else Color.WHITE
 
+## PV exacts sur la barre. Faux pour un ennemi quand le réglage « PV
+## ennemis exacts » est décoché : la barre montre alors son état (voir
+## HealthStatus).
+var exact_hp := true:
+	set(value):
+		exact_hp = value
+		queue_redraw()
+
 ## Effets en cours, affichés en pastilles au-dessus du pion.
 var conditions: Array[StringName] = []:
 	set(value):
@@ -209,6 +217,9 @@ func _draw() -> void:
 		draw_string(font, Vector2(-text_size.x / 2.0, text_size.y / 3.0), initial, HORIZONTAL_ALIGNMENT_CENTER, -1, 20, Color.WHITE)
 
 	var ratio := clampf(_shown_hp / combatant.definition.max_hp, 0.0, 1.0)
+	if not exact_hp:
+		var status := HealthStatus.Status.DOWN if combatant.is_dead else HealthStatus.of(roundi(_shown_hp), combatant.definition.max_hp)
+		ratio = HealthStatus.bar_fraction(status)
 	var bar := Rect2(Vector2(-RADIUS, RADIUS + 4.0), Vector2(RADIUS * 2.0, 6.0))
 	draw_rect(bar, HP_BACK_COLOR)
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), hp_color(ratio))

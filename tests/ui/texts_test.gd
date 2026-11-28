@@ -153,31 +153,60 @@ func test_initiative_line_explains_surprise() -> void:
 		.is_equal("Initiative : Gobelin guerrier 14 (12 [3, 12 ; caché, avantage] + 2), Guerrier 5 (4 [15, 4 ; surpris, désavantage] + 1).")
 
 
-func test_attack_hint_shows_the_estimate() -> void:
+func test_attack_tooltip_shows_the_estimate() -> void:
 	var estimate := AttackEstimate.new()
 	estimate.hit_chance = 0.55
 	estimate.critical_chance = 0.05
 	estimate.damage_min = 9
 	estimate.damage_max = 15
 	estimate.graze_damage = 3
+	estimate.cover_bonus = 2
 	estimate.advantage = AdvantageResult.new()
+	estimate.advantage.disadvantages = [AdvantageResolver.LONG_RANGE]
+	var text := _plain(Texts.attack_tooltip(Fixtures.greatsword(), estimate, false))
+	assert_str(text).contains("Épée à deux mains")
+	assert_str(text).contains("55 % pour toucher · 9 à 15 dégâts")
+	assert_str(text).contains("Graze : 3 si raté")
+	assert_str(text).contains("Abri partiel : +2 CA")
+	assert_str(text).contains("Désavantage : longue portée")
+
+
+func test_opportunity_warning_names_the_attackers() -> void:
 	var goblin := Combatant.new(Fixtures.goblin(), Combatant.Side.ENEMY)
-	assert_str(Texts.attack_hint(goblin, Fixtures.greatsword(), estimate)) \
-		.is_equal("Attaquer Gobelin guerrier (Épée à deux mains) : 55 % de toucher, 9 à 15 dégâts ; Graze : 3 si raté")
+	assert_str(_plain(Texts.opportunity_warning([goblin]))) \
+		.is_equal("▼ Attaque d'opportunité de Gobelin guerrier (Se désengager l'évite).")
 
 
-func test_move_hint_warns_of_opportunity_attacks() -> void:
+func test_health_text_exact_or_approximate() -> void:
 	var goblin := Combatant.new(Fixtures.goblin(), Combatant.Side.ENEMY)
-	assert_str(Texts.move_hint(3)).is_equal("Déplacement : 3 cases")
-	assert_str(Texts.move_hint(1, [goblin])) \
-		.is_equal("Déplacement : 1 case. Attention : attaque d'opportunité de Gobelin guerrier (Se désengager l'évite).")
+	goblin.hp = 7
+	assert_str(Texts.health_text(goblin, true)).is_equal("PV 7 / 10")
+	assert_str(Texts.health_text(goblin, false)).is_equal("Blessé")
+	goblin.hp = 5
+	assert_str(Texts.health_text(goblin, false)).is_equal("En sang")
+	goblin.is_dead = true
+	assert_str(Texts.health_text(goblin, false)).is_equal("mort")
 
 
-func test_target_line() -> void:
+func test_unit_title_and_body() -> void:
 	var goblin := Combatant.new(Fixtures.goblin(), Combatant.Side.ENEMY)
 	goblin.hp = 7
 	var effects: Array[StringName] = [Effect.SAPPED]
-	assert_str(Texts.target_line(goblin, effects)).is_equal("Gobelin guerrier · PV 7 / 10 · CA 15 · Sapé")
+	assert_str(_plain(Texts.unit_title(goblin, true))).is_equal("Gobelin guerrier · CA 15")
+	assert_str(_plain(Texts.unit_body(goblin, effects, 3, false))).is_equal("Blessé · à 3 cases\nSapé")
+	assert_str(_plain(Texts.unit_body(goblin, [], 1, true))).is_equal("PV 7 / 10 · au contact")
+
+
+func test_every_terrain_with_a_rule_has_a_name_and_a_rule() -> void:
+	for terrain: CellInfo.Terrain in [CellInfo.Terrain.OBSTACLE, CellInfo.Terrain.LOW_WALL, CellInfo.Terrain.DIFFICULT]:
+		assert_str(Texts.terrain_title(terrain)).is_not_empty()
+		assert_str(Texts.terrain_rule(terrain)).is_not_empty()
+
+
+## Texte sans balises BBCode.
+static func _plain(bbcode: String) -> String:
+	var regex := RegEx.create_from_string("\\[[^\\]]*\\]")
+	return regex.sub(bbcode, "", true)
 
 
 func test_every_effect_has_a_badge() -> void:

@@ -376,15 +376,69 @@ func test_unconscious_player_turn_passes_with_a_death_save() -> void:
 	assert_str((_scene.get_node("%ResultLabel") as Label).text).is_equal(Texts.DEFEAT)
 
 
-func test_hovering_an_enemy_shows_hit_chance_and_target_panel() -> void:
+func _tooltip() -> BoardTooltip:
+	return _scene.get("_tooltip")
+
+
+func _board() -> BoardView:
+	return _scene.get_node("%Board")
+
+
+func test_hovering_an_enemy_shows_the_tooltip_with_hit_chance() -> void:
 	await _start(FIGHTER_FIRST)
 	_put_goblin_next_to_fighter()
 	_scene.call("_on_cell_hovered", _goblin().position)
-	var hint: Label = _scene.get_node("%HintLabel")
+	assert_bool(_tooltip().visible).is_true()
+	var text := _tooltip().text()
+	assert_str(text).contains("Gobelin guerrier · CA 15")
+	assert_str(text).contains("Indemne · au contact")
 	# Épée + 5 contre CA 15 : 55 %, 2d6 + 3 avec Great Weapon Fighting.
-	assert_str(hint.text).contains("55 % de toucher, 9 à 15 dégâts")
-	var target: Label = _scene.get_node("%TargetLabel")
-	assert_str(target.text).starts_with("Gobelin guerrier · PV 10 / 10 · CA 15")
+	assert_str(text).contains("55 % pour toucher · 9 à 15 dégâts")
+
+
+func test_enemy_hit_points_are_approximate_unless_the_option_is_set() -> void:
+	await _start(FIGHTER_FIRST)
+	_put_goblin_next_to_fighter()
+	_goblin().hp = 7
+	var token: TokenView = (_scene.get("_tokens") as Dictionary)[_goblin()]
+	assert_bool(token.exact_hp).is_false()
+	_scene.call("_on_cell_hovered", _goblin().position)
+	assert_str(_tooltip().text()).contains("Blessé")
+	assert_str(_tooltip().text()).not_contains("7 / 10")
+	var saved: bool = Settings.exact_enemy_hp
+	Settings.exact_enemy_hp = true
+	_scene.call("_on_exact_hp_changed")
+	Settings.exact_enemy_hp = saved
+	assert_bool(token.exact_hp).is_true()
+	assert_str(_tooltip().text()).contains("PV 7 / 10")
+
+
+func test_hovering_open_grass_shows_only_the_path_cost() -> void:
+	await _start(FIGHTER_FIRST)
+	var next := _fighter().position + Vector2i(1, 0)
+	_scene.call("_on_cell_hovered", next)
+	assert_bool(_tooltip().visible).is_false()
+	assert_int(_board().path_cost).is_equal(1)
+	assert_array(_board().path_preview).contains_exactly([next])
+
+
+func test_hovering_a_tree_explains_its_rule() -> void:
+	await _start(FIGHTER_FIRST)
+	var tree: Vector2i = _state().encounter.blocked_cells[0]
+	_scene.call("_on_cell_hovered", tree)
+	assert_bool(_tooltip().visible).is_true()
+	assert_str(_tooltip().text()).contains(Texts.TERRAIN_NAMES[CellInfo.Terrain.OBSTACLE])
+	assert_str(_tooltip().text()).contains(Texts.TERRAIN_RULES[CellInfo.Terrain.OBSTACLE])
+
+
+func test_hovering_undergrowth_explains_its_rule_and_counts_double() -> void:
+	await _start(FIGHTER_FIRST)
+	var brush: Vector2i = _state().encounter.difficult_cells[0]
+	_scene.call("_on_cell_hovered", brush)
+	assert_str(_tooltip().text()).contains(Texts.TERRAIN_RULES[CellInfo.Terrain.DIFFICULT])
+	var path := _state().find_path(_fighter(), brush)
+	assert_int(_board().path_cost).is_equal(_state().path_cost(_fighter(), path))
+	assert_int(_board().path_cost).is_greater(path.size())
 
 
 func test_path_out_of_reach_warns_of_an_opportunity_attack() -> void:
@@ -392,8 +446,30 @@ func test_path_out_of_reach_warns_of_an_opportunity_attack() -> void:
 	_put_goblin_next_to_fighter()
 	var away := _fighter().position + Vector2i(-1, 0)
 	_scene.call("_on_cell_hovered", away)
-	assert_str((_scene.get_node("%HintLabel") as Label).text).contains("attaque d'opportunité de Gobelin guerrier")
-	assert_bool((_scene.get_node("%Board") as BoardView).path_warning).is_true()
+	assert_str(_tooltip().text()).contains("Attaque d'opportunité de Gobelin guerrier")
+	assert_bool(_board().path_warning).is_true()
+	assert_bool(_board().threat_preview.has(_fighter().position)).is_true()
+
+
+func test_aiming_from_afar_draws_the_line_of_fire() -> void:
+	await _start(FIGHTER_FIRST)
+	_place_goblin(Vector2i(5, 6))
+	var javelin: WeaponDef = null
+	for weapon in _fighter().definition.weapons:
+		if weapon.id == &"javelin":
+			javelin = weapon
+	_scene.call("_on_weapon_pressed", javelin)
+	_scene.call("_on_cell_hovered", _goblin().position)
+	assert_array(_board().aim).contains_exactly([_fighter().position, _goblin().position])
+	assert_str(_tooltip().text()).contains("Javelot")
+
+
+func test_tooltip_hides_when_leaving_the_board() -> void:
+	await _start(FIGHTER_FIRST)
+	_put_goblin_next_to_fighter()
+	_scene.call("_on_cell_hovered", _goblin().position)
+	_scene.call("_on_cell_hovered", BoardView.NO_CELL)
+	assert_bool(_tooltip().visible).is_false()
 
 
 func test_hit_shows_floating_damage() -> void:
