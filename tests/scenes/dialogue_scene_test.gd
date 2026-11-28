@@ -73,3 +73,25 @@ func test_history_lists_lines_already_read_and_pauses_the_dialogue() -> void:
 	_runner.simulate_key_pressed(KEY_H)
 	await _runner.await_input_processed()
 	assert_bool(_scene.call("is_history_open")).is_false()
+
+
+func test_after_a_short_rest_the_narrator_tells_what_each_one_recovered() -> void:
+	var saved_step := GameState.current_step_id
+	GameState.current_step_id = &"after_ambush"
+	var healed := ShortRestResult.new()
+	healed.hit_die_roll = 6
+	healed.healed = 8
+	healed.second_wind_regained = true
+	var report: Array[ShortRestResult] = [healed, ShortRestResult.new()]
+	GameState.rest_report = report
+	var story_scene: Control = auto_free(load("res://scenes/dialogue/dialogue.tscn").instantiate())
+	scene_runner(story_scene)
+	GameState.current_step_id = saved_step
+	var told: DialogueDef = story_scene.get("dialogue")
+	var written := DataRegistry.load_from().dialogue(&"after_ambush")
+	assert_int(told.lines.size()).is_equal(written.lines.size() + 2)
+	assert_str(told.lines[-2].text).is_equal("Repos court : Guerrier panse ses plaies (dé de vie 6, +8 PV) et retrouve une utilisation de Second souffle.")
+	assert_str(told.lines[-1].text).is_equal("Repos court : Roublard n'a besoin de rien.")
+	# Le dialogue de l'histoire n'est pas modifié, et le compte rendu est lu.
+	assert_int(written.lines.size()).is_equal(4)
+	assert_array(GameState.rest_report).is_empty()

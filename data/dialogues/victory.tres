@@ -1,26 +1,34 @@
 [gd_resource type="Resource" script_class="DialogueDef" format=3]
 
-[ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_qy03l"]
-[ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_ovsm7"]
+[ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_line"]
+[ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_dialogue"]
 [ext_resource type="Texture2D" path="res://assets/sprites/fighter.png" id="8_fighter"]
+[ext_resource type="Texture2D" path="res://assets/sprites/rogue.png" id="8_rogue"]
+[ext_resource type="Texture2D" path="res://assets/sprites/goblin.png" id="9_goblin"]
 
-[sub_resource type="Resource" id="Resource_2kjju"]
-script = ExtResource("1_qy03l")
+[sub_resource type="Resource" id="Line_victory_1"]
+script = ExtResource("1_line")
 speaker = "Narrateur"
-text = "Le gobelin s'effondre parmi les caisses éventrées."
+text = "Le dernier gobelin s'effondre au pied de sa palissade."
 
-[sub_resource type="Resource" id="Resource_nbs0v"]
-script = ExtResource("1_qy03l")
+[sub_resource type="Resource" id="Line_victory_2"]
+script = ExtResource("1_line")
+speaker = "Roublard"
+portrait = ExtResource("8_rogue")
+text = "J'ai retrouvé le coffre de la caravane. Je n'y ai pas touché. Presque pas."
+
+[sub_resource type="Resource" id="Line_victory_3"]
+script = ExtResource("1_line")
 speaker = "Guerrier"
 portrait = ExtResource("8_fighter")
-text = "Il n'était pas seul. Les autres ne doivent pas être loin."
+text = "Garde la monnaie pour la route. Pierrefeu est encore loin."
 
-[sub_resource type="Resource" id="Resource_x2qko"]
-script = ExtResource("1_qy03l")
+[sub_resource type="Resource" id="Line_victory_4"]
+script = ExtResource("1_line")
 speaker = "Narrateur"
-text = "Sur la crête, une fumée s'élève. La route de Pierrefeu sera plus longue que prévu."
+text = "Sur le col, la fumée se dissipe. La route de Pierrefeu est libre."
 
 [resource]
-script = ExtResource("2_ovsm7")
+script = ExtResource("2_dialogue")
 id = &"victory"
-lines = Array[ExtResource("1_qy03l")]([SubResource("Resource_2kjju"), SubResource("Resource_nbs0v"), SubResource("Resource_x2qko")])
+lines = Array[ExtResource("1_line")]([SubResource("Line_victory_1"), SubResource("Line_victory_2"), SubResource("Line_victory_3"), SubResource("Line_victory_4")])

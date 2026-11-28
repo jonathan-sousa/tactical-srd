@@ -169,7 +169,7 @@ func test_identical_creatures_are_numbered() -> void:
 	var names: Array[String] = []
 	for combatant in state.combatants:
 		names.append(combatant.display_name)
-	assert_array(names).contains_exactly(["Guerrier", "Sbire gobelin 1", "Sbire gobelin 2", "Gobelin guerrier 1", "Gobelin guerrier 2"])
+	assert_array(names).contains_exactly(["Guerrier", "Sbire gobelin 1", "Sbire gobelin 2", "Gobelin guerrier"])
 	assert_str(state.combatants[0].short_name()).is_equal("Guerrier")
 	assert_str(state.combatants[2].short_name()).is_equal("Sbire 2")
 

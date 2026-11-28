@@ -96,6 +96,7 @@ static func fighter() -> CharacterDef:
 	var def := CharacterDef.new()
 	def.id = &"fighter_lvl1"
 	def.display_name = "Guerrier"
+	def.hit_die = 10
 	def.strength = 17
 	def.dexterity = 13
 	def.constitution = 15

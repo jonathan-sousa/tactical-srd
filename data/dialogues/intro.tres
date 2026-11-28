@@ -1,39 +1,40 @@
 [gd_resource type="Resource" script_class="DialogueDef" format=3]
 
-[ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_s32o4"]
-[ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_tiqlg"]
+[ext_resource type="Script" path="res://data/defs/dialogue_line.gd" id="1_line"]
+[ext_resource type="Script" path="res://data/defs/dialogue_def.gd" id="2_dialogue"]
 [ext_resource type="Texture2D" path="res://assets/sprites/fighter.png" id="8_fighter"]
+[ext_resource type="Texture2D" path="res://assets/sprites/rogue.png" id="8_rogue"]
 [ext_resource type="Texture2D" path="res://assets/sprites/goblin.png" id="9_goblin"]
 
-[sub_resource type="Resource" id="Resource_stx1u"]
-script = ExtResource("1_s32o4")
+[sub_resource type="Resource" id="Line_intro_1"]
+script = ExtResource("1_line")
 speaker = "Narrateur"
 text = "La caravane devait atteindre Pierrefeu avant la nuit. Elle n'y arrivera pas."
 
-[sub_resource type="Resource" id="Resource_1osuu"]
-script = ExtResource("1_s32o4")
+[sub_resource type="Resource" id="Line_intro_2"]
+script = ExtResource("1_line")
 speaker = "Narrateur"
-text = "Au détour du col, les chariots gisent renversés, leurs bâches lacérées."
+text = "Au détour du col, les chariots gisent renversés. Le Guerrier et Tobin Piedléger, halfelin aux doigts trop agiles, arrivent trop tard."
 
-[sub_resource type="Resource" id="Resource_axwlu"]
-script = ExtResource("1_s32o4")
-speaker = "Guerrier"
-portrait = ExtResource("8_fighter")
-text = "Des traces de pas… petites, nombreuses. Et toutes fraîches."
+[sub_resource type="Resource" id="Line_intro_3"]
+script = ExtResource("1_line")
+speaker = "Roublard"
+portrait = ExtResource("8_rogue")
+text = "Des traces de pas… petites, nombreuses, toutes fraîches. Et pas les miennes, pour une fois."
 
-[sub_resource type="Resource" id="Resource_4p1oo"]
-script = ExtResource("1_s32o4")
+[sub_resource type="Resource" id="Line_intro_4"]
+script = ExtResource("1_line")
 speaker = "Gobelin"
 portrait = ExtResource("9_goblin")
 text = "Hé, la grande carcasse ! Pose ton épée et vide ta bourse, on sera peut-être gentils."
 
-[sub_resource type="Resource" id="Resource_n8x1o"]
-script = ExtResource("1_s32o4")
+[sub_resource type="Resource" id="Line_intro_5"]
+script = ExtResource("1_line")
 speaker = "Guerrier"
 portrait = ExtResource("8_fighter")
-text = "J'ai une meilleure idée."
+text = "Tobin, à couvert. J'ai une meilleure idée."
 
 [resource]
-script = ExtResource("2_tiqlg")
+script = ExtResource("2_dialogue")
 id = &"intro"
-lines = Array[ExtResource("1_s32o4")]([SubResource("Resource_stx1u"), SubResource("Resource_1osuu"), SubResource("Resource_axwlu"), SubResource("Resource_4p1oo"), SubResource("Resource_n8x1o")])
+lines = Array[ExtResource("1_line")]([SubResource("Line_intro_1"), SubResource("Line_intro_2"), SubResource("Line_intro_3"), SubResource("Line_intro_4"), SubResource("Line_intro_5")])

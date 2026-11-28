@@ -4,19 +4,26 @@
 
 Mini jeu tactique au tour par tour pour PC, en 2D vue de dessus sur grille, basé sur les règles publiées dans le SRD 5.2.1. « Projet Phénix » est un titre provisoire.
 
-Le jeu enchaîne un écran titre, un menu, une intro narrative, un combat 1v1 (Guerrier contre Gobelin), une outro, avec options et sauvegarde. Le sprint 2 l'a peaufiné : toutes les règles d'un Guerrier de niveau 1 et d'un Gobelin guerrier, prévisions et retours en combat, graphismes, son et export Windows.
+Le jeu enchaîne un écran titre, un menu, une intro narrative, deux combats et une outro, avec options et sauvegarde. Le joueur commande un groupe de deux personnages de niveau 1, un Guerrier et Tobin, un Roublard halfelin. Ils tombent d'abord dans l'embuscade d'un gobelin, prennent un repos court, puis affrontent une bande (un gobelin guerrier et deux sbires) retranchée derrière des palissades.
+
+Le sprint 2 a peaufiné le combat 1v1 du départ (règles complètes du Guerrier et du Gobelin, prévisions, graphismes, son, export Windows). Le sprint 3 « Escouade » a ajouté le groupe, le Roublard, la bande, l'abri partiel et l'action Aider.
 
 ## Règles implémentées
 
 Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officielle en regard, dans `docs/rules-deviations.md`.
 
-- **Tour de combat** : déplacement case par case, action, action bonus, réaction ; Foncer, Se désengager, Esquiver, Chercher, Se relever.
+- **Tour de combat** : déplacement case par case, action, action bonus, réaction ; Foncer, Se désengager, Esquiver, Chercher, Se relever, Se cacher, Aider.
+- **Groupe** : chaque personnage joue à son tour d'initiative ; on traverse la case d'un allié sans pouvoir s'y arrêter ; le combat continue tant qu'un personnage n'est ni mort ni stabilisé.
 - **Attaques** : au corps à corps, à distance et lancées, portées normale et longue, désavantage avec un ennemi au contact, ligne de vue (un obstacle est un abri total), abri partiel (+2 CA derrière un muret ou une autre créature), avantage et désavantage qui s'annulent, coups critiques, attaques d'opportunité (le joueur est consulté à chaque fois).
 - **Guerrier humain niveau 1, historique Soldat** : Great Weapon Fighting, Second Wind, Weapon Mastery (épée à deux mains : Graze, fléau : Sap, javelots : Slow), Savage Attacker, Inspiration héroïque.
+- **Roublard halfelin niveau 1, historique Criminel** : Attaque sournoise (1d6), Expertise (Discrétion, Perception), Weapon Mastery (épée courte et arc court : Vex), combat à deux armes, Chance et Discrétion naturelle du Halfelin, don Alert (échange d'initiative), flèches comptées (la moitié se récupère après le combat).
 - **Gobelin guerrier** : cimeterre et arc court, +1d4 dégâts avec l'avantage, Nimble Escape (se désengager ou se cacher par une action bonus).
+- **Sbire gobelin** : trois dagues, au corps à corps ou lancées, Nimble Escape.
+- **Aider** : distraire un ennemi au contact (avantage à la prochaine attaque d'un allié), ou stabiliser un allié mourant (Sagesse (Médecine) DD 10).
+- **Repos court** entre les deux combats : un dé de vie dépensé par personnage blessé, et Second Wind récupère une utilisation.
 - **Se cacher et chercher** : condition Invisible, attaque à l'aveugle d'une case, embuscade et surprise au début du combat. Un caché est trouvé par l'action Chercher, s'il finit son tour en vue d'un ennemi, si un ennemi finit son déplacement en vue de lui, par une Perception passive suffisante ou si on le heurte (règles de MJ, voir `docs/rules-deviations.md`).
 - **0 PV** : mort du monstre, Guerrier inconscient et à terre, jets contre la mort, dégâts massifs, critique automatique au contact.
-- **IA** : une action à la fois ; elle se cache, tire de loin, se désengage avant de reculer à l'abri, achève un Guerrier inconscient.
+- **IA** : une action à la fois ; elle se cache, tire de loin, se désengage avant de reculer à l'abri, vise le personnage debout le plus proche en chemin et n'achève un personnage à terre que faute de mieux.
 
 ## Prérequis
 
@@ -37,11 +44,12 @@ Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officie
 Commandes du combat :
 
 - clic sur une case bleue : se déplacer (le chemin passe en croix rouges s'il provoque une attaque d'opportunité) ;
-- clic sur un ennemi : l'attaquer avec l'arme choisie ; le survol affiche les chances de toucher et les dégâts ;
+- clic sur un ennemi : l'attaquer avec l'arme choisie ; le survol affiche les chances de toucher et les dégâts. Après une attaque avec une arme Légère, un nouveau clic fait l'attaque de la main libre (action bonus) ;
+- clic sur un allié mourant au contact : le stabiliser (action Aider) ;
 - clic sur un ennemi caché (pion transparent), ou **Maj** + clic sur une case : attaque à l'aveugle ;
-- trois premières lettres de la rangée du haut (**A Z E** en AZERTY) : choisir l'épée, le fléau ou les javelots ;
-- **1** à **6** : Foncer, Se désengager, Esquiver, Second souffle, Chercher, Se relever ;
-- **O** / **N** : répondre à une question (attaque d'opportunité, relance) ;
+- trois premières lettres de la rangée du haut (**A Z E** en AZERTY) : choisir une arme du personnage commandé ;
+- **1** à **8** : les actions de la barre (Foncer, Se désengager, Esquiver, Second souffle pour le Guerrier, Chercher, Se relever, Se cacher, Aider) ;
+- **O** / **N** : répondre à une question (attaque d'opportunité, relance, échange d'initiative d'Alert) ;
 - **Espace** : finir le tour.
 - En ligne de commande : `godot --path .`
 
@@ -55,7 +63,7 @@ godot --path . -- --autoplay --seed=42 --speed=2
 
 - `--seed=N` : graine des dés. Même graine, même code, même partie, à chaque fois.
 - `--speed=N` : accélère le jeu (de 0,25 à 16, 1 par défaut).
-- Le Guerrier est conduit par la même IA que le Gobelin. Le journal du combat est recopié dans la console (lignes `[démo]`), avec un résumé à la fin.
+- Le groupe est conduit par la même IA que les gobelins. Le journal du combat est recopié dans la console (lignes `[démo]`), avec un résumé à la fin.
 - La partie du joueur n'est pas touchée : le mode démo sauvegarde dans `user://autoplay_save.json`.
 - Sans fenêtre, pour ne lire que le journal : ajouter `--headless` avant `--path`.
 
@@ -157,7 +165,7 @@ Pour vérifier l'export sans rien publier : onglet **Actions**, workflow **Relea
 
 ## Rejouer un combat
 
-Chaque combat est enregistré au fil des choix du joueur dans `user://replays/last_combat.json` (sous Windows : `%APPDATA%\Godot\app_userdata\Projet Phénix\replays\`). Le fichier contient la graine des dés, la situation de départ du Guerrier et ses choix ; l'IA et les dés étant déterministes, cela suffit à reproduire tout le combat. Il est écrit après chaque choix : il reste utilisable si le jeu est quitté en plein combat.
+Chaque combat est enregistré au fil des choix du joueur dans `user://replays/last_combat.json` (sous Windows : `%APPDATA%\Godot\app_userdata\Projet Phénix\replays\`). Le fichier contient la graine des dés, la situation de départ du groupe et ses choix ; l'IA et les dés étant déterministes, cela suffit à reproduire tout le combat. Il est écrit après chaque choix : il reste utilisable si le jeu est quitté en plein combat.
 
 Pour rejouer le dernier combat :
 
@@ -170,7 +178,7 @@ Le combat se rejoue sous les yeux, puis la console dit s'il aboutit au même ré
 ## Enchaînement des écrans
 
 - `SceneRouter` (autoload) est le seul point d'entrée pour changer de scène, avec un fondu au noir.
-- `GameState` (autoload) suit l'étape courante de `data/story.tres` et les PV du Guerrier. Une étape terminée (dialogue lu, combat gagné ou perdu) indique quoi afficher ensuite.
+- `GameState` (autoload) suit l'étape courante de `data/story.tres` et l'état du groupe (PV, ressources, flèches, dés de vie). Une étape peut offrir un repos court (`short_rest`), raconté au début de son dialogue. Une étape terminée (dialogue lu, combat gagné ou perdu) indique quoi afficher ensuite.
 - Une défaite sans étape de défaite définie mène à l'écran de défaite : « Réessayer le combat » relance l'étape à l'identique.
 - Quitter un combat en cours le fait recommencer au prochain « Continuer ».
 
@@ -196,12 +204,12 @@ Trois bus audio (`default_bus_layout.tres`) : Master, Music et Effects, réglabl
 
 Critères d'acceptation du brief :
 
-- Partie complète depuis l'exécutable exporté (titre, menu, intro, combat, outro, retour au menu) : l'export Windows est produit et démarre sans erreur sur un PC Windows ; la partie complète au clavier et à la souris reste à jouer à la main depuis l'exécutable.
+- Partie complète depuis l'exécutable exporté (titre, menu, intro, deux combats, outro, retour au menu) : l'export Windows est produit et démarre sans erreur sur un PC Windows ; la partie complète au clavier et à la souris reste à jouer à la main depuis l'exécutable.
 - La défaite propose de réessayer, et le réessai repart d'un combat propre : vérifié.
 - Quitter puis Continuer reprend à la dernière étape franchie : vérifié, y compris après fermeture du jeu.
 - Le journal affiche chaque jet avec son détail : vérifié et couvert par des tests.
 - Tous les tests passent en ligne de commande : `scripts/test.sh`.
-- Un deuxième Gobelin ne demande que de modifier `data/encounters/goblin_ambush.tres` (ajouter une entrée à `enemies`) : vérifié puis annulé. Seul `tests/scenes/combat_scene_test.gd`, qui vérifie les deux combattants de la rencontre v1, est à adapter dans ce cas.
+- Ajouter un ennemi ne demande que de modifier une rencontre de `data/encounters/` (une entrée de plus dans `enemies`) : c'est ainsi qu'est construite la bande.
 
 Les simplifications de règles sont listées dans `docs/rules-deviations.md`.
 

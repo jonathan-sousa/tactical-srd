@@ -160,29 +160,43 @@ func test_standalone_victory_shows_result_panel() -> void:
 
 func test_story_victory_reports_remaining_hp_without_result_panel() -> void:
 	GameState.current_step_id = &"goblin_ambush"
-	var fighter := PartyMember.fresh(GameState.party_definitions()[0])
+	var definitions := GameState.party_definitions()
+	var fighter := PartyMember.fresh(definitions[0])
 	fighter.hp = 7
 	fighter.second_wind_uses = 1
 	fighter.heroic_inspiration = false
-	var party: Array[PartyMember] = [fighter]
+	var party: Array[PartyMember] = [fighter, PartyMember.fresh(definitions[1])]
 	GameState.party = party
 	var reported: Array = []
 	_scene = auto_free(load(COMBAT_SCENE).instantiate())
-	_scene.set("dice", _fixed_dice(FIGHTER_FIRST + [20, 6, 6, 6, 6, 6, 6, 6, 6]))
+	# Embuscade : le gobelin rate sa Discrétion (1). Initiative : Guerrier 20,
+	# Roublard 2, gobelin 1. Puis un 20 naturel et des dégâts.
+	_scene.set("dice", _fixed_dice([1, 20, 2, 1, 20, 6, 6, 6, 6, 6, 6, 6, 6]))
 	_scene.set("end_delay", 0.0)
-	_scene.set("on_story_end", func(outcome: int, survivors: Array[Combatant]) -> void: reported.append([outcome, survivors[0].hp]))
+	_scene.set("on_story_end", func(outcome: int, survivors: Array[Combatant]) -> void: reported.append([outcome, survivors[0].hp, survivors.size()]))
 	_runner = scene_runner(_scene)
+	await _settle()
+	# Le groupe de l'histoire : Guerrier et Roublard. Alert : on refuse.
+	assert_int(_state().party().size()).is_equal(2)
+	assert_bool(_reaction_panel().visible).is_true()
+	_scene.get_node("%DecisionNoButton").emit_signal("pressed")
 	await _settle()
 	# Les PV et ressources restants de l'histoire sont repris.
 	assert_int(_fighter().hp).is_equal(7)
 	assert_int(_fighter().second_wind_uses).is_equal(1)
 	assert_bool(_fighter().heroic_inspiration).is_false()
 
-	_put_goblin_next_to_fighter()
-	_scene.call("_on_cell_clicked", _goblin().position)
+	var goblin := _state().combatants[2]
+	var cell := _fighter().position + Vector2i(1, 0)
+	if _state().combatant_at(cell) != null:
+		cell = _fighter().position + Vector2i(0, -1)
+	goblin.position = cell
+	var token: TokenView = _scene.get("_tokens")[goblin]
+	token.cell = cell
+	_scene.call("_on_cell_clicked", goblin.position)
 	await _settle()
 	await _runner.simulate_frames(2)
-	assert_array(reported).is_equal([[GameState.Outcome.VICTORY, 7]])
+	assert_array(reported).is_equal([[GameState.Outcome.VICTORY, 7, 2]])
 	assert_bool((_scene.get_node("%ResultPanel") as Control).visible).is_false()
 
 

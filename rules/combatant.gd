@@ -21,6 +21,8 @@ var position: Vector2i
 var reaction_available: bool = true
 ## Utilisations de Second Wind restantes.
 var second_wind_uses: int
+## Dés de vie restants (repos court). Un par niveau au départ.
+var hit_dice: int
 ## Inspiration héroïque disponible ?
 var heroic_inspiration: bool
 ## Exemplaires restants des armes qui s'épuisent (javelots), par id.
@@ -46,6 +48,7 @@ func _init(p_definition: CharacterDef, p_side: Combatant.Side, p_position: Vecto
 	position = p_position
 	hp = p_definition.max_hp
 	second_wind_uses = p_definition.second_wind_uses
+	hit_dice = p_definition.level
 	heroic_inspiration = p_definition.heroic_inspiration
 	quantities.assign(p_definition.weapon_quantities)
 

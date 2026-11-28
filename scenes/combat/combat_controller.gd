@@ -895,7 +895,7 @@ func _make_bar_button() -> Button:
 	var button := Button.new()
 	button.focus_mode = Control.FOCUS_NONE
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.custom_minimum_size = Vector2(0, 40)
+	button.custom_minimum_size = Vector2(0, 34)
 	# Le texte ne fixe pas la largeur : trop long, il est coupé par « … ».
 	button.clip_text = true
 	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS

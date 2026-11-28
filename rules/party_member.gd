@@ -16,6 +16,9 @@ var heroic_inspiration: bool
 ## Munitions restantes, par id d'arme (propriété Ammunition : l'arc court et
 ## ses flèches). Une arme absente a toutes celles de sa fiche.
 var ammunition: Dictionary[StringName, int] = {}
+## Dés de vie restants (un par niveau ; ils reviennent au repos long, absent
+## du jeu). -1 : pas encore connu, la fiche donne le compte (`clamp_to`).
+var hit_dice: int = -1
 
 
 ## Personnage frais : PV et ressources de sa fiche.
@@ -36,6 +39,7 @@ static func of(combatant: Combatant) -> PartyMember:
 	member.hp = combatant.hp
 	member.second_wind_uses = combatant.second_wind_uses
 	member.heroic_inspiration = combatant.heroic_inspiration
+	member.hit_dice = combatant.hit_dice
 	for id in _ammunition_ids(combatant.definition):
 		member.ammunition[id] = combatant.quantity_of(id)
 	return member
@@ -67,6 +71,7 @@ func clamp_to(definition: CharacterDef) -> void:
 	hp = clampi(hp, 1, definition.max_hp)
 	second_wind_uses = clampi(second_wind_uses, 0, definition.second_wind_uses)
 	heroic_inspiration = heroic_inspiration and definition.heroic_inspiration
+	hit_dice = definition.level if hit_dice < 0 else clampi(hit_dice, 0, definition.level)
 	var kept: Dictionary[StringName, int] = {}
 	for id in _ammunition_ids(definition):
 		var full: int = definition.weapon_quantities[id]
@@ -79,6 +84,8 @@ func apply_to(combatant: Combatant) -> void:
 	combatant.hp = mini(hp, combatant.definition.max_hp)
 	combatant.second_wind_uses = second_wind_uses
 	combatant.heroic_inspiration = heroic_inspiration
+	if hit_dice >= 0:
+		combatant.hit_dice = hit_dice
 	for id in ammunition:
 		if combatant.quantities.has(id):
 			combatant.quantities[id] = mini(ammunition[id], combatant.definition.weapon_quantities[id])
@@ -91,6 +98,7 @@ func to_dict() -> Dictionary:
 		"second_wind_uses": second_wind_uses,
 		"heroic_inspiration": heroic_inspiration,
 		"ammunition": _ammunition_to_dict(),
+		"hit_dice": hit_dice,
 	}
 
 
@@ -121,6 +129,11 @@ static func from_dict(raw: Variant) -> PartyMember:
 	member.hp = int(hp_value)
 	member.second_wind_uses = int(uses)
 	member.heroic_inspiration = inspiration
+	# `hit_dice` : absent des fichiers d'avant le repos court (dés intacts).
+	var dice_left: Variant = dict.get("hit_dice", -1)
+	if not _is_whole_number(dice_left) or int(dice_left) < -1:
+		return null
+	member.hit_dice = int(dice_left)
 	var ammunition: Variant = dict.get("ammunition", {})
 	if typeof(ammunition) != TYPE_DICTIONARY:
 		return null

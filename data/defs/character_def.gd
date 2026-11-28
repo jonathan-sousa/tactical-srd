@@ -57,7 +57,13 @@ const SKILL_ABILITIES: Dictionary[StringName, Abilities.Ability] = {
 @export_group("Combat")
 @export var size: Size = Size.MEDIUM
 @export var max_hp: int = 1
+## Dé de vie de la classe, en nombre de faces (d10 Guerrier, d8 Roublard).
+## Un dé de vie par niveau, dépensé au repos court.
+@export var hit_die: int = 8
 @export var armor_class: int = 10
+## Armure qui donne le désavantage en Discrétion (cotte de mailles du
+## Guerrier, SRD « Armor »).
+@export var stealth_disadvantage: bool = false
 ## Vitesse en pieds, comme dans le SRD (30 ft = 9 m = 6 cases).
 @export var speed_feet: int = 30
 @export var proficiency_bonus: int = 2

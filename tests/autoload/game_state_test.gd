@@ -3,6 +3,7 @@
 extends GdUnitTestSuite
 
 const GameStateScript := preload("res://autoload/game_state.gd")
+const FixedDice := preload("res://tests/helpers/fixed_dice.gd")
 
 var _game: Node
 
@@ -11,6 +12,8 @@ func before_test() -> void:
 	# Note gdUnit4 : auto_free() libère le Node à la fin du test.
 	_game = auto_free(GameStateScript.new())
 	_game.setup(DataRegistry.load_from())
+	# Dé de vie du repos court : 6.
+	_game.rest_dice = FixedDice.new([6, 6] as Array[int])
 
 
 ## Le Guerrier à la fin d'un combat gagné.
@@ -29,6 +32,9 @@ func _survivors(fighter: Combatant) -> Array[Combatant]:
 func test_new_game_starts_at_first_step_with_full_hp() -> void:
 	_game.new_game()
 	assert_str(_game.current_step_id).is_equal("intro")
+	assert_int(_game.party.size()).is_equal(2)
+	assert_str(_game.party[1].id).is_equal(&"rogue_lvl1")
+	assert_int(_game.party[1].hp).is_equal(10)
 	assert_int(_game.party[0].hp).is_equal(12)
 	assert_int(_game.party[0].second_wind_uses).is_equal(2)
 	assert_bool(_game.party[0].heroic_inspiration).is_true()
@@ -56,20 +62,31 @@ func test_defeat_without_defeat_step_shows_defeat_screen_and_stays() -> void:
 	assert_int(_game.party[0].hp).is_equal(12)
 
 
-func test_victory_keeps_remaining_hp() -> void:
+func test_victory_keeps_remaining_hp_then_a_short_rest() -> void:
 	_game.new_game()
 	_game.complete_step(GameStateScript.Outcome.DONE)
-	assert_int(_game.complete_step(GameStateScript.Outcome.VICTORY, _survivors(_survivor(7, 1, false)))).is_equal(GameStateScript.Next.STEP)
-	assert_str(_game.current_step_id).is_equal("victory")
-	assert_int(_game.party[0].hp).is_equal(7)
-	# Pas de repos : les ressources dépensées le restent.
+	assert_int(_game.complete_step(GameStateScript.Outcome.VICTORY, _survivors(_survivor(3, 0, false)))).is_equal(GameStateScript.Next.STEP)
+	assert_str(_game.current_step_id).is_equal("after_ambush")
+	# Repos court avant le dialogue : dé de vie 6 + CON 2, et un Second
+	# souffle revient. L'Inspiration héroïque, elle, attend un repos long.
+	assert_int(_game.party[0].hp).is_equal(11)
+	assert_int(_game.party[0].hit_dice).is_equal(0)
 	assert_int(_game.party[0].second_wind_uses).is_equal(1)
 	assert_bool(_game.party[0].heroic_inspiration).is_false()
+	var report: Array[ShortRestResult] = _game.take_rest_report()
+	assert_int(report.size()).is_equal(2)
+	assert_int(report[0].healed).is_equal(8)
+	# Le Roublard, intact, ne dépense rien.
+	assert_int(report[1].hit_die_roll).is_equal(0)
+	assert_array(_game.take_rest_report()).is_empty()
 
 
 func test_last_step_ends_the_story() -> void:
 	_game.new_game()
 	_game.complete_step(GameStateScript.Outcome.DONE)
+	_game.complete_step(GameStateScript.Outcome.VICTORY, _survivors(_survivor(7)))
+	_game.complete_step(GameStateScript.Outcome.DONE)
+	assert_str(_game.current_step_id).is_equal("goblin_band")
 	_game.complete_step(GameStateScript.Outcome.VICTORY, _survivors(_survivor(7)))
 	assert_int(_game.complete_step(GameStateScript.Outcome.DONE)).is_equal(GameStateScript.Next.END)
 	assert_bool(_game.story_completed).is_true()

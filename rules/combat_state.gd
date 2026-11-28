@@ -360,7 +360,9 @@ func sees_cell_of(observer: Combatant, hider: Combatant, cell: Vector2i) -> bool
 ## combattant est caché et son total devient le DD pour le trouver.
 func roll_hide(combatant: Combatant, dice: Dice, bonus_action: bool) -> HideAttemptedEvent:
 	var bonus := combatant.definition.skill_bonus(CharacterDef.STEALTH)
-	var roll := dice.roll_d20(Dice.RollMode.NORMAL, combatant.is_lucky())
+	# Une armure lourde ou intermédiaire peut gêner la Discrétion.
+	var mode := Dice.RollMode.DISADVANTAGE if combatant.definition.stealth_disadvantage else Dice.RollMode.NORMAL
+	var roll := dice.roll_d20(mode, combatant.is_lucky())
 	var success := roll.natural + bonus >= HIDE_DC
 	var event := HideAttemptedEvent.new(combatant, roll.natural, bonus, success, bonus_action)
 	event.lucky = roll.luck_rerolls > 0

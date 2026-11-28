@@ -7,7 +7,6 @@ extends VBoxContainer
 @onready var _hp_label: Label = %HpLabel
 @onready var _movement_label: Label = %MovementLabel
 @onready var _action_label: Label = %ActionLabel
-@onready var _bonus_label: Label = %BonusLabel
 @onready var _reaction_label: Label = %ReactionLabel
 @onready var _resources_label: Label = %ResourcesLabel
 @onready var _effects_label: Label = %EffectsLabel
@@ -21,8 +20,8 @@ func refresh(combatant: Combatant, state: CombatState) -> void:
 	_hp_label.text = "%s : %d / %d · %s : %d" % [Texts.HIT_POINTS, combatant.hp, definition.max_hp, Texts.ARMOR_CLASS, combatant.armor_class()]
 	var movement := state.movement_left if is_turn else speed
 	_movement_label.text = "%s : %d / %s" % [Texts.MOVEMENT, movement, Texts.squares(speed)]
-	_action_label.text = Texts.ACTION_USED if is_turn and state.action_used else Texts.ACTION_AVAILABLE
-	_bonus_label.text = Texts.bonus_action_line(is_turn and state.bonus_action_used)
+	# Action et action bonus sur une ligne, pour laisser de la place au journal.
+	_action_label.text = Texts.turn_actions_line(is_turn and state.action_used, is_turn and state.bonus_action_used)
 	_reaction_label.text = Texts.REACTION_AVAILABLE if combatant.reaction_available else Texts.REACTION_USED
 	_resources_label.text = Texts.resources_line(combatant, combatant.sneak_attack_turn == state.turn_count)
 	if combatant.is_dying():

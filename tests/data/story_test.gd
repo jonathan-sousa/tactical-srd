@@ -10,13 +10,16 @@ func before() -> void:
 	_story = _registry.story
 
 
-func test_v1_sequence_is_intro_combat_victory() -> void:
+func test_sequence_is_intro_ambush_rest_band_victory() -> void:
 	var ids: Array[StringName] = []
 	var step := _story.get_step(_story.first_step)
 	while step != null:
 		ids.append(step.id)
 		step = _story.get_step(step.next_step)
-	assert_array(ids).contains_exactly(&"intro", &"goblin_ambush", &"victory")
+	assert_array(ids).contains_exactly(&"intro", &"goblin_ambush", &"after_ambush", &"goblin_band", &"victory")
+	# Le repos court a lieu entre les deux combats, et seulement là.
+	for each in _story.steps:
+		assert_bool(each.short_rest).override_failure_message("Repos court : %s" % each.id).is_equal(each.id == &"after_ambush")
 
 
 func test_step_ids_are_unique() -> void:
@@ -76,7 +79,7 @@ func test_intro_has_3_to_6_lines() -> void:
 
 
 func test_no_dialogue_line_is_empty() -> void:
-	for dialogue_id: StringName in [&"intro", &"victory"]:
+	for dialogue_id: StringName in [&"intro", &"after_ambush", &"victory"]:
 		for line in _registry.dialogue(dialogue_id).lines:
 			assert_str(line.speaker.strip_edges()).is_not_empty()
 			assert_str(line.text.strip_edges()).is_not_empty()

@@ -97,13 +97,17 @@ func test_goblin_ambush_starts_hidden_behind_the_rock() -> void:
 	assert_bool(line_of_sight.is_clear(encounter.player_starts[0], encounter.enemies[0].cell)).is_false()
 
 
-func test_goblin_band_is_two_warriors_and_two_minions_against_two_characters() -> void:
+func test_goblin_band_is_a_warrior_and_two_minions_against_two_characters() -> void:
 	var encounter := _registry.encounter(&"goblin_band")
 	assert_int(encounter.player_starts.size()).is_equal(2)
 	var ids: Array[StringName] = []
 	for placement in encounter.enemies:
 		ids.append(placement.character.id)
-	assert_array(ids).contains_exactly_in_any_order([&"goblin_minion", &"goblin_minion", &"goblin_warrior", &"goblin_warrior"])
+	assert_array(ids).contains_exactly_in_any_order([&"goblin_minion", &"goblin_minion", &"goblin_warrior"])
+
+
+func test_goblin_ambush_has_a_start_for_each_character() -> void:
+	assert_int(_registry.encounter(&"goblin_ambush").player_starts.size()).is_equal(2)
 
 
 func test_low_walls_are_not_also_obstacles() -> void:

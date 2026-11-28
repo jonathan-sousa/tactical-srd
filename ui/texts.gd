@@ -51,7 +51,8 @@ const PAUSE := "Pause"
 const RESUME := "Reprendre"
 const BACK_TO_MENU := "Retour au menu"
 const BACK := "Retour"
-const DEFEAT_MESSAGE := "Le Guerrier s'effondre. La route de Pierrefeu s'arrête ici… pour cette fois."
+const DEFEAT_MESSAGE := "Le Guerrier et Tobin tombent sous les lames gobelines. La route de Pierrefeu s'arrête ici… pour cette fois."
+const NARRATOR := "Narrateur"
 const RETRY_COMBAT := "Réessayer le combat"
 const MAIN_MENU := "Menu principal"
 const MASTER_VOLUME := "Volume général"
@@ -316,6 +317,11 @@ static func _count(value: int, noun: String) -> String:
 ## « Action bonus : disponible ».
 static func bonus_action_line(used: bool) -> String:
 	return BONUS_ACTION_USED if used else BONUS_ACTION_AVAILABLE
+
+
+## « Action : disponible · Bonus : utilisée ».
+static func turn_actions_line(action_used: bool, bonus_used: bool) -> String:
+	return "Action : %s · Bonus : %s" % ["utilisée" if action_used else "disponible", "utilisée" if bonus_used else "disponible"]
 
 
 ## « Second souffle : 2 / 2 · Inspiration héroïque : oui ». Pour le
@@ -652,6 +658,19 @@ static func stabilize_hint(helper: Combatant, patient: Combatant) -> String:
 	return "Stabiliser %s (action Aider) : Médecine %s contre DD %d, %s de réussite." % [
 		patient.display_name, signed(bonus), HelpAction.STABILIZE_DC, percent(chance),
 	]
+
+
+## Repos court : « Repos court : le Guerrier panse ses plaies (dé de vie 6
+## + 2 : +8 PV) et retrouve un Second souffle. »
+static func short_rest_line(name: String, result: ShortRestResult) -> String:
+	var parts: PackedStringArray = []
+	if result.hit_die_roll > 0:
+		parts.append("panse ses plaies (dé de vie %d, +%d PV)" % [result.hit_die_roll, result.healed])
+	if result.second_wind_regained:
+		parts.append("retrouve une utilisation de %s" % SECOND_WIND)
+	if parts.is_empty():
+		return "Repos court : %s n'a besoin de rien." % name
+	return "Repos court : %s %s." % [name, " et ".join(parts)]
 
 
 static func recovered_line(event: CombatantRecoveredEvent) -> String:

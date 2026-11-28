@@ -19,6 +19,9 @@ func test_fighter_matches_srd() -> void:
 	# Cotte de mailles : CA 16 (exige FOR 13).
 	assert_int(fighter.armor_class).is_equal(16)
 	assert_int(fighter.strength).is_greater_equal(13)
+	# Cotte de mailles : désavantage en Discrétion. Dé de vie du Guerrier : d10.
+	assert_bool(fighter.stealth_disadvantage).is_true()
+	assert_int(fighter.hit_die).is_equal(10)
 	assert_int(fighter.initiative_bonus).is_equal(Abilities.modifier(fighter.dexterity))
 	assert_int(fighter.speed_feet).is_equal(30)
 	assert_int(fighter.proficiency_bonus).is_equal(2)
@@ -110,6 +113,9 @@ func test_rogue_matches_srd() -> void:
 	assert_array(rogue.feats).contains_exactly([CharacterDef.ALERT])
 	assert_array(rogue.traits).contains_exactly_in_any_order([CharacterDef.HALFLING_LUCK, CharacterDef.NATURALLY_STEALTHY])
 	assert_str(rogue.sneak_attack_dice).is_equal("1d6")
+	# Armure de cuir : pas de gêne. Dé de vie du Roublard : d8.
+	assert_bool(rogue.stealth_disadvantage).is_false()
+	assert_int(rogue.hit_die).is_equal(8)
 	# Expertise en Discrétion et Perception : maîtrise doublée.
 	assert_int(rogue.skill_bonus(CharacterDef.STEALTH)).is_equal(Abilities.modifier(rogue.dexterity) + 2 * rogue.proficiency_bonus)
 	assert_int(rogue.skill_bonus(CharacterDef.PERCEPTION)).is_equal(Abilities.modifier(rogue.wisdom) + 2 * rogue.proficiency_bonus)
