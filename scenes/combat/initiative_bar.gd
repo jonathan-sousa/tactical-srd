@@ -20,7 +20,7 @@ func refresh(active: Combatant) -> void:
 	for entry in _entries:
 		var label := Label.new()
 		var combatant := entry.combatant
-		label.text = "%s (%d)" % [combatant.definition.display_name, entry.total]
+		label.text = "%s (%d)" % [combatant.short_name(), entry.total]
 		var color := IDLE_COLOR
 		if combatant.is_down():
 			color = DOWN_COLOR

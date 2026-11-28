@@ -202,7 +202,7 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, RADIUS, color)
 		draw_arc(Vector2.ZERO, RADIUS, 0.0, TAU, 48, color.darkened(0.4), 2.0)
 		# Deux lettres pour distinguer Guerrier (Gu) et Gobelin (Go).
-		var initial := combatant.definition.display_name.left(2)
+		var initial := combatant.display_name.left(2)
 		var text_size := font.get_string_size(initial, HORIZONTAL_ALIGNMENT_CENTER, -1, 20)
 		draw_string(font, Vector2(-text_size.x / 2.0, text_size.y / 3.0), initial, HORIZONTAL_ALIGNMENT_CENTER, -1, 20, Color.WHITE)
 
@@ -210,6 +210,15 @@ func _draw() -> void:
 	var bar := Rect2(Vector2(-RADIUS, RADIUS + 4.0), Vector2(RADIUS * 2.0, 6.0))
 	draw_rect(bar, HP_BACK_COLOR)
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), hp_color(ratio))
+
+	# Numéro en bas à gauche, pour distinguer deux combattants de même fiche.
+	if combatant.number > 0:
+		var number := str(combatant.number)
+		var number_center := Vector2(-RADIUS + 2.0, RADIUS - 6.0)
+		draw_circle(number_center, BADGE_RADIUS, color.darkened(0.3))
+		draw_arc(number_center, BADGE_RADIUS, 0.0, TAU, 24, Color(0.05, 0.05, 0.08), 1.5)
+		var number_size := font.get_string_size(number, HORIZONTAL_ALIGNMENT_CENTER, -1, 14)
+		draw_string(font, number_center + Vector2(-number_size.x / 2.0, 5.0), number, HORIZONTAL_ALIGNMENT_CENTER, -1, 14, Color.WHITE)
 
 	# Pastilles d'effets en haut à droite, de droite à gauche.
 	var badge_center := Vector2(RADIUS - 2.0, -RADIUS + 2.0)

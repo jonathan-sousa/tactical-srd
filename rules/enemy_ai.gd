@@ -9,6 +9,10 @@
 ## Le Guerrier joué par l'IA (mode démo, tests) prend Second Wind à la
 ## moitié de ses PV.
 ##
+## Face à un groupe, chacun vise le personnage debout qu'il peut attaquer
+## ce tour-ci, le plus proche en longueur de chemin. Un personnage à terre
+## n'est visé que si aucun autre n'est à portée ce tour-ci.
+##
 ## Tactique du Gobelin, dans l'ordre :
 ## 1. Hors de vue, il se cache d'abord (Nimble Escape) : son attaque aura
 ##    l'avantage, et +1d4 dégâts.
@@ -17,6 +21,9 @@
 ##    ne peut pas attaquer d'où il est, il va sur la meilleure case.
 ## 3. Au contact d'un ennemi, il se désengage avant de reculer.
 ## 4. Il recule à l'abri d'un obstacle, puis s'y cache s'il le peut encore.
+##
+## Le Sbire lance ses dagues de loin, mais garde la dernière pour le
+## contact.
 class_name EnemyAI
 extends RefCounted
 
@@ -115,11 +122,16 @@ static func _weapon_here(state: CombatState, actor: Combatant, target: Combatant
 	return null
 
 
-## Arme à distance utilisable (arc, javelots restants), ou `null`.
+## Arme à distance utilisable (arc, javelots restants), ou `null`. On ne
+## lance pas le dernier exemplaire de son arme de corps à corps (la dernière
+## dague du Sbire) : sans elle, il n'aurait plus de quoi frapper.
 static func _ranged_weapon(actor: Combatant) -> WeaponDef:
 	for weapon in actor.definition.weapons:
-		if weapon.has_range() and actor.quantity(weapon) > 0:
-			return weapon
+		if not weapon.has_range() or actor.quantity(weapon) <= 0:
+			continue
+		if weapon.has_property(WeaponDef.THROWN) and actor.quantity(weapon) == 1 and actor.melee_weapon() == weapon:
+			continue
+		return weapon
 	return null
 
 
@@ -186,9 +198,13 @@ static func _approach_cell(state: CombatState, actor: Combatant, target: Combata
 	if goal == NO_CELL:
 		return NO_CELL
 	var path := state.find_path(actor, goal)
-	if path.is_empty():
-		return NO_CELL
-	return path[mini(state.movement_left, path.size()) - 1]
+	# On traverse un allié sans pouvoir s'arrêter dans sa case : on s'arrête
+	# alors un peu avant.
+	var allies := state.ally_cells(actor)
+	var stop := mini(state.movement_left, path.size()) - 1
+	while stop >= 0 and allies.has(path[stop]):
+		stop -= 1
+	return path[stop] if stop >= 0 else NO_CELL
 
 
 # --- Action bonus et repli -------------------------------------------------------
@@ -238,18 +254,57 @@ static func _retreat_step(state: CombatState, actor: Combatant) -> Action:
 # --- Outils ----------------------------------------------------------------------
 
 
-## Ennemi à viser : le plus proche de ceux qu'on ne sait pas cachés.
+## Ennemi à viser parmi ceux qu'on ne sait pas cachés, `null` s'il n'y en a
+## pas. Critères, dans l'ordre :
+## 1. un ennemi debout qu'on peut attaquer ce tour-ci ; à défaut un ennemi à
+##    terre qu'on peut attaquer ; à défaut, un ennemi debout ;
+## 2. le plus proche en longueur de chemin ;
+## 3. le moins de PV, puis l'ordre des combattants (choix reproductible).
 static func _choose_target(state: CombatState, actor: Combatant) -> Combatant:
-	var closest: Combatant = null
-	var best := 0
+	var reachable := state.reachable_from(actor, actor.position, state.movement_left)
+	var everywhere := state.reachable_from(actor, actor.position, state.encounter.grid_size.x * state.encounter.grid_size.y)
+	var best: Combatant = null
+	var best_score: Array[int] = []
 	for enemy in state.living_enemies_of(actor):
 		if state.is_hidden_from(enemy, actor):
 			continue
-		var distance := GridPathfinder.chebyshev(actor.position, enemy.position)
-		if closest == null or distance < best:
-			closest = enemy
-			best = distance
-	return closest
+		var attackable := _can_attack_this_turn(state, actor, enemy, reachable)
+		var tier := 0 if attackable else 2
+		if enemy.is_down():
+			tier += 1
+		var score: Array[int] = [tier, _path_length_to(actor, enemy, everywhere), enemy.hp, state.combatants.find(enemy)]
+		if best == null or score < best_score:
+			best = enemy
+			best_score = score
+	return best
+
+
+## Peut-on attaquer `target` ce tour-ci, d'ici ou après s'être déplacé vers
+## une case de `reachable` ?
+static func _can_attack_this_turn(state: CombatState, actor: Combatant, target: Combatant, reachable: Dictionary[Vector2i, int]) -> bool:
+	if _weapon_here(state, actor, target) != null:
+		return true
+	var melee := actor.melee_weapon()
+	var ranged := _ranged_weapon(actor)
+	for cell: Vector2i in reachable:
+		if melee != null and GridPathfinder.chebyshev(cell, target.position) <= 1:
+			return true
+		if ranged != null and _can_shoot_from(state, actor, target, ranged, cell):
+			return true
+	return false
+
+
+## Nombre de cases à parcourir pour arriver au contact de `target`, d'après
+## `everywhere` (case → coût, sans limite de déplacement). Très grand si on
+## ne peut pas l'atteindre.
+static func _path_length_to(actor: Combatant, target: Combatant, everywhere: Dictionary[Vector2i, int]) -> int:
+	if GridPathfinder.chebyshev(actor.position, target.position) <= 1:
+		return 0
+	var shortest := 1 << 30
+	for cell: Vector2i in everywhere:
+		if GridPathfinder.chebyshev(cell, target.position) <= 1:
+			shortest = mini(shortest, everywhere[cell])
+	return shortest
 
 
 static func _has_conscious_enemy(state: CombatState, actor: Combatant) -> bool:

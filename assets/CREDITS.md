@@ -7,6 +7,7 @@ Toutes les ressources graphiques et sonores et la police du jeu sont sous licenc
 | Tiny Town 1.1 | `tiles/tiny_town.png` (herbe, arbres, buissons) | Kenney | CC0 1.0 | https://kenney.nl/assets/tiny-town |
 | Tiny Dungeon 1.0 | `sprites/fighter.png` (tuile 98) | Kenney | CC0 1.0 | https://kenney.nl/assets/tiny-dungeon |
 | Tiny Dungeon 1.0, recoloré | `sprites/goblin.png` (tuile 112, peau verte et bandeau rouge pour le Gobelin) | Kenney, modifié pour ce jeu | CC0 1.0 | https://kenney.nl/assets/tiny-dungeon |
+| Tiny Dungeon 1.0, recoloré | `sprites/goblin_minion.png` (tuile 112, peau verte et bandeau jaune pour le Sbire gobelin) | Kenney, modifié pour ce jeu | CC0 1.0 | https://kenney.nl/assets/tiny-dungeon |
 | Icône du jeu | `icon.png` (le Guerrier de Tiny Dungeon, agrandi sur un médaillon) | Kenney, modifié pour ce jeu | CC0 1.0 | https://kenney.nl/assets/tiny-dungeon |
 | UI Pack: RPG Expansion | `ui/*.png` (panneaux et boutons) | Kenney | CC0 1.0 | https://kenney.nl/assets/ui-pack-rpg-expansion |
 | RPG Audio | `audio/sfx/knifeSlice.ogg`, `audio/sfx/knifeSlice2.ogg`, `audio/sfx/drawKnife1.ogg`, `audio/sfx/cloth1.ogg`, `audio/sfx/cloth3.ogg` | Kenney | CC0 1.0 | https://kenney.nl/assets/rpg-audio |
