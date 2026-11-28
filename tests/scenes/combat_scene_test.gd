@@ -303,7 +303,7 @@ func test_second_wind_key_heals_the_fighter() -> void:
 	# 1d10 + 1 : 5 + 1 = 6 PV.
 	await _start(FIGHTER_FIRST + [5])
 	_fighter().hp = 4
-	_runner.simulate_key_pressed(KEY_4)
+	_runner.simulate_key_pressed(KEY_7)
 	await _settle()
 	assert_int(_fighter().hp).is_equal(10)
 	assert_bool(_state().bonus_action_used).is_true()
@@ -344,8 +344,8 @@ func test_ambush_shows_the_hidden_goblin_as_a_ghost_until_found() -> void:
 	var token: TokenView = _scene.get("_tokens")[_goblin()]
 	assert_bool(_state().is_hidden(_goblin())).is_true()
 	assert_bool(token.is_ghost).is_true()
-	# Chercher (touche 5) : 20 + 3 = 23, au-dessus de sa Discrétion (18).
-	_runner.simulate_key_pressed(KEY_5)
+	# Chercher (touche 4) : 20 + 3 = 23, au-dessus de sa Discrétion (18).
+	_runner.simulate_key_pressed(KEY_4)
 	await _settle()
 	assert_bool(_state().is_hidden(_goblin())).is_false()
 	assert_bool(token.is_ghost).is_false()
@@ -520,6 +520,72 @@ func test_alt_shows_the_tactical_view_while_held() -> void:
 	await _runner.simulate_frames(1)
 	assert_bool(_board().tactical).is_false()
 	assert_str(token.label_text).is_empty()
+
+
+func _budget() -> TurnBudget:
+	return (_scene.get_node("%CharacterPanel") as CharacterPanel).budget
+
+
+func _action_button(id: StringName) -> Button:
+	return (_scene.get("_action_buttons") as Dictionary)[id]
+
+
+func _action_tip() -> BoardTooltip:
+	return _scene.get("_action_tip")
+
+
+func test_turn_budget_pips_follow_the_turn() -> void:
+	await _start(FIGHTER_FIRST)
+	assert_bool(_budget().action_available).is_true()
+	assert_bool(_budget().bonus_available).is_true()
+	assert_int(_budget().movement_left).is_equal(6)
+	_scene.call("_on_cell_clicked", _fighter().position + Vector2i(2, 0))
+	await _settle()
+	assert_int(_budget().movement_left).is_equal(4)
+	_runner.simulate_key_pressed(KEY_3)
+	await _settle()
+	assert_bool(_budget().action_available).is_false()
+
+
+func test_hovering_dash_previews_the_extended_reach() -> void:
+	await _start(FIGHTER_FIRST)
+	_scene.call("_on_action_hovered", StandardAction.DASH, _action_button(StandardAction.DASH))
+	assert_array(_board().reach_preview).is_not_empty()
+	var far := _board().reach_preview[0]
+	assert_bool(_board().reachable.has(far)).is_false()
+	assert_bool(_action_tip().visible).is_true()
+	assert_str(_action_tip().text()).contains("6 cases → 12 cases")
+	_scene.call("_on_action_unhovered", _action_button(StandardAction.DASH))
+	assert_array(_board().reach_preview).is_empty()
+	assert_bool(_action_tip().visible).is_false()
+
+
+func test_hovering_hide_shows_the_cells_out_of_sight() -> void:
+	await _start(FIGHTER_FIRST)
+	_scene.call("_on_action_hovered", HideAction.ID, _action_button(HideAction.ID))
+	assert_array(_board().hiding_preview).is_equal(_state().hiding_cells(_fighter()))
+	assert_str(_action_tip().text()).contains(Texts.PREVIEW_HIDE_CELLS)
+
+
+func test_a_disabled_action_explains_why() -> void:
+	await _start(FIGHTER_FIRST)
+	_runner.simulate_key_pressed(KEY_3)
+	await _settle()
+	var dash := _action_button(StandardAction.DASH)
+	assert_bool(dash.disabled).is_true()
+	_scene.call("_on_action_hovered", StandardAction.DASH, dash)
+	assert_str(_action_tip().text()).contains(Texts.reason(StandardAction.new(_fighter(), StandardAction.DASH).validate(_state())))
+	assert_str(_action_tip().text()).contains(Texts.COST_ACTION)
+
+
+func test_cursor_shows_what_a_click_would_do() -> void:
+	await _start(FIGHTER_FIRST)
+	_scene.call("_on_cell_hovered", _fighter().position + Vector2i(1, 0))
+	assert_int(_scene.get("_cursor_shape")).is_equal(Input.CURSOR_POINTING_HAND)
+	_scene.call("_on_cell_hovered", Vector2i(11, 7))
+	assert_int(_scene.get("_cursor_shape")).is_equal(Input.CURSOR_FORBIDDEN)
+	_scene.call("_on_cell_hovered", BoardView.NO_CELL)
+	assert_int(_scene.get("_cursor_shape")).is_equal(Input.CURSOR_ARROW)
 
 
 func test_hit_shows_floating_damage() -> void:

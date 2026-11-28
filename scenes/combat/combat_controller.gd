@@ -88,7 +88,7 @@ var _replay_index := 0
 @onready var _result_panel: PanelContainer = %ResultPanel
 @onready var _result_label: Label = %ResultLabel
 @onready var _replay_button: Button = %ReplayButton
-@onready var _action_bar: GridContainer = %ActionBar
+@onready var _action_bar: VBoxContainer = %ActionBar
 @onready var _weapon_bar: HBoxContainer = %WeaponBar
 @onready var _decision_panel: PanelContainer = %DecisionPanel
 @onready var _decision_question: Label = %DecisionQuestionLabel
@@ -116,6 +116,13 @@ var _tooltip: BoardTooltip
 var _sheet: CombatantSheet
 ## Vue tactique affichée (touche Alt maintenue).
 var _tactical := false
+## Bulle d'un bouton d'action ou d'arme, collée à gauche du panneau.
+var _action_tip: BoardTooltip
+## Bouton d'action survolé (ou qui a le focus), et son code ; vide sinon.
+var _hovered_action: StringName = &""
+var _hovered_action_button: Button
+## Forme du curseur choisie au survol du plateau (lue par les tests).
+var _cursor_shape := Input.CURSOR_ARROW
 ## Dernier round annoncé dans le journal.
 var _logged_round := 0
 ## Position de repos du plateau, que la secousse retrouve.
@@ -204,6 +211,8 @@ func _ready() -> void:
 	$Hud.add_child(_tooltip)
 	_sheet = CombatantSheet.new()
 	$Hud.add_child(_sheet)
+	_action_tip = BoardTooltip.new()
+	$Hud.add_child(_action_tip)
 	# Le plateau (un Node2D) suit la place que lui réserve l'interface.
 	# Note Godot : `item_rect_changed` est émis quand un Control change de
 	# position ou de taille, par exemple quand son conteneur le place.
@@ -850,8 +859,16 @@ func _set_tactical(enabled: bool) -> void:
 		_on_cell_hovered(_hovered_cell)
 
 
+## Curseur de la souris : une main si le clic fait quelque chose, un sens
+## interdit s'il serait refusé, la flèche ailleurs.
+func _set_cursor(shape: Input.CursorShape) -> void:
+	_cursor_shape = shape
+	Input.set_default_cursor_shape(shape)
+
+
 ## Efface la bulle et les aperçus du survol précédent.
 func _clear_hover() -> void:
+	_set_cursor(Input.CURSOR_ARROW)
 	_tooltip.hide_content()
 	_tooltip.keep_clear = Rect2()
 	_board.path_preview = []
@@ -872,6 +889,7 @@ func _hover_enemy(enemy: Combatant, cell: Vector2i) -> void:
 		body = Texts.TOOLTIP_HIDDEN
 	var attack := _action_for_cell(cell) as AttackAction
 	var reason := attack.validate(state)
+	_set_cursor(Input.CURSOR_POINTING_HAND if reason.is_empty() else Input.CURSOR_FORBIDDEN)
 	if not reason.is_empty():
 		body += "\n" + Texts.refusal(reason)
 	elif attack.is_blind():
@@ -898,6 +916,7 @@ func _hover_ally(ally: Combatant) -> void:
 		if action is HelpAction:
 			var reason := action.validate(state)
 			body += "\n" + (Texts.stabilize_hint(_player, ally) if reason.is_empty() else Texts.refusal(reason))
+			_set_cursor(Input.CURSOR_POINTING_HAND if reason.is_empty() else Input.CURSOR_FORBIDDEN)
 	_show_unit_tooltip(ally, body)
 
 
@@ -916,6 +935,7 @@ func _hover_ground(cell: Vector2i) -> void:
 		lines.append(Texts.terrain_rule(info.terrain))
 	var move := _action_for_cell(cell)
 	var reason := move.validate(state)
+	_set_cursor(Input.CURSOR_POINTING_HAND if reason.is_empty() else Input.CURSOR_FORBIDDEN)
 	if move is MoveAction and reason.is_empty():
 		var path := state.find_path(_player, cell)
 		var attackers := state.opportunity_attackers(_player, path)
@@ -1002,34 +1022,236 @@ func _build_weapon_bar() -> void:
 			button.shortcut = _key_shortcut(WEAPON_KEYS[i], true)
 			_weapon_key_labels.append(_physical_key_label(WEAPON_KEYS[i]))
 		button.pressed.connect(_on_weapon_pressed.bind(weapon))
+		button.add_child(_cost_stripe(Palette.FREE))
+		button.mouse_entered.connect(_on_weapon_hovered.bind(weapon, button))
+		button.mouse_exited.connect(func() -> void: _action_tip.hide_content())
 		_weapon_bar.add_child(button)
 		_weapon_buttons[weapon] = button
 
 
-## Barre d'actions : Foncer, Se désengager, Esquiver, Second Wind si le
-## personnage l'a, Chercher et Se relever. Chaque bouton a sa touche (1 à 6).
+## Barre d'actions, en sections selon le coût : Action (Foncer, Se
+## désengager, Esquiver, Chercher, Se cacher, Aider), Action bonus (Second
+## Wind si le personnage l'a, rappel de la main libre) et Déplacement (Se
+## relever). Les touches 1 à 8 suivent l'ordre affiché.
 func _build_action_bar() -> void:
 	_clear_bar(_action_bar)
 	_action_buttons.clear()
 	_action_factories.clear()
+	_clear_action_preview()
+	var actions: Array[StringName] = []
 	for kind in StandardAction.ALL:
 		_action_factories[kind] = func() -> Action: return StandardAction.new(_player, kind)
-	if _player.definition.second_wind_uses > 0:
-		_action_factories[Texts.SECOND_WIND_ID] = func() -> Action: return SecondWindAction.new(_player)
+		actions.append(kind)
 	_action_factories[SearchAction.ID] = func() -> Action: return SearchAction.new(_player)
-	_action_factories[StandUpAction.ID] = func() -> Action: return StandUpAction.new(_player)
 	_action_factories[HideAction.ID] = func() -> Action: return HideAction.new(_player)
 	_action_factories[HelpAction.ID] = _help_for_button
-	var i := 0
-	for id: StringName in _action_factories:
-		var button := _make_bar_button()
-		button.text = "%s (%d)" % [Texts.action_name(id), i + 1]
-		if i < ACTION_KEYS.size():
-			button.shortcut = _key_shortcut(ACTION_KEYS[i])
-		button.pressed.connect(_on_action_pressed.bind(id))
-		_action_bar.add_child(button)
-		_action_buttons[id] = button
-		i += 1
+	actions.append_array([SearchAction.ID, HideAction.ID, HelpAction.ID])
+	var bonus: Array[StringName] = []
+	if _player.definition.second_wind_uses > 0:
+		_action_factories[Texts.SECOND_WIND_ID] = func() -> Action: return SecondWindAction.new(_player)
+		bonus.append(Texts.SECOND_WIND_ID)
+	_action_factories[StandUpAction.ID] = func() -> Action: return StandUpAction.new(_player)
+	var movement: Array[StringName] = [StandUpAction.ID]
+
+	_action_bar.add_child(_section_header(Texts.SECTION_ACTIONS, Palette.ACTION))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override(&"h_separation", 8)
+	grid.add_theme_constant_override(&"v_separation", 4)
+	_action_bar.add_child(grid)
+	for id in actions:
+		grid.add_child(_make_action_button(id, Palette.ACTION))
+
+	# Action bonus et déplacement côte à côte : une ligne pour deux sections.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 8)
+	_action_bar.add_child(row)
+	var bonus_box := _section_box(Texts.SECTION_BONUS, Palette.BONUS_ACTION)
+	row.add_child(bonus_box)
+	for id in bonus:
+		bonus_box.add_child(_make_action_button(id, Palette.BONUS_ACTION))
+	if bonus.is_empty() and _has_off_hand():
+		var reminder := Label.new()
+		reminder.text = Texts.OFF_HAND_REMINDER
+		reminder.tooltip_text = Texts.OFF_HAND_REMINDER_TOOLTIP
+		# Note Godot : un Label ignore la souris par défaut ; pour montrer son
+		# infobulle, il doit la recevoir.
+		reminder.mouse_filter = Control.MOUSE_FILTER_PASS
+		reminder.theme_type_variation = &"MutedLabel"
+		reminder.custom_minimum_size = Vector2(0, 34)
+		reminder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		reminder.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		reminder.clip_text = true
+		bonus_box.add_child(reminder)
+	var movement_box := _section_box(Texts.SECTION_MOVEMENT, Palette.MOVEMENT)
+	row.add_child(movement_box)
+	for id in movement:
+		movement_box.add_child(_make_action_button(id, Palette.MOVEMENT))
+
+
+## Deux armes légères : l'attaque de la main libre est possible.
+func _has_off_hand() -> bool:
+	var light := 0
+	for weapon in _player.definition.weapons:
+		if weapon.properties.has(WeaponDef.LIGHT):
+			light += 1
+	return light >= 2
+
+
+## Titre de section : un point et le nom, à la couleur du coût.
+func _section_header(text: String, color: Color) -> Label:
+	var label := Label.new()
+	label.text = "● " + text
+	label.add_theme_color_override(&"font_color", color)
+	label.add_theme_font_size_override(&"font_size", 13)
+	return label
+
+
+func _section_box(text: String, color: Color) -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override(&"separation", 2)
+	box.add_child(_section_header(text, color))
+	return box
+
+
+## Bouton d'une action, avec sa touche et un liseré à la couleur du coût.
+func _make_action_button(id: StringName, color: Color) -> Button:
+	var index := _action_buttons.size()
+	var button := _make_bar_button()
+	button.text = Texts.action_name(id)
+	if index < ACTION_KEYS.size():
+		button.text += " (%d)" % (index + 1)
+		button.shortcut = _key_shortcut(ACTION_KEYS[index])
+	button.add_child(_cost_stripe(color))
+	button.pressed.connect(_on_action_pressed.bind(id))
+	button.mouse_entered.connect(_on_action_hovered.bind(id, button))
+	button.mouse_exited.connect(_on_action_unhovered.bind(button))
+	_action_buttons[id] = button
+	return button
+
+
+## Liseré coloré sur le bord gauche d'un bouton : le coût se lit sans texte.
+static func _cost_stripe(color: Color) -> ColorRect:
+	var stripe := ColorRect.new()
+	stripe.color = color
+	stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Note Godot : les ancres collent le liseré au bord gauche, sur toute la
+	# hauteur du bouton, quelle que soit sa taille.
+	stripe.anchor_bottom = 1.0
+	stripe.offset_left = 3.0
+	stripe.offset_top = 4.0
+	stripe.offset_right = 7.0
+	stripe.offset_bottom = -4.0
+	return stripe
+
+
+## Survol d'un bouton d'action : sa bulle (coût, effet, raison d'un refus) et
+## son aperçu sur le plateau.
+func _on_action_hovered(id: StringName, button: Button) -> void:
+	_hovered_action = id
+	_hovered_action_button = button
+	_show_action_preview()
+
+
+func _on_action_unhovered(button: Button) -> void:
+	if button == _hovered_action_button:
+		_clear_action_preview()
+
+
+func _clear_action_preview() -> void:
+	_hovered_action = &""
+	_hovered_action_button = null
+	if _action_tip != null:
+		_action_tip.hide_content()
+	_board.reach_preview = []
+	_board.hiding_preview = []
+	_board.ring_cells = []
+	_board.threats_faded = false
+	_board.threat_preview = []
+
+
+func _show_action_preview() -> void:
+	var id := _hovered_action
+	if id.is_empty() or state == null:
+		return
+	_board.reach_preview = []
+	_board.hiding_preview = []
+	_board.ring_cells = []
+	_board.threats_faded = false
+	_board.threat_preview = []
+	var action: Action = _action_factories[id].call()
+	var reason := action.validate(state)
+	var lines: PackedStringArray = [Texts.ACTION_DESCRIPTIONS[id]]
+	if _is_player_turn():
+		var preview := _action_preview_text(id)
+		if not preview.is_empty():
+			lines.append(Texts.colored(preview, Palette.ALLY))
+	if not reason.is_empty():
+		lines.append(Texts.refusal(reason))
+	var cost: String = Texts.ACTION_COSTS[id]
+	var color := Palette.ACTION if cost == Texts.COST_ACTION else (Palette.BONUS_ACTION if cost == Texts.COST_BONUS else Palette.MOVEMENT)
+	_action_tip.show_anchored(Texts.action_tip_title(Texts.action_name(id), cost, color), "\n".join(lines), Vector2(_side_panel_left(), _hovered_action_button.global_position.y))
+
+
+## Aperçu d'une action sur le plateau, et sa phrase pour la bulle. Tout vient
+## du moteur : portée, menaces, qui nous voit, cases pour se cacher.
+func _action_preview_text(id: StringName) -> String:
+	match id:
+		StandardAction.DASH:
+			var speed := state.speed_in_squares(_player)
+			var current := state.reachable_cells()
+			var extended := state.reachable_from(_player, _player.position, state.movement_left + speed)
+			var extra: Array[Vector2i] = []
+			for cell: Vector2i in extended:
+				if not current.has(cell):
+					extra.append(cell)
+			_board.reach_preview = extra
+			return Texts.preview_dash(state.movement_left, state.movement_left + speed)
+		StandardAction.DISENGAGE:
+			var threats := state.threat_cells(_player)
+			var cells: Array[Vector2i] = []
+			var threatening: Array[Combatant] = []
+			for cell: Vector2i in threats:
+				cells.append(cell)
+				for enemy: Combatant in threats[cell]:
+					if not threatening.has(enemy):
+						threatening.append(enemy)
+			_board.threat_preview = cells
+			_board.threats_faded = true
+			return Texts.preview_disengage(threatening)
+		StandardAction.DODGE:
+			var seeing := state.enemies_seeing(_player)
+			_board.ring_cells = _token_cells(seeing)
+			return Texts.preview_dodge(seeing)
+		HideAction.ID:
+			_board.hiding_preview = state.hiding_cells(_player)
+			var seeing := state.enemies_seeing(_player)
+			_board.ring_cells = _token_cells(seeing)
+			var here := Texts.PREVIEW_HIDE_HERE if seeing.is_empty() else Texts.preview_hide_seen(seeing)
+			return "%s\n%s" % [Texts.PREVIEW_HIDE_CELLS, here]
+		HelpAction.ID:
+			var targets: Array[Combatant] = []
+			for help in _help_targets():
+				targets.append(help.target)
+			_board.ring_cells = _token_cells(targets)
+			return Texts.PREVIEW_HELP if not targets.is_empty() else ""
+		SearchAction.ID:
+			var hidden := state.hidden_enemies_of(_player)
+			_board.ring_cells = _token_cells(hidden)
+			return Texts.preview_search(hidden.size())
+		StandUpAction.ID:
+			return Texts.preview_stand_up(StandUpAction.cost(state, _player))
+	return ""
+
+
+## Cases où sont affichés les pions de ces combattants (la dernière position
+## connue pour un caché).
+func _token_cells(combatants: Array[Combatant]) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for combatant in combatants:
+		cells.append(_tokens[combatant].cell)
+	return cells
 
 
 ## Vide une barre de boutons avant de la reconstruire pour un autre
@@ -1110,6 +1332,18 @@ func _help_for_button() -> Action:
 	return targets[0] if not targets.is_empty() else HelpAction.new(_player, null)
 
 
+func _on_weapon_hovered(weapon: WeaponDef, button: Button) -> void:
+	_clear_action_preview()
+	var title := Texts.action_tip_title(weapon.display_name, Texts.COST_FREE, Palette.FREE)
+	_action_tip.show_anchored(title, Texts.weapon_tooltip(_player, weapon), Vector2(_side_panel_left(), button.global_position.y))
+
+
+## Bord gauche du panneau de droite, moins une marge : la bulle d'un bouton
+## s'y colle, sur le plateau.
+func _side_panel_left() -> float:
+	return ($Hud/Root/Columns/SidePanel as Control).global_position.x - 8.0
+
+
 func _on_weapon_pressed(weapon: WeaponDef) -> void:
 	_weapon = weapon
 	_refresh()
@@ -1152,9 +1386,6 @@ func _refresh() -> void:
 		var action: Action = _action_factories[id].call()
 		var reason := action.validate(state)
 		button.disabled = not player_turn or not reason.is_empty()
-		button.tooltip_text = Texts.ACTION_DESCRIPTIONS[id]
-		if player_turn and not reason.is_empty():
-			button.tooltip_text += "\n" + Texts.reason(reason)
 
 	# Armes : plus de javelots, on revient à l'arme de corps à corps.
 	if _weapon == null or _player.quantity(_weapon) <= 0:
@@ -1168,7 +1399,6 @@ func _refresh() -> void:
 			button.text += " (%s)" % _weapon_key_labels[i]
 		button.set_pressed_no_signal(weapon == _weapon)
 		button.disabled = _player.quantity(weapon) <= 0
-		button.tooltip_text = Texts.weapon_tooltip(_player, weapon)
 
 	# Bouton « Fin de tour » grisé hors du tour du joueur, avec la raison.
 	var end_turn_reason := EndTurnAction.new(_player).validate(state)
@@ -1177,6 +1407,8 @@ func _refresh() -> void:
 
 	# La bulle et les aperçus suivent le nouvel état.
 	_on_cell_hovered(_hovered_cell)
+	if not _hovered_action.is_empty() and is_instance_valid(_hovered_action_button):
+		_show_action_preview()
 	if _tactical:
 		_set_tactical(true)
 

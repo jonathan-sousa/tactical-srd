@@ -22,6 +22,8 @@ var bounds := Rect2()
 ## Zone que la bulle ne doit pas cacher si elle peut l'éviter (ligne de tir,
 ## trajet), en coordonnées globales. Vide : rien à éviter.
 var keep_clear := Rect2()
+## Suit la souris (plateau), ou reste où on l'a posée (boutons d'action).
+var follows_mouse := true
 
 var _title: RichTextLabel
 var _bar: Control
@@ -81,8 +83,25 @@ func show_content(title: String, body: String, bar_fraction: float = -1.0, bar_c
 	_bar.queue_redraw()
 	# La hauteur suit le texte : on repart de la plus petite taille.
 	size = Vector2(WIDTH, 0)
+	follows_mouse = true
 	show()
 	_follow_mouse()
+
+
+## Affiche la bulle à une place fixe : son bord droit en `right_edge.x`, son
+## haut en `right_edge.y` (sans sortir de l'écran par le bas).
+func show_anchored(title: String, body: String, right_edge: Vector2) -> void:
+	_title.text = title
+	_title.visible = not title.is_empty()
+	_body.text = body
+	_body.visible = not body.is_empty()
+	_bar.visible = false
+	follows_mouse = false
+	size = Vector2(WIDTH, 0)
+	show()
+	reset_size()
+	var bottom := get_viewport_rect().size.y - 8.0
+	global_position = Vector2(right_edge.x - size.x, minf(right_edge.y, bottom - size.y))
 
 
 func hide_content() -> void:
@@ -95,7 +114,7 @@ func text() -> String:
 
 
 func _process(_delta: float) -> void:
-	if visible:
+	if visible and follows_mouse:
 		_follow_mouse()
 
 

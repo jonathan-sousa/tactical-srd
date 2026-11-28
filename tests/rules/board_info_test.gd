@@ -179,3 +179,20 @@ func test_cell_info_occupant_as_seen_by_the_observer() -> void:
 	state.remove_effect(goblin, Effect.HIDDEN)
 	goblin.is_dead = true
 	assert_object(CellInfo.of(state, Vector2i(5, 3), fighter).occupant).is_null()
+
+
+# --- Qui me voit ? ---------------------------------------------------------------
+
+
+func test_enemies_seeing_a_combatant() -> void:
+	# Un arbre en (5, 3) cache le Guerrier en (4, 3) du Gobelin en (10, 3).
+	var blocked: Array[Vector2i] = [Vector2i(5, 2), Vector2i(5, 3), Vector2i(5, 4)]
+	var state := _state(Vector2i(10, 3), blocked)
+	var fighter := state.combatants[0]
+	fighter.position = Vector2i(4, 3)
+	assert_array(state.enemies_seeing(fighter)).is_empty()
+	fighter.position = Vector2i(8, 3)
+	assert_array(state.enemies_seeing(fighter)).contains_exactly([state.combatants[1]])
+	# Un ennemi inconscient ne voit rien.
+	state.combatants[1].hp = 0
+	assert_array(state.enemies_seeing(fighter)).is_empty()
