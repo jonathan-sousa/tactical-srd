@@ -20,6 +20,8 @@ var damage_max: int
 var graze_damage: int
 ## Bonus d'abri de la cible (0 ou +2), compté dans `hit_chance`.
 var cover_bonus: int
+## Cases qui donnent cet abri (murets, créatures sur la ligne de tir).
+var cover_cells: Array[Vector2i] = []
 ## L'Attaque sournoise s'ajouterait sur une touche (comptée dans les dégâts).
 var sneak_attack: bool
 var advantage: AdvantageResult
@@ -30,7 +32,8 @@ static func of(state: CombatState, attacker: Combatant, target: Combatant, weapo
 	var estimate := AttackEstimate.new()
 	estimate.advantage = AdvantageResolver.for_attack(state, attacker, target, weapon)
 	var mode := estimate.advantage.mode
-	estimate.cover_bonus = state.cover_bonus(attacker, target)
+	estimate.cover_cells = state.cover_cells(attacker, target)
+	estimate.cover_bonus = CombatState.HALF_COVER_BONUS if not estimate.cover_cells.is_empty() else 0
 	var single := _single_hit_chance(attacker.attack_bonus(weapon), target.armor_class() + estimate.cover_bonus)
 	estimate.hit_chance = _with_mode(single, mode)
 	var always_critical := AttackSequence.critical_on_hit(state, attacker, target)

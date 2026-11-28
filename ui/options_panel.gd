@@ -17,6 +17,7 @@ signal closed
 @onready var _sfx_value: Label = %SfxValue
 @onready var _fullscreen_check: CheckButton = %FullscreenCheck
 @onready var _large_text_check: CheckButton = %LargeTextCheck
+@onready var _exact_enemy_hp_check: CheckButton = %ExactEnemyHpCheck
 @onready var _back_button: Button = %OptionsBackButton
 
 
@@ -27,6 +28,8 @@ func _ready() -> void:
 	_sfx_label.text = Texts.EFFECTS_VOLUME
 	_fullscreen_check.text = Texts.FULLSCREEN
 	_large_text_check.text = Texts.LARGE_TEXT
+	_exact_enemy_hp_check.text = Texts.EXACT_ENEMY_HP
+	_exact_enemy_hp_check.tooltip_text = Texts.EXACT_ENEMY_HP_TOOLTIP
 	_back_button.text = Texts.BACK
 	sync_from_settings()
 	_volume_slider.value_changed.connect(_on_volume_changed)
@@ -34,6 +37,7 @@ func _ready() -> void:
 	_sfx_slider.value_changed.connect(_on_sfx_changed)
 	_fullscreen_check.toggled.connect(func(enabled: bool) -> void: Settings.set_fullscreen(enabled))
 	_large_text_check.toggled.connect(func(enabled: bool) -> void: Settings.set_large_text(enabled))
+	_exact_enemy_hp_check.toggled.connect(func(enabled: bool) -> void: Settings.set_exact_enemy_hp(enabled))
 	_back_button.pressed.connect(func() -> void: closed.emit())
 
 
@@ -46,6 +50,7 @@ func sync_from_settings() -> void:
 	_sfx_slider.set_value_no_signal(roundf(Settings.effects_volume * 100.0))
 	_fullscreen_check.set_pressed_no_signal(Settings.fullscreen)
 	_large_text_check.set_pressed_no_signal(Settings.large_text)
+	_exact_enemy_hp_check.set_pressed_no_signal(Settings.exact_enemy_hp)
 	_update_volume_label()
 	if is_visible_in_tree():
 		_volume_slider.grab_focus()

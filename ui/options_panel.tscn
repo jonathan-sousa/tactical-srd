@@ -95,6 +95,10 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 
+[node name="ExactEnemyHpCheck" type="CheckButton" parent="Content"]
+unique_name_in_owner = true
+layout_mode = 2
+
 [node name="OptionsBackButton" type="Button" parent="Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
