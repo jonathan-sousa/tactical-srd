@@ -472,6 +472,56 @@ func test_tooltip_hides_when_leaving_the_board() -> void:
 	assert_bool(_tooltip().visible).is_false()
 
 
+func _sheet() -> CombatantSheet:
+	return _scene.get("_sheet")
+
+
+func test_right_click_opens_the_enemy_sheet_and_escape_closes_it() -> void:
+	await _start(FIGHTER_FIRST)
+	_scene.call("_on_cell_right_clicked", _goblin().position)
+	assert_bool(_sheet().visible).is_true()
+	var text := _sheet().text()
+	assert_str(text).contains("Gobelin guerrier")
+	assert_str(text).contains("Cimeterre")
+	assert_str(text).contains("Arc court")
+	assert_str(text).contains(Texts.TRAIT_NAMES[CharacterDef.NIMBLE_ESCAPE])
+	# Échap ferme la fiche sans ouvrir le menu pause.
+	_runner.simulate_action_pressed("ui_cancel")
+	await _runner.simulate_frames(2)
+	assert_bool(_sheet().visible).is_false()
+	assert_bool(get_tree().paused).is_false()
+
+
+func test_sheet_explains_effects() -> void:
+	await _start(FIGHTER_FIRST)
+	_state().add_effect(Effect.new(Effect.PRONE, _goblin(), _goblin(), Effect.Expiry.UNTIL_REMOVED))
+	_scene.call("_on_cell_right_clicked", _goblin().position)
+	assert_str(_sheet().text()).contains(Texts.EFFECT_DESCRIPTIONS[Effect.PRONE])
+
+
+func test_no_sheet_for_a_hidden_enemy() -> void:
+	await _start(FIGHTER_FIRST)
+	_state().add_effect(Effect.new(Effect.HIDDEN, _goblin(), _goblin(), Effect.Expiry.UNTIL_REMOVED, 20))
+	_scene.call("_on_cell_right_clicked", _goblin().position)
+	assert_bool(_sheet().visible).is_false()
+
+
+func test_alt_shows_the_tactical_view_while_held() -> void:
+	await _start(FIGHTER_FIRST)
+	_put_goblin_next_to_fighter()
+	_runner.simulate_action_press("tactical_view")
+	await _runner.simulate_frames(1)
+	assert_bool(_board().tactical).is_true()
+	assert_bool(_board().tactical_threats.has(_fighter().position)).is_true()
+	var token: TokenView = (_scene.get("_tokens") as Dictionary)[_goblin()]
+	assert_str(token.label_text).contains("Indemne")
+	assert_str((_scene.get_node("%HintLabel") as Label).text).is_equal(Texts.TACTICAL_LEGEND)
+	_runner.simulate_action_release("tactical_view")
+	await _runner.simulate_frames(1)
+	assert_bool(_board().tactical).is_false()
+	assert_str(token.label_text).is_empty()
+
+
 func test_hit_shows_floating_damage() -> void:
 	await _start(FIGHTER_FIRST + [15, 1, 1, 1, 1])
 	_put_goblin_next_to_fighter()

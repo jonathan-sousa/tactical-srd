@@ -112,6 +112,10 @@ var _weapon_key_labels: Array[String] = []
 var _hovered_cell := BoardView.NO_CELL
 ## Bulle d'information au survol (voir BoardTooltip).
 var _tooltip: BoardTooltip
+## Fiche d'un combattant, au clic droit (voir CombatantSheet).
+var _sheet: CombatantSheet
+## Vue tactique affichée (touche Alt maintenue).
+var _tactical := false
 ## Dernier round annoncé dans le journal.
 var _logged_round := 0
 ## Position de repos du plateau, que la secousse retrouve.
@@ -198,6 +202,8 @@ func _ready() -> void:
 	_board.setup(encounter)
 	_tooltip = BoardTooltip.new()
 	$Hud.add_child(_tooltip)
+	_sheet = CombatantSheet.new()
+	$Hud.add_child(_sheet)
 	# Le plateau (un Node2D) suit la place que lui réserve l'interface.
 	# Note Godot : `item_rect_changed` est émis quand un Control change de
 	# position ou de taille, par exemple quand son conteneur le place.
@@ -217,6 +223,7 @@ func _ready() -> void:
 	# Note Godot : connecter un signal = s'abonner à un événement (callback).
 	_board.cell_clicked.connect(_on_cell_clicked)
 	_board.cell_hovered.connect(_on_cell_hovered)
+	_board.cell_right_clicked.connect(_on_cell_right_clicked)
 	_end_turn_button.text = Texts.END_TURN_WITH_KEY
 	_end_turn_button.pressed.connect(_on_end_turn_pressed)
 	_replay_button.text = Texts.REPLAY
@@ -236,9 +243,21 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Alt maintenu : vue tactique, tant que la touche reste enfoncée.
+	if event.is_action("tactical_view") and not event.is_echo():
+		get_viewport().set_input_as_handled()
+		_set_tactical(event.is_pressed())
+		return
 	if event.is_action_pressed("end_turn"):
 		get_viewport().set_input_as_handled()
 		_on_end_turn_pressed()
+
+
+# Note Godot : _notification reçoit les avis du moteur. Si la fenêtre perd le
+# focus (Alt+Tab), on ne recevra pas le relâchement d'Alt : on éteint la vue.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _tactical:
+		_set_tactical(false)
 
 
 # --- Déroulement -------------------------------------------------------------
@@ -784,7 +803,7 @@ func _enemy_token_at(cell: Vector2i) -> Combatant:
 func _on_cell_hovered(cell: Vector2i) -> void:
 	_hovered_cell = cell
 	_clear_hover()
-	if not _is_player_turn() or cell == BoardView.NO_CELL:
+	if not _is_player_turn() or cell == BoardView.NO_CELL or _sheet.visible:
 		return
 	if _help_armed:
 		_hint_label.text = Texts.HELP_ARMED_HINT
@@ -798,6 +817,37 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 		_hover_ally(occupant)
 		return
 	_hover_ground(cell)
+
+
+## Clic droit : la fiche du combattant visible sur cette case (un ennemi
+## caché n'en a pas : on ne sait pas qui il est ni s'il est là).
+func _on_cell_right_clicked(cell: Vector2i) -> void:
+	if not _is_player_turn():
+		return
+	var combatant := state.combatant_at(cell)
+	if combatant == null or state.is_hidden_from(combatant, _player):
+		return
+	var is_enemy := combatant.side != _player.side
+	_tooltip.hide_content()
+	_sheet.open(Texts.combatant_sheet(combatant, state, is_enemy, _shows_exact_hp(combatant)), _board_area.get_global_rect())
+
+
+## Vue tactique : nature des cases, zones de menace de tous les ennemis
+## (pour le personnage commandé), nom et PV au-dessus de chaque pion.
+func _set_tactical(enabled: bool) -> void:
+	_tactical = enabled and state != null
+	_board.tactical = _tactical
+	var threats: Array[Vector2i] = []
+	if _tactical:
+		threats.assign(state.threat_cells(_player).keys())
+	_board.tactical_threats = threats
+	for combatant: Combatant in _tokens:
+		var visible_token := not combatant.is_dead and not state.is_hidden_from(combatant, _player)
+		_tokens[combatant].label_text = Texts.tactical_label(combatant, _shows_exact_hp(combatant)) if _tactical and visible_token else ""
+	if _tactical:
+		_hint_label.text = Texts.TACTICAL_LEGEND
+	elif state != null:
+		_on_cell_hovered(_hovered_cell)
 
 
 ## Efface la bulle et les aperçus du survol précédent.
@@ -927,6 +977,8 @@ func _on_exact_hp_changed() -> void:
 		_tokens[combatant].exact_hp = _shows_exact_hp(combatant)
 	if state != null:
 		_on_cell_hovered(_hovered_cell)
+		if _tactical:
+			_set_tactical(true)
 
 
 ## Un bouton par arme du personnage, avec sa touche. L'arme choisie sert à
@@ -1125,6 +1177,8 @@ func _refresh() -> void:
 
 	# La bulle et les aperçus suivent le nouvel état.
 	_on_cell_hovered(_hovered_cell)
+	if _tactical:
+		_set_tactical(true)
 
 	# Plus rien à faire : le bouton pulse pour inviter à finir le tour.
 	var nothing_left := player_turn and state.action_used and state.movement_left == 0 and attackable.is_empty()
