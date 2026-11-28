@@ -114,10 +114,11 @@ func test_only_one_attack_per_turn_but_can_still_move() -> void:
 	_run(AttackAction.new(_fighter, _goblin), FixedDice.new([2]))
 	assert_str(AttackAction.new(_fighter, _goblin).validate(_state)).is_equal(Action.ACTION_ALREADY_USED)
 	# 4 cases utilisées, il en reste 2 après l'action. On reste au contact du
-	# Gobelin (pas d'attaque d'opportunité) : la diagonale vers (5,1) longe
-	# le Gobelin, donc le chemin passe par (4,1).
+	# Gobelin (pas d'attaque d'opportunité). La diagonale vers (5,1) longe
+	# le Gobelin : une créature n'empêche pas de couper le coin (SRD
+	# « Corners » : seul le décor le fait), elle coûte 1 case.
 	_run(MoveAction.new(_fighter, Vector2i(5, 1)))
-	assert_int(_state.movement_left).is_equal(0)
+	assert_int(_state.movement_left).is_equal(1)
 	assert_object(_state.pending).is_null()
 
 

@@ -416,7 +416,8 @@ func test_board_is_built_from_tiles() -> void:
 	var obstacles: TileMapLayer = board.get_node("Obstacles")
 	var encounter := _state().encounter
 	assert_int(floor_layer.get_used_cells().size()).is_equal(encounter.grid_size.x * encounter.grid_size.y)
-	assert_array(obstacles.get_used_cells()).contains_exactly_in_any_order(encounter.blocked_cells)
+	# Arbres, murets et broussailles (terrain difficile) sur la couche du décor.
+	assert_array(obstacles.get_used_cells()).contains_exactly_in_any_order(encounter.blocked_cells + encounter.low_walls + encounter.difficult_cells)
 	# Le plateau suit la zone que l'interface lui réserve.
 	var area: Control = _scene.get_node("%BoardArea")
 	assert_that(board.position).is_equal(area.global_position)

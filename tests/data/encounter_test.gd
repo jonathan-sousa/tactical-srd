@@ -24,7 +24,7 @@ func _encounters() -> Array[EncounterDef]:
 
 ## Grille du déplacement : obstacles et murets bloquent le passage.
 func _grid(encounter: EncounterDef) -> GridPathfinder:
-	return GridPathfinder.new(encounter.grid_size, encounter.blocked_cells + encounter.low_walls)
+	return GridPathfinder.new(encounter.grid_size, encounter.blocked_cells + encounter.low_walls, encounter.difficult_cells)
 
 
 func test_grids_fit_the_board() -> void:
@@ -44,6 +44,18 @@ func test_blocked_cells_and_low_walls_are_inside_the_grid() -> void:
 	for encounter in _encounters():
 		for cell in encounter.blocked_cells + encounter.low_walls:
 			assert_bool(_grid(encounter).is_inside(cell)).override_failure_message("%s : obstacle hors grille %s" % [encounter.id, cell]).is_true()
+
+
+func test_difficult_terrain_is_inside_the_grid_and_on_free_cells() -> void:
+	for encounter in _encounters():
+		var grid := _grid(encounter)
+		var starts: Array[Vector2i] = encounter.player_starts.duplicate()
+		for placement in encounter.enemies:
+			starts.append(placement.cell)
+		for cell in encounter.difficult_cells:
+			assert_bool(grid.is_inside(cell)).override_failure_message("%s : terrain difficile hors grille %s" % [encounter.id, cell]).is_true()
+			assert_bool(grid.is_blocked(cell)).override_failure_message("%s : terrain difficile sur un obstacle %s" % [encounter.id, cell]).is_false()
+			assert_bool(starts.has(cell)).override_failure_message("%s : départ en terrain difficile %s" % [encounter.id, cell]).is_false()
 
 
 func test_each_has_at_least_one_player_start() -> void:

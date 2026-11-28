@@ -210,16 +210,25 @@ static func _can_shoot_from(state: CombatState, actor: Combatant, target: Combat
 ## case d'attaque la plus proche (en longueur de chemin), au plus loin que
 ## permet le déplacement.
 static func _approach_cell(state: CombatState, actor: Combatant, target: Combatant) -> Vector2i:
-	var all_cells := state.reachable_from(actor, actor.position, state.encounter.grid_size.x * state.encounter.grid_size.y)
+	var grid := state.encounter.grid_size
+	var all_cells := state.reachable_from(actor, actor.position, GridPathfinder.DIFFICULT_COST * grid.x * grid.y)
 	var goal := _best_attack_cell(state, actor, target, all_cells)
 	if goal == NO_CELL:
 		return NO_CELL
 	var path := state.find_path(actor, goal)
-	# On traverse un allié sans pouvoir s'arrêter dans sa case : on s'arrête
-	# alors un peu avant.
-	var allies := state.ally_cells(actor)
-	var stop := mini(state.movement_left, path.size()) - 1
-	while stop >= 0 and allies.has(path[stop]):
+	# Aussi loin que le déplacement le permet (le terrain difficile coûte
+	# double)...
+	var stop := -1
+	var spent := 0
+	var difficult := state.creature_difficult_cells(actor)
+	for i in path.size():
+		spent += state.pathfinder.step_cost(path[i], difficult)
+		if spent > state.movement_left:
+			break
+		stop = i
+	# ... mais pas dans la case d'un allié qu'on traverse : un peu avant.
+	var pass_through := state.pass_through_cells(actor)
+	while stop >= 0 and pass_through.has(path[stop]):
 		stop -= 1
 	return path[stop] if stop >= 0 else NO_CELL
 
