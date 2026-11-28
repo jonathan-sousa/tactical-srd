@@ -1,5 +1,5 @@
 ## Options du joueur (volumes général, musique et effets, plein écran, texte
-## agrandi), persistées dans
+## agrandi, PV ennemis exacts), persistées dans
 ## `user://settings.cfg` indépendamment de la sauvegarde, et appliquées au
 ## démarrage du jeu.
 ##
@@ -11,6 +11,8 @@ extends Node
 ## Émis quand le joueur change la taille du texte : les écrans ouverts
 ## s'adaptent aussitôt.
 signal large_text_changed(enabled: bool)
+## Émis quand le joueur choisit de voir ou non les PV exacts des ennemis.
+signal exact_enemy_hp_changed(enabled: bool)
 
 const DEFAULT_PATH := "user://settings.cfg"
 const DEFAULT_VOLUME := 1.0
@@ -25,6 +27,9 @@ var effects_volume := DEFAULT_VOLUME
 var fullscreen := false
 ## Texte agrandi dans le journal de combat, les aides et les dialogues.
 var large_text := false
+## PV exacts des ennemis. Par défaut, seulement leur état (Indemne, Blessé,
+## En sang : voir HealthStatus), comme à une table de jeu.
+var exact_enemy_hp := false
 
 
 func _ready() -> void:
@@ -38,6 +43,7 @@ func load_settings() -> void:
 	effects_volume = DEFAULT_VOLUME
 	fullscreen = false
 	large_text = false
+	exact_enemy_hp = false
 	var config := ConfigFile.new()
 	if config.load(path) != OK:
 		return
@@ -50,6 +56,9 @@ func load_settings() -> void:
 	var large: Variant = config.get_value("display", "large_text", false)
 	if typeof(large) == TYPE_BOOL:
 		large_text = large
+	var exact: Variant = config.get_value("gameplay", "exact_enemy_hp", false)
+	if typeof(exact) == TYPE_BOOL:
+		exact_enemy_hp = exact
 
 
 func save_settings() -> Error:
@@ -59,6 +68,7 @@ func save_settings() -> Error:
 	config.set_value("audio", "effects_volume", effects_volume)
 	config.set_value("display", "fullscreen", fullscreen)
 	config.set_value("display", "large_text", large_text)
+	config.set_value("gameplay", "exact_enemy_hp", exact_enemy_hp)
 	return config.save(path)
 
 
@@ -90,6 +100,12 @@ func set_large_text(enabled: bool) -> void:
 	large_text = enabled
 	save_settings()
 	large_text_changed.emit(enabled)
+
+
+func set_exact_enemy_hp(enabled: bool) -> void:
+	exact_enemy_hp = enabled
+	save_settings()
+	exact_enemy_hp_changed.emit(enabled)
 
 
 ## Taille de police selon l'option : `normal`, ou `large` si le texte est

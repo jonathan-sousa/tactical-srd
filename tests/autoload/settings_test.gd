@@ -110,3 +110,31 @@ func test_volumes_are_applied_to_their_bus() -> void:
 	# Remet les volumes du jeu.
 	Settings.music_volume = saved_music
 	Settings.apply_volume()
+
+
+func test_enemy_hit_points_are_approximate_by_default() -> void:
+	# Fichier d'avant le sprint 4 : pas de clé, PV ennemis approximatifs.
+	var file := FileAccess.open(TEST_PATH, FileAccess.WRITE)
+	file.store_string("[display]\nlarge_text=true\n")
+	file.close()
+	_settings.load_settings()
+	assert_bool(_settings.exact_enemy_hp).is_false()
+
+
+func test_exact_enemy_hit_points_round_trip_and_announce() -> void:
+	var announced: Array[bool] = []
+	_settings.exact_enemy_hp_changed.connect(func(enabled: bool) -> void: announced.append(enabled))
+	_settings.set_exact_enemy_hp(true)
+	assert_array(announced).contains_exactly([true])
+	var other: Node = auto_free(SettingsScript.new())
+	other.path = TEST_PATH
+	other.load_settings()
+	assert_bool(other.exact_enemy_hp).is_true()
+
+
+func test_invalid_exact_enemy_hit_points_falls_back_to_default() -> void:
+	var file := FileAccess.open(TEST_PATH, FileAccess.WRITE)
+	file.store_string("[gameplay]\nexact_enemy_hp=\"oui\"\n")
+	file.close()
+	_settings.load_settings()
+	assert_bool(_settings.exact_enemy_hp).is_false()

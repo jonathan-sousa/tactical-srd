@@ -85,6 +85,8 @@ const DIALOGUE_SKIP := "Passer (Tab)"
 const DIALOGUE_HISTORY := "Historique (H)"
 const DIALOGUE_HISTORY_CLOSE := "Fermer l'historique (H)"
 const LARGE_TEXT := "Texte agrandi"
+const EXACT_ENEMY_HP := "PV ennemis exacts"
+const EXACT_ENEMY_HP_TOOLTIP := "Sinon, on ne voit que l'état des ennemis : indemne, blessé, en sang (la moitié de leurs PV ou moins)."
 ## Textes flottants au-dessus des pions.
 const FLOAT_MISS := "Raté !"
 const FLOAT_CRITICAL := "Critique !"

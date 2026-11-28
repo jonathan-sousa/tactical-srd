@@ -188,12 +188,26 @@ func cover_bonus(attacker: Combatant, target: Combatant) -> int:
 ## là. Les obstacles, eux, sont un abri total : on ne peut pas viser à
 ## travers (voir `has_line_of_sight_to`). Écart : voir docs/rules-deviations.md.
 func cover_between(attacker: Combatant, from: Vector2i, target: Combatant, to: Vector2i) -> int:
+	return HALF_COVER_BONUS if not cover_cells_between(attacker, from, target, to).is_empty() else 0
+
+
+## Cases qui donnent un abri à `target` contre `attacker` (murets et
+## créatures sur la ligne de tir), pour les montrer au joueur.
+func cover_cells(attacker: Combatant, target: Combatant) -> Array[Vector2i]:
+	return cover_cells_between(attacker, attacker.position, target, target.position)
+
+
+func cover_cells_between(attacker: Combatant, from: Vector2i, target: Combatant, to: Vector2i) -> Array[Vector2i]:
 	var screens: Array[Vector2i] = encounter.low_walls.duplicate()
 	for combatant in combatants:
 		if combatant == attacker or combatant == target or combatant.is_dead or is_hidden_from(combatant, attacker):
 			continue
 		screens.append(combatant.position)
-	return HALF_COVER_BONUS if LineOfSight.crosses_any(from, to, screens) else 0
+	var crossed: Array[Vector2i] = []
+	for cell in screens:
+		if LineOfSight.crosses_any(from, to, [cell]):
+			crossed.append(cell)
+	return crossed
 
 
 ## Combattant vivant sur cette case (même inconscient ou caché), ou `null`.
@@ -637,18 +651,74 @@ func opportunity_attackers(mover: Combatant, path: Array[Vector2i]) -> Array[Com
 ## sa réaction, et ce pas fait sortir `mover` de son allonge. Aucun si
 ## `mover` s'est désengagé.
 func _opportunity_reactor(mover: Combatant, from: Vector2i, next: Vector2i, skip: Array[Combatant]) -> Combatant:
-	if has_effect(mover, Effect.DISENGAGED):
-		return null
-	for other in combatants:
-		if other.side == mover.side or other.is_down() or not other.reaction_available or skip.has(other):
+	for other in _opportunity_attackers_of(mover):
+		if skip.has(other):
 			continue
 		var weapon := other.melee_weapon()
-		if weapon == null or is_hidden_from(mover, other):
-			continue
-		var leaves_reach := is_cell_within_reach(other, from, weapon) and not is_cell_within_reach(other, next, weapon)
-		if leaves_reach and line_of_sight.is_clear(other.position, from):
+		if _threatens(other, weapon, from) and not is_cell_within_reach(other, next, weapon):
 			return other
 	return null
+
+
+## Ennemis qui pourraient faire une attaque d'opportunité contre `mover` :
+## conscients, réaction disponible, une arme de corps à corps, et `mover`
+## n'est ni caché d'eux ni désengagé.
+func _opportunity_attackers_of(mover: Combatant) -> Array[Combatant]:
+	var found: Array[Combatant] = []
+	if has_effect(mover, Effect.DISENGAGED):
+		return found
+	for other in combatants:
+		if other.side == mover.side or other.is_down() or not other.reaction_available:
+			continue
+		if other.melee_weapon() == null or is_hidden_from(mover, other):
+			continue
+		found.append(other)
+	return found
+
+
+## `cell` est-elle dans l'allonge de `other`, et la voit-il ?
+func _threatens(other: Combatant, weapon: WeaponDef, cell: Vector2i) -> bool:
+	return is_cell_within_reach(other, cell, weapon) and line_of_sight.is_clear(other.position, cell)
+
+
+## Zones de menace : pour chaque case que `mover` ne pourrait pas quitter
+## sans risquer une attaque d'opportunité, les ennemis qui la menacent. Mêmes
+## conditions que `_opportunity_reactor` ; le décor n'y figure pas.
+func threat_cells(mover: Combatant) -> Dictionary[Vector2i, Array]:
+	var threats: Dictionary[Vector2i, Array] = {}
+	for other in _opportunity_attackers_of(mover):
+		var weapon := other.melee_weapon()
+		@warning_ignore("integer_division")
+		var reach := maxi(weapon.reach_feet / FEET_PER_SQUARE, 1)
+		for dx in range(-reach, reach + 1):
+			for dy in range(-reach, reach + 1):
+				var cell := other.position + Vector2i(dx, dy)
+				if cell == other.position or not pathfinder.is_inside(cell) or pathfinder.is_blocked(cell):
+					continue
+				if not _threatens(other, weapon, cell):
+					continue
+				if not threats.has(cell):
+					threats[cell] = []
+				threats[cell].append(other)
+	return threats
+
+
+## Cases d'où `combatant` pourrait se cacher : hors de vue de tous ses
+## ennemis conscients (la condition de `can_hide`), sans décor ni autre
+## combattant. Sa propre case en fait partie si elle convient.
+func hiding_cells(combatant: Combatant) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for x in encounter.grid_size.x:
+		for y in encounter.grid_size.y:
+			var cell := Vector2i(x, y)
+			if pathfinder.is_blocked(cell):
+				continue
+			var occupant := combatant_at(cell)
+			if occupant != null and occupant != combatant:
+				continue
+			if is_out_of_sight_at(combatant, cell):
+				cells.append(cell)
+	return cells
 
 
 func has_effect(combatant: Combatant, id: StringName) -> bool:
