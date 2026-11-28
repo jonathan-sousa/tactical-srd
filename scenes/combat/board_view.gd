@@ -13,6 +13,8 @@ extends Node2D
 signal cell_clicked(cell: Vector2i)
 ## Émis quand la souris change de case (`NO_CELL` hors de la grille).
 signal cell_hovered(cell: Vector2i)
+## Clic droit sur une case : la fiche du combattant qui s'y trouve.
+signal cell_right_clicked(cell: Vector2i)
 
 const CELL_SIZE := 64
 const NO_CELL := Vector2i(-1, -1)
@@ -50,6 +52,13 @@ const AIM_COLOR := Color(1.0, 0.9, 0.55, 0.85)
 const AIM_DASH := 10.0
 const SHIELD_COLOR := Palette.GOLD
 const SHIELD_TEXT_COLOR := Color(0.16, 0.11, 0.06)
+## Vue tactique : chaque case colorée selon ce qu'elle est.
+const TACTICAL_OBSTACLE_COLOR := Color(0.05, 0.05, 0.08, 0.6)
+const TACTICAL_WALL_COLOR := Color(1.0, 0.85, 0.3, 0.3)
+const TACTICAL_WALL_BORDER := Color(1.0, 0.85, 0.3, 0.9)
+const TACTICAL_DIFFICULT_COLOR := Color(0.65, 0.4, 0.15, 0.35)
+const TACTICAL_DIFFICULT_BORDER := Color(0.85, 0.55, 0.25, 0.9)
+const TACTICAL_TAG_SIZE := 16
 ## Coût du trajet, écrit sur la case d'arrivée.
 const COST_FONT_SIZE := 26
 const COST_OUTLINE := 6
@@ -99,6 +108,17 @@ var aim: Array[Vector2i] = []:
 var cover_marks: Array[Vector2i] = []:
 	set(value):
 		cover_marks = value
+		queue_redraw()
+
+## Vue tactique (touche Alt maintenue) : nature des cases et zones de menace
+## de tous les ennemis (`tactical_threats`).
+var tactical := false:
+	set(value):
+		tactical = value
+		queue_redraw()
+var tactical_threats: Array[Vector2i] = []:
+	set(value):
+		tactical_threats = value
 		queue_redraw()
 
 var _hovered := NO_CELL
@@ -202,6 +222,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var cell := _cell_under_mouse()
 		if cell != NO_CELL:
 			cell_clicked.emit(cell)
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		var cell := _cell_under_mouse()
+		if cell != NO_CELL:
+			cell_right_clicked.emit(cell)
 
 
 func _draw() -> void:
@@ -215,6 +239,9 @@ func _draw() -> void:
 				draw_rect(rect, ATTACKABLE_COLOR)
 				_draw_hatching(rect)
 			draw_rect(rect, LINE_COLOR, false, 1.0)
+
+	if tactical:
+		_draw_tactical()
 
 	for cell in threat_preview:
 		var threat_rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
@@ -240,6 +267,33 @@ func _draw() -> void:
 
 	if _hovered != NO_CELL:
 		draw_rect(Rect2(Vector2(_hovered) * CELL_SIZE, Vector2.ONE * CELL_SIZE).grow(-2), HOVER_COLOR, false, 2.0)
+
+
+## Vue tactique : arbres assombris, palissades dorées « +2 », broussailles
+## « x2 », et les zones de menace en rouge. Des marques en plus des
+## couleurs, pour qui les distingue mal.
+func _draw_tactical() -> void:
+	for cell in blocked_cells:
+		var rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
+		draw_rect(rect, TACTICAL_OBSTACLE_COLOR)
+		draw_line(rect.position + Vector2(10, 10), rect.end - Vector2(10, 10), Color(0, 0, 0, 0.7), 3.0)
+		draw_line(Vector2(rect.end.x - 10, rect.position.y + 10), Vector2(rect.position.x + 10, rect.end.y - 10), Color(0, 0, 0, 0.7), 3.0)
+	for cell in low_walls:
+		_draw_tagged_cell(cell, TACTICAL_WALL_COLOR, TACTICAL_WALL_BORDER, "+%d" % CombatState.HALF_COVER_BONUS)
+	for cell in difficult_cells:
+		_draw_tagged_cell(cell, TACTICAL_DIFFICULT_COLOR, TACTICAL_DIFFICULT_BORDER, "x2")
+	for cell in tactical_threats:
+		var rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
+		draw_rect(rect, THREAT_FILL_COLOR)
+		draw_rect(rect.grow(-3), THREAT_COLOR, false, 2.0)
+		_draw_hatching(rect)
+
+
+func _draw_tagged_cell(cell: Vector2i, fill: Color, border: Color, tag: String) -> void:
+	var rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
+	draw_rect(rect, fill)
+	draw_rect(rect.grow(-2), border, false, 2.0)
+	_draw_centered_text(rect.position + Vector2(CELL_SIZE - 16, 14), tag, TACTICAL_TAG_SIZE, Color.WHITE)
 
 
 ## Texte centré sur un point, avec un contour sombre pour rester lisible sur

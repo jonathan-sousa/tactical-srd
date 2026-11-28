@@ -38,6 +38,8 @@ const BADGE_COLORS: Dictionary[StringName, Color] = {
 	Effect.HELPED: Color(0.85, 0.75, 0.25),
 }
 const STEP_DURATION := 0.12
+## Taille du texte de l'étiquette (vue tactique).
+const LABEL_FONT_SIZE := 14
 ## Sprite agrandi ×3, posé sur l'anneau.
 const SPRITE_SIZE := 48.0
 ## Léger balancement au repos : amplitude en pixels et durée d'un aller.
@@ -70,6 +72,13 @@ var is_ghost := false:
 var exact_hp := true:
 	set(value):
 		exact_hp = value
+		queue_redraw()
+
+## Étiquette au-dessus du pion (vue tactique) : nom et PV ou état. Vide :
+## rien.
+var label_text := "":
+	set(value):
+		label_text = value
 		queue_redraw()
 
 ## Effets en cours, affichés en pastilles au-dessus du pion.
@@ -242,6 +251,12 @@ func _draw() -> void:
 		var letter_size := font.get_string_size(letter, HORIZONTAL_ALIGNMENT_CENTER, -1, 13)
 		draw_string(font, badge_center + Vector2(-letter_size.x / 2.0, 4.5), letter, HORIZONTAL_ALIGNMENT_CENTER, -1, 13, Color.WHITE)
 		badge_center.x -= BADGE_RADIUS * 2.0 + 2.0
+
+	if not label_text.is_empty():
+		var label_size := font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, LABEL_FONT_SIZE)
+		var origin := Vector2(-label_size.x / 2.0, -RADIUS - 12.0)
+		draw_rect(Rect2(origin + Vector2(-4, -label_size.y + 4), label_size + Vector2(8, 2)), Color(0, 0, 0, 0.7))
+		draw_string(font, origin, label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, LABEL_FONT_SIZE, Color.WHITE)
 
 	if combatant.is_dead:
 		var arm := RADIUS * 0.7

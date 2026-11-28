@@ -538,6 +538,145 @@ static func terrain_rule(terrain: CellInfo.Terrain) -> String:
 	return TERRAIN_RULES[terrain]
 
 
+# --- Fiche au clic droit et vue tactique -----------------------------------
+
+const SHEET_CLOSE := "Échap, clic ou clic droit pour fermer"
+const SHEET_EFFECTS := "Effets"
+const SHEET_ATTACKS := "Attaques"
+const SHEET_TRAITS := "Traits"
+const SHEET_RESOURCES := "Ressources"
+const SHEET_ENEMY := "ennemi"
+const SHEET_ALLY := "allié"
+const SHEET_DOWN := "Inconscient : vitesse 0, ne peut pas agir ; au contact, toute touche contre lui est critique."
+const TACTICAL_LEGEND := "Vue tactique : sombre = arbre (bloque passage et vue), « +2 » = palissade (abri partiel), « x2 » = broussailles (2 cases), rouge = zone de menace."
+const TACTICAL_HINT := "Clic droit sur un pion : sa fiche. Alt maintenu : vue tactique."
+
+## Ce que fait chaque effet, en clair (SRD 5.2.1).
+const EFFECT_DESCRIPTIONS: Dictionary[StringName, String] = {
+	Effect.DODGING: "jusqu'au début de son prochain tour, les attaques contre lui ont le désavantage s'il voit l'attaquant.",
+	Effect.DISENGAGED: "ses déplacements ne provoquent pas d'attaque d'opportunité jusqu'à la fin de son tour.",
+	Effect.SAPPED: "désavantage à sa prochaine attaque (maîtrise Sap), jusqu'au début du prochain tour de qui l'a touché.",
+	Effect.SLOWED: "vitesse réduite de 10 ft, soit 2 cases (maîtrise Slow), jusqu'au début du prochain tour de qui l'a touché.",
+	Effect.HIDDEN: "ses ennemis ne savent pas où il est tant qu'ils ne l'ont pas trouvé ; avantage à ses attaques, désavantage aux attaques contre lui.",
+	Effect.PRONE: "au contact, on l'attaque avec l'avantage ; à distance, avec le désavantage. Désavantage à ses attaques. Se relever coûte la moitié de sa vitesse.",
+	Effect.VEXED: "la prochaine attaque de qui l'a touché contre lui a l'avantage (maîtrise Vex).",
+	Effect.HELPED: "la prochaine attaque d'un allié de l'aidant contre lui a l'avantage (action Aider).",
+}
+
+## Traits de fiche qui ne sont pas des constantes de CharacterDef : on les
+## déduit des champs de la fiche (voir `traits_of`).
+const SECOND_WIND_TRAIT := &"second_wind"
+const HEROIC_INSPIRATION_TRAIT := &"heroic_inspiration"
+const SNEAK_ATTACK_TRAIT := &"sneak_attack"
+const ADVANTAGE_DAMAGE_TRAIT := &"advantage_damage"
+
+const TRAIT_NAMES: Dictionary[StringName, String] = {
+	CharacterDef.GREAT_WEAPON_FIGHTING: "Great Weapon Fighting",
+	CharacterDef.SAVAGE_ATTACKER: "Savage Attacker",
+	CharacterDef.NIMBLE_ESCAPE: "Fuite agile (Nimble Escape)",
+	CharacterDef.ALERT: "Alert",
+	CharacterDef.HALFLING_LUCK: "Chance du Halfelin",
+	CharacterDef.NATURALLY_STEALTHY: "Discrétion naturelle",
+	SECOND_WIND_TRAIT: SECOND_WIND,
+	HEROIC_INSPIRATION_TRAIT: HEROIC_INSPIRATION,
+	SNEAK_ATTACK_TRAIT: SNEAK_ATTACK,
+	ADVANTAGE_DAMAGE_TRAIT: "Dégâts avec l'avantage",
+}
+
+const TRAIT_DESCRIPTIONS: Dictionary[StringName, String] = {
+	CharacterDef.GREAT_WEAPON_FIGHTING: "avec une arme de corps à corps à deux mains, chaque 1 ou 2 d'un dé de dégâts compte comme un 3.",
+	CharacterDef.SAVAGE_ATTACKER: "une fois par tour, lance deux fois les dés de dégâts de l'arme et garde le meilleur résultat.",
+	CharacterDef.NIMBLE_ESCAPE: "se désengager ou se cacher par une action bonus.",
+	CharacterDef.ALERT: "ajoute sa maîtrise à l'initiative, et peut échanger son initiative avec un allié au début du combat.",
+	CharacterDef.HALFLING_LUCK: "un 1 au d20 d'un jet d'attaque, d'un test ou d'un jet de sauvegarde est relancé.",
+	CharacterDef.NATURALLY_STEALTHY: "peut se cacher derrière une créature plus grande que lui.",
+	SECOND_WIND_TRAIT: "action bonus : regagne 1d10 + son niveau en PV.",
+	HEROIC_INSPIRATION_TRAIT: "relance un dé de son choix, une fois.",
+	SNEAK_ATTACK_TRAIT: "une fois par tour, dégâts en plus avec une arme de finesse ou à distance, si l'attaque a l'avantage ou si un allié est au contact de la cible.",
+	ADVANTAGE_DAMAGE_TRAIT: "dégâts en plus quand l'attaque a l'avantage.",
+}
+
+
+## Traits d'une fiche, dans un ordre stable : style de combat, dons, traits,
+## puis capacités de classe.
+static func traits_of(definition: CharacterDef) -> Array[StringName]:
+	var found: Array[StringName] = []
+	if not definition.fighting_style.is_empty():
+		found.append(definition.fighting_style)
+	found.append_array(definition.feats)
+	found.append_array(definition.traits)
+	if not definition.sneak_attack_dice.is_empty():
+		found.append(SNEAK_ATTACK_TRAIT)
+	if definition.second_wind_uses > 0:
+		found.append(SECOND_WIND_TRAIT)
+	if definition.heroic_inspiration:
+		found.append(HEROIC_INSPIRATION_TRAIT)
+	if not definition.advantage_damage_dice.is_empty():
+		found.append(ADVANTAGE_DAMAGE_TRAIT)
+	return found
+
+
+## « Attaque sournoise (1d6) : une fois par tour… ».
+static func trait_line(definition: CharacterDef, id: StringName) -> String:
+	var name: String = TRAIT_NAMES.get(id, str(id))
+	if id == SNEAK_ATTACK_TRAIT:
+		name += " (%s)" % definition.sneak_attack_dice
+	elif id == ADVANTAGE_DAMAGE_TRAIT:
+		name += " (+%s)" % definition.advantage_damage_dice
+	return "%s : %s" % [colored(name, Palette.GOLD), TRAIT_DESCRIPTIONS.get(id, "")]
+
+
+## Fiche complète d'un combattant, en BBCode : PV ou état, CA, vitesse,
+## initiative ; effets expliqués ; attaques ; traits ; ressources.
+static func combatant_sheet(combatant: Combatant, state: CombatState, is_enemy: bool, exact: bool) -> String:
+	var lines: PackedStringArray = []
+	lines.append("%s  %s" % [
+		colored("[b]%s[/b]" % combatant.display_name, Palette.DANGER if is_enemy else Palette.ALLY),
+		colored("(%s)" % (SHEET_ENEMY if is_enemy else SHEET_ALLY), Palette.MUTED),
+	])
+	lines.append("%s · %s %d · Vitesse %s · Initiative %d" % [
+		health_text(combatant, exact), ARMOR_CLASS, combatant.armor_class(),
+		squares(state.speed_in_squares(combatant)) if not combatant.is_down() else "0",
+		_initiative_of(combatant, state),
+	])
+	var effects := state.effects_on(combatant)
+	if not effects.is_empty() or (combatant.is_down() and not combatant.is_dead):
+		lines.append("")
+		lines.append(colored("[b]%s[/b]" % SHEET_EFFECTS, Palette.GOLD))
+		if combatant.is_down() and not combatant.is_dead:
+			lines.append("• " + SHEET_DOWN)
+		for id in effects:
+			lines.append("• %s : %s" % [colored(effect_name(id), Palette.EFFECT), EFFECT_DESCRIPTIONS.get(id, "")])
+	lines.append("")
+	lines.append(colored("[b]%s[/b]" % SHEET_ATTACKS, Palette.GOLD))
+	for weapon in combatant.definition.weapons:
+		var detail := weapon_tooltip(combatant, weapon).split("\n")
+		lines.append("• " + detail[0])
+		for i in range(1, detail.size()):
+			lines.append("   " + colored(detail[i], Palette.MUTED))
+	var traits := traits_of(combatant.definition)
+	if not traits.is_empty():
+		lines.append("")
+		lines.append(colored("[b]%s[/b]" % SHEET_TRAITS, Palette.GOLD))
+		for id in traits:
+			lines.append("• " + trait_line(combatant.definition, id))
+	if not is_enemy:
+		var resources := resources_line(combatant)
+		if not resources.is_empty():
+			lines.append("")
+			lines.append("%s : %s" % [colored("[b]%s[/b]" % SHEET_RESOURCES, Palette.GOLD), resources])
+	return "\n".join(lines)
+
+
+## Étiquette d'un pion en vue tactique : « Sbire 1 · En sang ».
+static func tactical_label(combatant: Combatant, exact: bool) -> String:
+	var name := combatant.definition.short_name if not combatant.definition.short_name.is_empty() else combatant.display_name
+	if combatant.number > 0:
+		name += " %d" % combatant.number
+	var health := health_text(combatant, exact).replace(HIT_POINTS + " ", "")
+	return "%s · %s" % [name, health]
+
+
 # --- Journal de combat ---------------------------------------------------------
 
 

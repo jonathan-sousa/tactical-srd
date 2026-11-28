@@ -234,3 +234,33 @@ func test_cover_is_shown_next_to_the_armor_class() -> void:
 	var fighter := Combatant.new(Fixtures.fighter(), Combatant.Side.PLAYER)
 	var result := AttackResolver.roll_attack(goblin, fighter, Fixtures.scimitar(), FixedDice.new([13]), Dice.RollMode.NORMAL, false, CombatState.HALF_COVER_BONUS)
 	assert_str(Texts.attack_detail(result)).is_equal("13 + 4 = 17 contre CA 18 (abri partiel, +2 CA)")
+
+
+func test_every_effect_has_a_description() -> void:
+	for id: StringName in Texts.EFFECT_NAMES:
+		assert_bool(Texts.EFFECT_DESCRIPTIONS.has(id)).override_failure_message("Effet sans description : %s" % id).is_true()
+
+
+func test_every_trait_of_the_game_characters_has_a_name_and_a_description() -> void:
+	var registry := DataRegistry.load_from()
+	for id: StringName in [&"fighter_lvl1", &"rogue_lvl1", &"goblin_warrior", &"goblin_minion"]:
+		var definition := registry.character(id)
+		assert_object(definition).is_not_null()
+		for trait_id in Texts.traits_of(definition):
+			assert_bool(Texts.TRAIT_NAMES.has(trait_id)).override_failure_message("%s : trait sans nom %s" % [id, trait_id]).is_true()
+			assert_bool(Texts.TRAIT_DESCRIPTIONS.has(trait_id)).override_failure_message("%s : trait sans description %s" % [id, trait_id]).is_true()
+
+
+func test_traits_of_the_rogue() -> void:
+	var traits := Texts.traits_of(Fixtures.rogue())
+	assert_bool(traits.has(Texts.SNEAK_ATTACK_TRAIT)).is_true()
+	assert_bool(traits.has(CharacterDef.HALFLING_LUCK)).is_true()
+	assert_bool(traits.has(Texts.SECOND_WIND_TRAIT)).is_false()
+
+
+func test_tactical_label() -> void:
+	var goblin := Combatant.new(Fixtures.minion(), Combatant.Side.ENEMY)
+	goblin.number = 2
+	goblin.hp = 3
+	assert_str(Texts.tactical_label(goblin, false)).ends_with("2 · En sang")
+	assert_str(Texts.tactical_label(goblin, true)).ends_with("2 · 3 / 7")
