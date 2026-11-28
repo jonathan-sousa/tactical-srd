@@ -30,6 +30,9 @@ func _init() -> void:
 	_label.fit_content = true
 	_label.scroll_active = false
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Largeur connue d'avance, pour une mise en page juste dès l'ouverture
+	# (marges du style TooltipPanel : 12 px de chaque côté).
+	_label.custom_minimum_size = Vector2(WIDTH - 24.0, 0)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
 	_label.add_theme_font_size_override(&"normal_font_size", FONT_SIZE)

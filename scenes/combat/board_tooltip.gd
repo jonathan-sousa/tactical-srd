@@ -14,6 +14,8 @@ extends PanelContainer
 const CURSOR_OFFSET := Vector2(20, 20)
 const WIDTH := 320.0
 const FONT_SIZE := 16
+## Marges intérieures de la bulle (style TooltipPanel : 12 px de chaque côté).
+const TEXT_MARGIN := 24.0
 const BAR_HEIGHT := 7.0
 const BAR_BACK_COLOR := Color(0.1, 0.1, 0.1)
 
@@ -24,6 +26,8 @@ var bounds := Rect2()
 var keep_clear := Rect2()
 ## Suit la souris (plateau), ou reste où on l'a posée (boutons d'action).
 var follows_mouse := true
+## Coin haut-droit de la bulle quand elle est ancrée (voir `show_anchored`).
+var _anchor := Vector2.ZERO
 
 var _title: RichTextLabel
 var _bar: Control
@@ -62,6 +66,9 @@ static func _make_label() -> RichTextLabel:
 	label.fit_content = true
 	label.scroll_active = false
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Largeur connue d'avance : sans elle, le texte se met d'abord en page sur
+	# une largeur nulle, un mot par ligne, et la bulle devient immense.
+	label.custom_minimum_size = Vector2(WIDTH - TEXT_MARGIN, 0)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Pas de cadre propre au texte : seul celui de la bulle se voit.
 	label.add_theme_stylebox_override(&"normal", StyleBoxEmpty.new())
@@ -81,11 +88,26 @@ func show_content(title: String, body: String, bar_fraction: float = -1.0, bar_c
 	_bar_color = bar_color
 	_bar.visible = bar_fraction >= 0.0
 	_bar.queue_redraw()
-	# La hauteur suit le texte : on repart de la plus petite taille.
-	size = Vector2(WIDTH, 0)
 	follows_mouse = true
 	show()
-	_follow_mouse()
+	_fit()
+
+
+## La hauteur suit le texte : on repart de la plus petite taille. Note
+## Godot : le texte n'est mis en page qu'à la frame suivante, d'où un second
+## ajustement différé (call_deferred).
+func _fit() -> void:
+	_resize()
+	_resize.call_deferred()
+
+
+func _resize() -> void:
+	size = Vector2(WIDTH, 0)
+	reset_size()
+	if follows_mouse:
+		_follow_mouse()
+	else:
+		_place_anchored()
 
 
 ## Affiche la bulle à une place fixe : son bord droit en `right_edge.x`, son
@@ -97,11 +119,14 @@ func show_anchored(title: String, body: String, right_edge: Vector2) -> void:
 	_body.visible = not body.is_empty()
 	_bar.visible = false
 	follows_mouse = false
-	size = Vector2(WIDTH, 0)
+	_anchor = right_edge
 	show()
-	reset_size()
+	_fit()
+
+
+func _place_anchored() -> void:
 	var bottom := get_viewport_rect().size.y - 8.0
-	global_position = Vector2(right_edge.x - size.x, minf(right_edge.y, bottom - size.y))
+	global_position = Vector2(_anchor.x - size.x, minf(_anchor.y, bottom - size.y))
 
 
 func hide_content() -> void:

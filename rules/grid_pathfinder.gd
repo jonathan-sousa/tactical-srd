@@ -4,6 +4,8 @@
 ## - 8 directions, une diagonale coûte 1 case comme un pas droit ;
 ## - entrer dans une case de terrain difficile coûte 2 cases (« Entering a
 ##   Square ») ;
+## - en rampant (créature à terre), chaque case coûte 1 de plus, 2 de plus
+##   en terrain difficile (« Crawling ») : 2 cases, ou 3 ;
 ## - une diagonale ne peut pas couper le coin d'un élément de décor qui
 ##   remplit sa case (« Corners ») : arbre, muret. Une créature ne l'empêche
 ##   pas.
@@ -23,9 +25,12 @@
 class_name GridPathfinder
 extends RefCounted
 
-## Coût d'une case normale et d'une case de terrain difficile.
+## Coût d'une case normale et d'une case de terrain difficile, debout et en
+## rampant.
 const NORMAL_COST := 1
 const DIFFICULT_COST := 2
+const CRAWL_COST := 2
+const CRAWL_DIFFICULT_COST := 3
 
 ## Les huit cases voisines.
 const NEIGHBOUR_OFFSETS: Array[Vector2i] = [
@@ -70,27 +75,30 @@ func is_difficult(cell: Vector2i) -> bool:
 
 ## Coût pour entrer dans `cell`. `difficult` : cases de créatures qui sont
 ## un terrain difficile pour celui qui se déplace. Le terrain difficile ne se
-## cumule pas : une case l'est ou ne l'est pas.
-func step_cost(cell: Vector2i, difficult: Array[Vector2i] = []) -> int:
-	return DIFFICULT_COST if is_difficult(cell) or difficult.has(cell) else NORMAL_COST
+## cumule pas : une case l'est ou ne l'est pas. `crawling` : il rampe.
+func step_cost(cell: Vector2i, difficult: Array[Vector2i] = [], crawling: bool = false) -> int:
+	var rough := is_difficult(cell) or difficult.has(cell)
+	if crawling:
+		return CRAWL_DIFFICULT_COST if rough else CRAWL_COST
+	return DIFFICULT_COST if rough else NORMAL_COST
 
 
 ## Coût total d'un chemin (sans la case de départ, comme `find_path`).
-func path_cost(path: Array[Vector2i], difficult: Array[Vector2i] = []) -> int:
+func path_cost(path: Array[Vector2i], difficult: Array[Vector2i] = [], crawling: bool = false) -> int:
 	var total := 0
 	for cell in path:
-		total += step_cost(cell, difficult)
+		total += step_cost(cell, difficult, crawling)
 	return total
 
 
 ## Chemin le moins coûteux de `from` à `to`, sans la case de départ. Vide si
 ## `to` est hors grille, bloquée, occupée ou inaccessible. Le chemin peut
 ## passer par les cases `no_stop`, mais pas y finir.
-func find_path(from: Vector2i, to: Vector2i, blocking: Array[Vector2i], no_stop: Array[Vector2i] = [], difficult: Array[Vector2i] = []) -> Array[Vector2i]:
+func find_path(from: Vector2i, to: Vector2i, blocking: Array[Vector2i], no_stop: Array[Vector2i] = [], difficult: Array[Vector2i] = [], crawling: bool = false) -> Array[Vector2i]:
 	var path: Array[Vector2i] = []
 	if not is_inside(to) or is_blocked(to) or blocking.has(to) or no_stop.has(to) or from == to:
 		return path
-	var parents := _search(from, -1, blocking, difficult, to)[1] as Dictionary
+	var parents := _search(from, -1, blocking, difficult, crawling, to)[1] as Dictionary
 	if not parents.has(to):
 		return path
 	var cell := to
@@ -102,11 +110,11 @@ func find_path(from: Vector2i, to: Vector2i, blocking: Array[Vector2i], no_stop:
 
 ## Cases où l'on peut finir un déplacement d'au plus `budget` cases, avec
 ## leur coût. La case de départ et les cases `no_stop` n'en font pas partie.
-func reachable_cells(from: Vector2i, budget: int, blocking: Array[Vector2i], no_stop: Array[Vector2i] = [], difficult: Array[Vector2i] = []) -> Dictionary[Vector2i, int]:
+func reachable_cells(from: Vector2i, budget: int, blocking: Array[Vector2i], no_stop: Array[Vector2i] = [], difficult: Array[Vector2i] = [], crawling: bool = false) -> Dictionary[Vector2i, int]:
 	var reachable: Dictionary[Vector2i, int] = {}
 	if budget <= 0:
 		return reachable
-	var costs := _search(from, budget, blocking, difficult)[0] as Dictionary
+	var costs := _search(from, budget, blocking, difficult, crawling)[0] as Dictionary
 	for cell: Vector2i in costs:
 		if cell != from and not no_stop.has(cell):
 			reachable[cell] = costs[cell]
@@ -115,7 +123,7 @@ func reachable_cells(from: Vector2i, budget: int, blocking: Array[Vector2i], no_
 
 ## Dijkstra depuis `from`. `budget` < 0 : sans limite. S'arrête dès que
 ## `goal` est fixé, s'il est donné. Renvoie [coûts, parents].
-func _search(from: Vector2i, budget: int, blocking: Array[Vector2i], difficult: Array[Vector2i], goal := Vector2i(-1, -1)) -> Array:
+func _search(from: Vector2i, budget: int, blocking: Array[Vector2i], difficult: Array[Vector2i], crawling: bool, goal := Vector2i(-1, -1)) -> Array:
 	var costs: Dictionary[Vector2i, int] = {from: 0}
 	var diagonals: Dictionary[Vector2i, int] = {from: 0}
 	var parents: Dictionary[Vector2i, Vector2i] = {}
@@ -140,7 +148,7 @@ func _search(from: Vector2i, budget: int, blocking: Array[Vector2i], difficult: 
 			if offset.x != 0 and offset.y != 0:
 				if is_blocked(cell + Vector2i(offset.x, 0)) or is_blocked(cell + Vector2i(0, offset.y)):
 					continue
-			var cost: int = costs[cell] + step_cost(next, difficult)
+			var cost: int = costs[cell] + step_cost(next, difficult, crawling)
 			var diagonal: int = diagonals[cell] + (1 if offset.x != 0 and offset.y != 0 else 0)
 			if budget >= 0 and cost > budget:
 				continue

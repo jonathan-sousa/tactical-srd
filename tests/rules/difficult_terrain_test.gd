@@ -149,3 +149,50 @@ func test_enemy_ai_stops_where_its_movement_runs_out() -> void:
 	assert_str(move.validate(state)).is_empty()
 	# 3 broussailles (6 cases) : il s'arrête en (7, 0).
 	assert_that(move.destination).is_equal(Vector2i(7, 0))
+
+
+# --- Ramper (SRD « Crawling ») ----------------------------------------------------
+
+
+## Guerrier à terre en (0, 0) sur une rangée, broussailles en `difficult`.
+func _prone_state(difficult: Array[Vector2i] = []) -> CombatState:
+	var state := _state(difficult, Vector2i(12, 1), Vector2i(11, 0))
+	var fighter := state.combatants[0]
+	state.add_effect(Effect.new(Effect.PRONE, fighter, fighter, Effect.Expiry.UNTIL_REMOVED))
+	return state
+
+
+func test_a_prone_creature_crawls_at_double_cost() -> void:
+	# « While you're crawling, each foot of movement costs 1 extra foot. »
+	var state := _prone_state()
+	var fighter := state.combatants[0]
+	assert_bool(state.is_crawling(fighter)).is_true()
+	_run(state, MoveAction.new(fighter, Vector2i(2, 0)))
+	assert_that(fighter.position).is_equal(Vector2i(2, 0))
+	assert_int(state.movement_left).is_equal(2)
+	# Toujours à terre : ramper ne relève pas.
+	assert_bool(state.has_effect(fighter, Effect.PRONE)).is_true()
+
+
+func test_crawling_reach_is_halved() -> void:
+	var state := _prone_state()
+	var reachable := state.reachable_cells()
+	assert_int(reachable[Vector2i(3, 0)]).is_equal(6)
+	assert_bool(reachable.has(Vector2i(4, 0))).is_false()
+	assert_str(MoveAction.new(state.combatants[0], Vector2i(4, 0)).validate(state)).is_equal(Action.NOT_ENOUGH_MOVEMENT)
+
+
+func test_crawling_through_difficult_terrain_costs_three() -> void:
+	# « (2 extra feet in Difficult Terrain) » : 1 + 2 = 3 cases.
+	var difficult: Array[Vector2i] = [Vector2i(1, 0)]
+	var state := _prone_state(difficult)
+	var fighter := state.combatants[0]
+	assert_int(state.path_cost(fighter, state.find_path(fighter, Vector2i(2, 0)))).is_equal(5)
+
+
+func test_standing_up_ends_crawling() -> void:
+	var state := _prone_state()
+	var fighter := state.combatants[0]
+	_run(state, StandUpAction.new(fighter))
+	assert_bool(state.is_crawling(fighter)).is_false()
+	assert_int(state.reachable_cells()[Vector2i(3, 0)]).is_equal(3)

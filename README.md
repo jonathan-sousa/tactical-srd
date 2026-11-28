@@ -6,17 +6,25 @@ Mini jeu tactique au tour par tour pour PC, en 2D vue de dessus sur grille, bas�
 
 Le jeu enchaîne un écran titre, un menu, une intro narrative, deux combats et une outro, avec options et sauvegarde. Le joueur commande un groupe de deux personnages de niveau 1, un Guerrier et Tobin, un Roublard halfelin. Ils tombent d'abord dans l'embuscade d'un gobelin, prennent un repos court, puis affrontent une bande (un gobelin guerrier et deux sbires) retranchée derrière des palissades.
 
-Le sprint 2 a peaufiné le combat 1v1 du départ (règles complètes du Guerrier et du Gobelin, prévisions, graphismes, son, export Windows). Le sprint 3 « Escouade » a ajouté le groupe, le Roublard, la bande, l'abri partiel et l'action Aider.
+Le sprint 2 a peaufiné le combat 1v1 du départ (règles complètes du Guerrier et du Gobelin, prévisions, graphismes, son, export Windows). Le sprint 3 « Escouade » a ajouté le groupe, le Roublard, la bande, l'abri partiel et l'action Aider. Le sprint 4 « Lisibilité » a rendu le combat lisible : bulles au survol, fiche des combattants, vue tactique, panneau d'actions par coût, et le terrain difficile.
 
 ## Aperçu
 
-![Tour du Roublard : au survol d'un sbire au contact du Guerrier, la prévision donne les chances de toucher et les dégâts, Attaque sournoise comprise.](docs/screenshots/combat-prevision.png)
+![Tour du Roublard, arc en main : la bulle sur le gobelin guerrier donne son état, les chances de toucher et les dégâts ; la ligne de tir passe par une palissade marquée d'un bouclier +2.](docs/screenshots/combat-prevision.png)
 
-*Le tour de Tobin, le Roublard : survoler un ennemi affiche les chances de toucher et les dégâts possibles. Le sbire est au contact du Guerrier, donc l'Attaque sournoise est comptée.*
+*Viser : la bulle donne l'état de la cible, les chances de toucher et les dégâts. La ligne de tir traverse une palissade, marquée d'un bouclier « +2 » : l'abri partiel est compté.*
 
-![Combat contre la bande : un sbire est mort, le Guerrier est à terre, le gobelin guerrier tire depuis sa palissade.](docs/screenshots/combat-bande.png)
+![Survol du bouton Se cacher : les cases hors de vue de tous les ennemis sont en violet, les ennemis qui voient le Roublard sont entourés, et la bulle explique pourquoi il ne peut pas se cacher ici.](docs/screenshots/combat-actions.png)
 
-*La bande, derrière ses palissades : le gobelin guerrier tire avec l'avantage depuis sa cachette, et le journal détaille chaque jet, abri partiel compris.*
+*Les actions sont rangées par coût, et le budget du tour se lit en pastilles. Survoler une action la montre sur le plateau : ici, les cases d'où se cacher et les ennemis qui voient Tobin.*
+
+![Vue tactique : arbres barrés, palissades +2, broussailles x2, zones de menace hachurées en rouge, nom et état au-dessus de chaque pion.](docs/screenshots/combat-tactique.png)
+
+*Alt maintenu : la vue tactique montre ce qui bloque, ce qui abrite, ce qui ralentit, et où un ennemi frapperait au passage.*
+
+![Fiche du gobelin guerrier : état, CA, vitesse, initiative, attaques et traits expliqués.](docs/screenshots/combat-fiche.png)
+
+*Clic droit sur un pion : sa fiche complète, effets et traits expliqués.*
 
 ![Dialogue : Tobin, le Roublard halfelin, relève des traces de pas.](docs/screenshots/dialogue.png)
 
@@ -27,7 +35,7 @@ Le sprint 2 a peaufiné le combat 1v1 du départ (règles complètes du Guerrier
 Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officielle en regard, dans `docs/rules-deviations.md`.
 
 - **Tour de combat** : déplacement case par case, action, action bonus, réaction ; Foncer, Se désengager, Esquiver, Chercher, Se relever, Se cacher, Aider.
-- **Déplacement** : grille à 8 directions, une diagonale coûte une case, pas de coin coupé le long d'un arbre ou d'un muret ; terrain difficile (broussailles) à deux cases ; on traverse la case d'un allié, ou celle d'un ennemi neutralisé en terrain difficile, sans pouvoir s'y arrêter.
+- **Déplacement** : grille à 8 directions, une diagonale coûte une case, pas de coin coupé le long d'un arbre ou d'un muret ; terrain difficile (broussailles) à deux cases ; à terre, on rampe (deux cases, trois en terrain difficile) ou on se relève ; on traverse la case d'un allié, ou celle d'un ennemi neutralisé en terrain difficile, sans pouvoir s'y arrêter.
 - **Groupe** : chaque personnage joue à son tour d'initiative ; le combat continue tant qu'un personnage n'est ni mort ni stabilisé.
 - **Attaques** : au corps à corps, à distance et lancées, portées normale et longue, désavantage avec un ennemi au contact, ligne de vue (un obstacle est un abri total), abri partiel (+2 CA derrière un muret ou une autre créature), avantage et désavantage qui s'annulent, coups critiques, attaques d'opportunité (le joueur est consulté à chaque fois).
 - **Guerrier humain niveau 1, historique Soldat** : Great Weapon Fighting, Second Wind, Weapon Mastery (épée à deux mains : Graze, fléau : Sap, javelots : Slow), Savage Attacker, Inspiration héroïque.
@@ -58,15 +66,24 @@ Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officie
 
 Commandes du combat :
 
-- clic sur une case bleue : se déplacer (le chemin passe en croix rouges s'il provoque une attaque d'opportunité) ;
-- clic sur un ennemi : l'attaquer avec l'arme choisie ; le survol affiche les chances de toucher et les dégâts. Après une attaque avec une arme Légère, un nouveau clic fait l'attaque de la main libre (action bonus) ;
+- clic sur une case bleue : se déplacer ; le coût du trajet s'affiche sur la case d'arrivée, et le chemin passe en croix rouges s'il provoque une attaque d'opportunité ;
+- clic sur un ennemi : l'attaquer avec l'arme choisie. Après une attaque avec une arme Légère, un nouveau clic fait l'attaque de la main libre (action bonus) ;
 - clic sur un allié mourant au contact : le stabiliser (action Aider) ;
 - clic sur un ennemi caché (pion transparent), ou **Maj** + clic sur une case : attaque à l'aveugle ;
 - trois premières lettres de la rangée du haut (**A Z E** en AZERTY) : choisir une arme du personnage commandé ;
-- **1** à **8** : les actions de la barre (Foncer, Se désengager, Esquiver, Second souffle pour le Guerrier, Chercher, Se relever, Se cacher, Aider) ;
+- **1** à **8** : les actions de la barre, dans l'ordre affiché (Foncer, Se désengager, Esquiver, Chercher, Se cacher, Aider, puis Second souffle pour le Guerrier, puis Se relever) ;
 - **O** / **N** : répondre à une question (attaque d'opportunité, relance, échange d'initiative d'Alert) ;
-- **Espace** : finir le tour.
+- **Espace** : finir le tour ;
+- clic droit sur un pion : sa fiche (Échap, clic ou clic droit la ferme) ;
+- **Alt** maintenu : la vue tactique.
 - En ligne de commande : `godot --path .`
+
+Ce que montre l'interface :
+
+- **Bulle au survol** : sur un ennemi, son état, sa CA, ses effets, la distance, puis la prévision avec l'arme choisie (chances de toucher, dégâts, abri, avantage ou désavantage et leur raison, Attaque sournoise) ; sur un allié, ses PV et ses jets contre la mort ; sur un arbre, une palissade ou des broussailles, leur règle. Rien sur une case d'herbe libre.
+- **PV des ennemis** : leur état seulement (Indemne, Blessé, En sang à la moitié de leurs PV ou moins, comme « Bloodied » dans le SRD), sauf si l'option « PV ennemis exacts » est cochée.
+- **Panneau d'actions** : budget du tour en pastilles (action, action bonus, réaction) et jauge de déplacement ; boutons rangés par coût, avec un liseré de couleur ; au survol d'un bouton, une bulle (coût, effet, raison d'un refus) et un aperçu sur le plateau (portée de Foncer, menaces que Se désengager évite, cases d'où se cacher, ennemis qui vous voient, cibles d'Aider).
+- **Curseur** : une main si le clic fait quelque chose, un sens interdit s'il serait refusé.
 
 ## Mode démo
 
@@ -202,7 +219,7 @@ Le combat se rejoue sous les yeux, puis la console dit s'il aboutit au même ré
 - Sauvegarde automatique à chaque étape franchie, dans `user://save_1.json` (sous Windows : `%APPDATA%\Godot\app_userdata\Projet Phénix\`). Pas de sauvegarde en plein combat.
 - Écriture atomique (fichier `.tmp` puis renommage) et champ `version` avec migrations. Un fichier illisible ou d'une version inconnue affiche un message et grise « Continuer ».
 - Seul du JSON validé champ par champ est lu depuis `user://`, jamais une Resource.
-- Les options (volumes général, musique et effets, plein écran, texte agrandi) sont dans `user://settings.cfg`, indépendamment de la sauvegarde. Un fichier d'options plus ancien garde son volume général ; les nouveaux réglages prennent leur valeur par défaut.
+- Les options (volumes général, musique et effets, plein écran, texte agrandi, PV ennemis exacts) sont dans `user://settings.cfg`, indépendamment de la sauvegarde. Un fichier d'options plus ancien garde son volume général ; les nouveaux réglages prennent leur valeur par défaut.
 
 ## Conventions
 

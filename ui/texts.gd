@@ -126,7 +126,6 @@ const REASONS: Dictionary[StringName, String] = {
 	Action.SEEN_BY_ENEMY: "Un ennemi vous voit : impossible de se cacher.",
 	Action.NOTHING_TO_SEARCH: "Aucun ennemi caché à chercher.",
 	Action.NO_TARGET: "Aucune cible à attaquer ici.",
-	Action.PRONE: "À terre : relevez-vous d'abord.",
 	Action.NOT_PRONE: "Vous n'êtes pas à terre.",
 	Action.NO_OFF_HAND_ATTACK: "Attaque de la main libre : attaquez d'abord avec une arme Légère (action Attaque).",
 	Action.OFF_HAND_WEAPON: "Main libre : il faut une autre arme Légère que celle qui a déjà frappé.",
@@ -623,7 +622,7 @@ const EFFECT_DESCRIPTIONS: Dictionary[StringName, String] = {
 	Effect.SAPPED: "désavantage à sa prochaine attaque (maîtrise Sap), jusqu'au début du prochain tour de qui l'a touché.",
 	Effect.SLOWED: "vitesse réduite de 10 ft, soit 2 cases (maîtrise Slow), jusqu'au début du prochain tour de qui l'a touché.",
 	Effect.HIDDEN: "ses ennemis ne savent pas où il est tant qu'ils ne l'ont pas trouvé ; avantage à ses attaques, désavantage aux attaques contre lui.",
-	Effect.PRONE: "au contact, on l'attaque avec l'avantage ; à distance, avec le désavantage. Désavantage à ses attaques. Se relever coûte la moitié de sa vitesse.",
+	Effect.PRONE: "au contact, on l'attaque avec l'avantage ; à distance, avec le désavantage. Désavantage à ses attaques. Il rampe (chaque case coûte double) ou se relève pour la moitié de sa vitesse.",
 	Effect.VEXED: "la prochaine attaque de qui l'a touché contre lui a l'avantage (maîtrise Vex).",
 	Effect.HELPED: "la prochaine attaque d'un allié de l'aidant contre lui a l'avantage (action Aider).",
 }
