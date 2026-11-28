@@ -378,32 +378,6 @@ static func squares(count: int) -> String:
 
 ## Aide au survol d'une case libre : « Déplacement : 3 cases », et
 ## l'avertissement si le trajet provoque une attaque d'opportunité.
-static func move_hint(square_count: int, opportunity_attackers: Array[Combatant] = []) -> String:
-	var line := "%s : %s" % [MOVEMENT, squares(square_count)]
-	if not opportunity_attackers.is_empty():
-		var names: PackedStringArray = []
-		for attacker in opportunity_attackers:
-			names.append(attacker.display_name)
-		line += ". Attention : attaque d'opportunité de %s (Se désengager l'évite)." % ", ".join(names)
-	return line
-
-
-## Panneau de la cible : « Gobelin guerrier · PV 7 / 10 · CA 15 · Caché ».
-static func target_line(combatant: Combatant, effect_ids: Array[StringName]) -> String:
-	var parts: PackedStringArray = [
-		combatant.display_name,
-		"%s %d / %d" % [HIT_POINTS, combatant.hp, combatant.definition.max_hp],
-		"%s %d" % [ARMOR_CLASS, combatant.armor_class()],
-	]
-	if combatant.is_dead:
-		parts.append("mort")
-	elif combatant.is_down():
-		parts.append("inconscient")
-	for id in effect_ids:
-		parts.append(effect_name(id))
-	return " · ".join(parts)
-
-
 ## Liste du groupe : « ▶ Guerrier · PV 7 / 12 », puis l'état s'il est à
 ## terre. La flèche marque le personnage commandé.
 static func party_line(member: Combatant, commanded: bool) -> String:
@@ -425,25 +399,6 @@ static func round_header(round: int) -> String:
 	return "Round %d" % round
 
 
-## Aide au survol d'un ennemi, d'après la prévision du moteur :
-## « Attaquer Gobelin guerrier (Épée à deux mains) : 55 % de toucher, 9 à
-## 15 dégâts ; Graze : 3 si raté ».
-static func attack_hint(target: Combatant, weapon: WeaponDef, estimate: AttackEstimate) -> String:
-	var line := "Attaquer %s (%s) : %s de toucher, %s dégâts" % [
-		target.display_name, weapon.display_name, percent(estimate.hit_chance),
-		_range_text(estimate.damage_min, estimate.damage_max),
-	]
-	if estimate.critical_chance >= estimate.hit_chance and estimate.hit_chance > 0.0:
-		line += " (toujours critique)"
-	if estimate.graze_damage > 0:
-		line += " ; Graze : %d si raté" % estimate.graze_damage
-	if estimate.sneak_attack:
-		line += " ; %s comprise" % SNEAK_ATTACK
-	if estimate.cover_bonus > 0:
-		line += " ; %s" % cover_text(estimate.cover_bonus)
-	return line + _advantage_detail(estimate.advantage)
-
-
 ## « abri partiel, +2 CA ».
 static func cover_text(bonus: int) -> String:
 	return "abri partiel, +%d %s" % [bonus, ARMOR_CLASS]
@@ -461,6 +416,126 @@ static func _range_text(low: int, high: int) -> String:
 ## Aide au survol de la dernière position connue d'un ennemi caché.
 static func blind_attack_hint(weapon: WeaponDef) -> String:
 	return "Attaque à l'aveugle (%s) : désavantage, et ratée si personne n'est là." % weapon.display_name
+
+
+# --- Bulle au survol du plateau ------------------------------------------------
+
+## État de santé d'un ennemi quand ses PV exacts sont masqués.
+const HEALTH_STATUS_NAMES: Dictionary[HealthStatus.Status, String] = {
+	HealthStatus.Status.UNHURT: "Indemne",
+	HealthStatus.Status.WOUNDED: "Blessé",
+	HealthStatus.Status.BLOODIED: "En sang",
+	HealthStatus.Status.DOWN: "Hors de combat",
+}
+
+const TERRAIN_NAMES: Dictionary[CellInfo.Terrain, String] = {
+	CellInfo.Terrain.OBSTACLE: "Arbre",
+	CellInfo.Terrain.LOW_WALL: "Palissade (muret)",
+	CellInfo.Terrain.DIFFICULT: "Broussailles (terrain difficile)",
+}
+
+const TERRAIN_RULES: Dictionary[CellInfo.Terrain, String] = {
+	CellInfo.Terrain.OBSTACLE: "Infranchissable. Bloque la vue : on ne peut ni voir ni viser à travers (abri total).",
+	CellInfo.Terrain.LOW_WALL: "Infranchissable, mais on voit par-dessus. Qui est derrière a un abri partiel : +2 CA contre les attaques qui la traversent.",
+	CellInfo.Terrain.DIFFICULT: "Chaque case coûte 2 cases de déplacement.",
+}
+
+const TOOLTIP_YOUR_TURN := "C'est son tour : ses ressources sont dans le panneau."
+const TOOLTIP_HIDDEN := "Caché : dernière position connue."
+const TOOLTIP_ALWAYS_CRITICAL := "Toute touche est critique."
+const TOOLTIP_CANCELLED := "Avantage et désavantage s'annulent."
+
+
+## Couleur en BBCode : « [color=#ffd94d]texte[/color] ».
+static func colored(text: String, color: Color) -> String:
+	return "[color=#%s]%s[/color]" % [color.to_html(false), text]
+
+
+## PV montrés : les chiffres (« PV 7 / 10 ») si `exact`, sinon l'état
+## (« Blessé »). Un mort est « mort », un personnage à 0 PV « inconscient ».
+static func health_text(combatant: Combatant, exact: bool) -> String:
+	if combatant.is_dead:
+		return "mort"
+	if not exact:
+		return HEALTH_STATUS_NAMES[HealthStatus.of_combatant(combatant)]
+	var line := "%s %d / %d" % [HIT_POINTS, combatant.hp, combatant.definition.max_hp]
+	if combatant.is_down():
+		line += " · inconscient"
+	return line
+
+
+## Titre de la bulle d'un combattant : « Gobelin guerrier · CA 15 ».
+static func unit_title(combatant: Combatant, is_enemy: bool) -> String:
+	var color := Palette.DANGER if is_enemy else Palette.ALLY
+	return "%s · %s %d" % [colored("[b]%s[/b]" % combatant.display_name, color), ARMOR_CLASS, combatant.armor_class()]
+
+
+## Corps de la bulle d'un combattant : PV ou état, distance, effets, jets
+## contre la mort s'il est mourant.
+static func unit_body(combatant: Combatant, effect_ids: Array[StringName], distance: int, exact: bool) -> String:
+	var lines: PackedStringArray = []
+	var first := health_text(combatant, exact)
+	if distance > 0:
+		first += " · %s" % ("au contact" if distance == 1 else "à %s" % squares(distance))
+	lines.append(first)
+	if not effect_ids.is_empty():
+		var names: PackedStringArray = []
+		for id in effect_ids:
+			names.append(effect_name(id))
+		lines.append(colored(", ".join(names), Palette.EFFECT))
+	if combatant.is_dying():
+		lines.append(death_saves_line(combatant))
+	return "
+".join(lines)
+
+
+## Prévision d'une attaque, d'après le moteur, en lignes courtes :
+## « 55 % pour toucher · 9 à 15 dégâts », puis ce qui la modifie.
+static func attack_tooltip(weapon: WeaponDef, estimate: AttackEstimate, off_hand: bool) -> String:
+	var lines: PackedStringArray = []
+	lines.append(colored((OFF_HAND_HINT if off_hand else "") + weapon.display_name, Palette.MUTED))
+	lines.append("%s pour toucher · %s dégâts" % [
+		colored("[b]%s[/b]" % percent(estimate.hit_chance), Palette.GOLD), _range_text(estimate.damage_min, estimate.damage_max),
+	])
+	if estimate.critical_chance >= estimate.hit_chance and estimate.hit_chance > 0.0:
+		lines.append(TOOLTIP_ALWAYS_CRITICAL)
+	if estimate.graze_damage > 0:
+		lines.append("Graze : %d si raté" % estimate.graze_damage)
+	if estimate.sneak_attack:
+		lines.append(colored("★ %s comprise" % SNEAK_ATTACK, Palette.GOLD))
+	if estimate.cover_bonus > 0:
+		lines.append(colored("▼ Abri partiel : +%d %s" % [estimate.cover_bonus, ARMOR_CLASS], Palette.DANGER))
+	var advantage := estimate.advantage
+	if advantage != null:
+		if not advantage.advantages.is_empty():
+			lines.append(colored("▲ Avantage : %s" % _reasons(advantage.advantages), Palette.HEAL))
+		if not advantage.disadvantages.is_empty():
+			lines.append(colored("▼ Désavantage : %s" % _reasons(advantage.disadvantages), Palette.DANGER))
+		if not advantage.advantages.is_empty() and not advantage.disadvantages.is_empty():
+			lines.append(TOOLTIP_CANCELLED)
+	return "
+".join(lines)
+
+
+## Ligne d'alerte : le trajet provoque une attaque d'opportunité.
+static func opportunity_warning(attackers: Array[Combatant]) -> String:
+	var names: PackedStringArray = []
+	for attacker in attackers:
+		names.append(attacker.display_name)
+	return colored("▼ Attaque d'opportunité de %s (Se désengager l'évite)." % ", ".join(names), Palette.DANGER)
+
+
+## Ligne d'erreur dans la bulle : la raison d'un refus.
+static func refusal(code: StringName) -> String:
+	return colored(reason(code), Palette.DANGER)
+
+
+static func terrain_title(terrain: CellInfo.Terrain) -> String:
+	return colored("[b]%s[/b]" % TERRAIN_NAMES[terrain], Palette.TERRAIN)
+
+
+static func terrain_rule(terrain: CellInfo.Terrain) -> String:
+	return TERRAIN_RULES[terrain]
 
 
 # --- Journal de combat ---------------------------------------------------------

@@ -94,7 +94,6 @@ var _replay_index := 0
 @onready var _decision_question: Label = %DecisionQuestionLabel
 @onready var _decision_yes: Button = %DecisionYesButton
 @onready var _decision_no: Button = %DecisionNoButton
-@onready var _target_label: Label = %TargetLabel
 @onready var _board_area: Control = %BoardArea
 
 ## Boutons de la barre d'actions, par code d'action, et l'action que chacun
@@ -108,9 +107,11 @@ var _chosen_weapons: Dictionary[Combatant, WeaponDef] = {}
 var _weapon_buttons: Dictionary[WeaponDef, Button] = {}
 ## Lettre de la touche de chaque arme, calculée une fois.
 var _weapon_key_labels: Array[String] = []
-## Ennemi survolé, montré dans le panneau de la cible (sinon le premier
-## ennemi vivant).
-var _hovered_enemy: Combatant
+## Case survolée sur le plateau (BoardView.NO_CELL hors du plateau) : la
+## bulle et les aperçus sont recalculés quand l'état change.
+var _hovered_cell := BoardView.NO_CELL
+## Bulle d'information au survol (voir BoardTooltip).
+var _tooltip: BoardTooltip
 ## Dernier round annoncé dans le journal.
 var _logged_round := 0
 ## Position de repos du plateau, que la secousse retrouve.
@@ -195,6 +196,8 @@ func _ready() -> void:
 	_panel.get_parent().move_child(_party_list, _panel.get_index())
 	_party_list.visible = state.party().size() > 1
 	_board.setup(encounter)
+	_tooltip = BoardTooltip.new()
+	$Hud.add_child(_tooltip)
 	# Le plateau (un Node2D) suit la place que lui réserve l'interface.
 	# Note Godot : `item_rect_changed` est émis quand un Control change de
 	# position ou de taille, par exemple quand son conteneur le place.
@@ -202,11 +205,13 @@ func _ready() -> void:
 	_place_board()
 	_apply_text_size()
 	Settings.large_text_changed.connect(func(_enabled: bool) -> void: _apply_text_size())
+	Settings.exact_enemy_hp_changed.connect(func(_enabled: bool) -> void: _on_exact_hp_changed())
 	for combatant in state.combatants:
 		var token := TokenView.new()
 		token.setup(combatant, combatant.position, _board.cell_center(combatant.position))
 		_tokens_root.add_child(token)
 		_tokens[combatant] = token
+		token.exact_hp = _shows_exact_hp(combatant)
 		token.stepped.connect(AudioManager.play.bind(AudioManager.STEP))
 
 	# Note Godot : connecter un signal = s'abonner à un événement (callback).
@@ -435,8 +440,7 @@ func _perform(action: Action) -> void:
 		AudioManager.play(AudioManager.REFUSED)
 		return
 	_busy = true
-	_board.path_preview = []
-	_hint_label.text = ""
+	_clear_hover()
 	_refresh()
 	if action.actor.side == Combatant.Side.PLAYER:
 		_remember(action)
@@ -778,55 +782,151 @@ func _enemy_token_at(cell: Vector2i) -> Combatant:
 
 
 func _on_cell_hovered(cell: Vector2i) -> void:
-	if not _is_player_turn():
+	_hovered_cell = cell
+	_clear_hover()
+	if not _is_player_turn() or cell == BoardView.NO_CELL:
 		return
-	_board.path_preview = []
-	_board.path_warning = false
-	_hint_label.text = ""
-	var shown := _enemy_token_at(cell) if cell != BoardView.NO_CELL else null
-	if shown != _hovered_enemy:
-		_hovered_enemy = shown
-		_refresh_target()
-	if cell == BoardView.NO_CELL or cell == _player.position:
-		return
-
 	if _help_armed:
 		_hint_label.text = Texts.HELP_ARMED_HINT
 		return
-	var action := _action_for_cell(cell)
-	var reason := action.validate(state)
-	if action is HelpAction:
-		var help := action as HelpAction
-		_hint_label.text = Texts.stabilize_hint(_player, help.target) if reason.is_empty() else Texts.reason(reason)
+	var shown := _enemy_token_at(cell)
+	if shown != null:
+		_hover_enemy(shown, cell)
 		return
-	if action is AttackAction:
-		var attack := action as AttackAction
-		if not reason.is_empty():
-			_hint_label.text = Texts.reason(reason)
-		elif attack.is_blind():
-			_hint_label.text = Texts.blind_attack_hint(attack.weapon)
-		else:
-			_hint_label.text = _attack_hint(attack)
+	var occupant := state.combatant_at(cell)
+	if occupant != null and occupant.side == _player.side:
+		_hover_ally(occupant)
 		return
+	_hover_ground(cell)
 
-	if reason.is_empty():
+
+## Efface la bulle et les aperçus du survol précédent.
+func _clear_hover() -> void:
+	_tooltip.hide_content()
+	_tooltip.keep_clear = Rect2()
+	_board.path_preview = []
+	_board.path_warning = false
+	_board.path_cost = 0
+	_board.threat_preview = []
+	_board.aim = []
+	_board.cover_marks = []
+	_hint_label.text = ""
+
+
+## Survol d'un ennemi (ou de sa dernière position connue s'il est caché) :
+## qui il est, puis la prévision de l'attaque avec l'arme choisie. Tout vient
+## du moteur (AttackEstimate).
+func _hover_enemy(enemy: Combatant, cell: Vector2i) -> void:
+	var body := Texts.unit_body(enemy, state.effects_on(enemy), GridPathfinder.chebyshev(_player.position, cell), _shows_exact_hp(enemy))
+	if state.is_hidden_from(enemy, _player):
+		body = Texts.TOOLTIP_HIDDEN
+	var attack := _action_for_cell(cell) as AttackAction
+	var reason := attack.validate(state)
+	if not reason.is_empty():
+		body += "\n" + Texts.refusal(reason)
+	elif attack.is_blind():
+		body += "\n" + Texts.blind_attack_hint(attack.weapon)
+	else:
+		var estimate := AttackEstimate.of(state, _player, attack.target, attack.weapon, attack.off_hand)
+		body += "\n" + Texts.attack_tooltip(attack.weapon, estimate, attack.off_hand)
+		if GridPathfinder.chebyshev(_player.position, enemy.position) > 1:
+			_board.aim = [_player.position, enemy.position]
+		_board.cover_marks = estimate.cover_cells
+		_tooltip.keep_clear = _cells_rect([_player.position, enemy.position])
+	_show_unit_tooltip(enemy, body)
+
+
+## Survol d'un allié (ou du personnage commandé) : PV, effets, jets contre la
+## mort ; s'il est mourant, la chance de le stabiliser.
+func _hover_ally(ally: Combatant) -> void:
+	var distance := GridPathfinder.chebyshev(_player.position, ally.position)
+	var body := Texts.unit_body(ally, state.effects_on(ally), distance, true)
+	if ally == _player:
+		body += "\n" + Texts.colored(Texts.TOOLTIP_YOUR_TURN, Palette.MUTED)
+	else:
+		var action := _action_for_cell(ally.position)
+		if action is HelpAction:
+			var reason := action.validate(state)
+			body += "\n" + (Texts.stabilize_hint(_player, ally) if reason.is_empty() else Texts.refusal(reason))
+	_show_unit_tooltip(ally, body)
+
+
+func _show_unit_tooltip(combatant: Combatant, body: String) -> void:
+	var fraction := _hp_fraction(combatant)
+	_tooltip.show_content(Texts.unit_title(combatant, combatant.side != _player.side), body, fraction, TokenView.hp_color(fraction))
+
+
+## Survol d'une case sans combattant visible : le trajet et son coût sur le
+## plateau ; une bulle seulement si la case a une règle (arbre, palissade,
+## broussailles) ou si le trajet provoque une attaque d'opportunité.
+func _hover_ground(cell: Vector2i) -> void:
+	var info := CellInfo.of(state, cell, _player)
+	var lines: PackedStringArray = []
+	if info.has_rule():
+		lines.append(Texts.terrain_rule(info.terrain))
+	var move := _action_for_cell(cell)
+	var reason := move.validate(state)
+	if move is MoveAction and reason.is_empty():
 		var path := state.find_path(_player, cell)
 		var attackers := state.opportunity_attackers(_player, path)
-		_board.path_warning = not attackers.is_empty()
 		_board.path_preview = path
-		_hint_label.text = Texts.move_hint(state.path_cost(_player, path), attackers)
-	else:
+		_board.path_cost = state.path_cost(_player, path)
+		_board.path_warning = not attackers.is_empty()
+		var shown: Array[Vector2i] = [_player.position]
+		shown.append_array(path)
+		_tooltip.keep_clear = _cells_rect(shown)
+		if not attackers.is_empty():
+			lines.append(Texts.opportunity_warning(attackers))
+			_board.threat_preview = _threat_cells_of(attackers)
+	elif not info.blocks_movement:
 		_hint_label.text = Texts.reason(reason)
 	if not state.hidden_enemies_of(_player).is_empty():
-		_hint_label.text += "\n" + Texts.BLIND_ATTACK_SHIFT_HINT
+		var hints: PackedStringArray = [_hint_label.text] if not _hint_label.text.is_empty() else []
+		hints.append(Texts.BLIND_ATTACK_SHIFT_HINT)
+		_hint_label.text = "\n".join(hints)
+	if not lines.is_empty():
+		_tooltip.show_content(Texts.terrain_title(info.terrain) if info.has_rule() else "", "\n".join(lines))
 
 
-## Aide au survol d'un ennemi : chances de toucher, dégâts possibles,
-## raisons d'avantage ou de désavantage. Tout vient de la prévision du
-## moteur (AttackEstimate).
-func _attack_hint(attack: AttackAction) -> String:
-	var hint := Texts.attack_hint(attack.target, attack.weapon, AttackEstimate.of(state, _player, attack.target, attack.weapon, attack.off_hand))
-	return Texts.OFF_HAND_HINT + hint if attack.off_hand else hint
+## Rectangle global qui englobe ces cases du plateau : ce que la bulle doit
+## éviter de cacher.
+func _cells_rect(cells: Array[Vector2i]) -> Rect2:
+	var rect := Rect2(_board.to_global(Vector2(cells[0]) * BoardView.CELL_SIZE), Vector2.ONE * BoardView.CELL_SIZE)
+	for cell in cells:
+		rect = rect.merge(Rect2(_board.to_global(Vector2(cell) * BoardView.CELL_SIZE), Vector2.ONE * BoardView.CELL_SIZE))
+	return rect
+
+
+## Cases menacées par ces ennemis : celles qu'on ne quitte pas sans risque.
+func _threat_cells_of(attackers: Array[Combatant]) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	var threats := state.threat_cells(_player)
+	for cell: Vector2i in threats:
+		for attacker: Combatant in threats[cell]:
+			if attackers.has(attacker):
+				cells.append(cell)
+				break
+	return cells
+
+
+## Les PV de ce combattant sont-ils montrés en chiffres ? Toujours pour les
+## personnages du joueur ; pour les ennemis, selon le réglage.
+func _shows_exact_hp(combatant: Combatant) -> bool:
+	return combatant.side == Combatant.Side.PLAYER or Settings.exact_enemy_hp
+
+
+## Remplissage de la barre de PV montrée pour ce combattant.
+func _hp_fraction(combatant: Combatant) -> float:
+	if _shows_exact_hp(combatant):
+		return clampf(float(combatant.hp) / combatant.definition.max_hp, 0.0, 1.0)
+	return HealthStatus.bar_fraction(HealthStatus.of_combatant(combatant))
+
+
+func _on_exact_hp_changed() -> void:
+	for combatant: Combatant in _tokens:
+		_tokens[combatant].exact_hp = _shows_exact_hp(combatant)
+	if state != null:
+		_on_cell_hovered(_hovered_cell)
 
 
 ## Un bouton par arme du personnage, avec sa touche. L'arme choisie sert à
@@ -979,7 +1079,6 @@ func _refresh() -> void:
 	_initiative_bar.refresh(state.active())
 	for combatant: Combatant in _tokens:
 		_tokens[combatant].conditions = state.effects_on(combatant)
-	_refresh_target()
 
 	var player_turn := _is_player_turn()
 	var reachable: Dictionary[Vector2i, int] = {}
@@ -1024,6 +1123,9 @@ func _refresh() -> void:
 	_end_turn_button.disabled = _busy or not end_turn_reason.is_empty()
 	_end_turn_button.tooltip_text = Texts.reason(end_turn_reason) if not end_turn_reason.is_empty() else ""
 
+	# La bulle et les aperçus suivent le nouvel état.
+	_on_cell_hovered(_hovered_cell)
+
 	# Plus rien à faire : le bouton pulse pour inviter à finir le tour.
 	var nothing_left := player_turn and state.action_used and state.movement_left == 0 and attackable.is_empty()
 	_set_pulse(nothing_left)
@@ -1034,6 +1136,8 @@ func _refresh() -> void:
 func _place_board() -> void:
 	_board.position = _board_area.global_position
 	_board_origin = _board.position
+	if _tooltip != null:
+		_tooltip.bounds = _board_area.get_global_rect()
 
 
 ## Fin d'un rejeu : le résultat est-il celui de l'enregistrement ? Puis on
@@ -1047,18 +1151,6 @@ func _check_replay_outcome() -> void:
 	else:
 		Autoplay.report("rejeu : DIFFÉRENT de l'enregistrement (%s attendu, %s obtenu)." % [_replay.outcome, outcome])
 	Autoplay.later(self, AudioManager.quit_game, end_delay + 1.0)
-
-
-## Panneau de la cible : l'ennemi survolé, sinon le premier encore en vie.
-func _refresh_target() -> void:
-	var target := _hovered_enemy
-	if target == null or target.is_dead:
-		for enemy in state.living_enemies_of(_player):
-			target = enemy
-			break
-	_target_label.visible = target != null
-	if target != null:
-		_target_label.text = Texts.target_line(target, state.effects_on(target))
 
 
 ## Texte flottant au-dessus d'un point du plateau.
@@ -1077,7 +1169,6 @@ func _shake() -> void:
 
 func _apply_text_size() -> void:
 	_hint_label.add_theme_font_size_override(&"font_size", Settings.font_size(18, 21))
-	_target_label.add_theme_font_size_override(&"font_size", Settings.font_size(18, 21))
 
 
 func _set_pulse(enabled: bool) -> void:

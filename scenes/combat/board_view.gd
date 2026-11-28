@@ -42,6 +42,17 @@ const PATH_WARNING_COLOR := Color(1.0, 0.4, 0.3, 0.95)
 const HATCH_COLOR := Color(1.0, 0.55, 0.5, 0.7)
 const HATCH_SPACING := 12.0
 const HOVER_COLOR := Color(1, 1, 1, 0.6)
+## Zone de menace (attaque d'opportunité) : bord rouge et hachures.
+const THREAT_COLOR := Color(1.0, 0.35, 0.3, 0.85)
+const THREAT_FILL_COLOR := Color(1.0, 0.35, 0.3, 0.15)
+## Ligne de tir vers la cible visée, et bouclier sur la case qui l'abrite.
+const AIM_COLOR := Color(1.0, 0.9, 0.55, 0.85)
+const AIM_DASH := 10.0
+const SHIELD_COLOR := Palette.GOLD
+const SHIELD_TEXT_COLOR := Color(0.16, 0.11, 0.06)
+## Coût du trajet, écrit sur la case d'arrivée.
+const COST_FONT_SIZE := 26
+const COST_OUTLINE := 6
 
 var grid_size: Vector2i
 var blocked_cells: Array[Vector2i] = []
@@ -66,6 +77,28 @@ var path_preview: Array[Vector2i] = []:
 var path_warning := false:
 	set(value):
 		path_warning = value
+		queue_redraw()
+
+## Coût du trajet prévu, écrit sur sa dernière case (0 : rien).
+var path_cost := 0:
+	set(value):
+		path_cost = value
+		queue_redraw()
+## Zones de menace à montrer (les cases que l'on quitterait au risque d'une
+## attaque d'opportunité).
+var threat_preview: Array[Vector2i] = []:
+	set(value):
+		threat_preview = value
+		queue_redraw()
+## Ligne de tir : [case de l'attaquant, case de la cible], ou vide.
+var aim: Array[Vector2i] = []:
+	set(value):
+		aim = value
+		queue_redraw()
+## Cases qui abritent la cible visée (murets, créatures) : un bouclier +2.
+var cover_marks: Array[Vector2i] = []:
+	set(value):
+		cover_marks = value
 		queue_redraw()
 
 var _hovered := NO_CELL
@@ -183,6 +216,11 @@ func _draw() -> void:
 				_draw_hatching(rect)
 			draw_rect(rect, LINE_COLOR, false, 1.0)
 
+	for cell in threat_preview:
+		var threat_rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
+		draw_rect(threat_rect, THREAT_FILL_COLOR)
+		draw_rect(threat_rect.grow(-3), THREAT_COLOR, false, 3.0)
+
 	for cell in path_preview:
 		if path_warning:
 			# Une croix en plus de la couleur : le danger se lit sans elle.
@@ -192,8 +230,42 @@ func _draw() -> void:
 		else:
 			draw_circle(cell_center(cell), 6.0, PATH_COLOR)
 
+	if path_cost > 0 and not path_preview.is_empty():
+		_draw_centered_text(cell_center(path_preview.back()), str(path_cost), COST_FONT_SIZE, Color.WHITE)
+
+	if aim.size() == 2:
+		draw_dashed_line(cell_center(aim[0]), cell_center(aim[1]), AIM_COLOR, 2.0, AIM_DASH)
+	for cell in cover_marks:
+		_draw_shield(cell_center(cell))
+
 	if _hovered != NO_CELL:
 		draw_rect(Rect2(Vector2(_hovered) * CELL_SIZE, Vector2.ONE * CELL_SIZE).grow(-2), HOVER_COLOR, false, 2.0)
+
+
+## Texte centré sur un point, avec un contour sombre pour rester lisible sur
+## l'herbe.
+func _draw_centered_text(center: Vector2, text: String, font_size: int, color: Color) -> void:
+	var font := ThemeDB.fallback_font
+	var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+	var origin := center + Vector2(-text_size.x / 2.0, text_size.y / 3.0)
+	draw_string_outline(font, origin, text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, COST_OUTLINE, Color(0, 0, 0, 0.85))
+	draw_string(font, origin, text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, color)
+
+
+## Petit écusson doré « +2 » : cette case abrite la cible (abri partiel).
+func _draw_shield(center: Vector2) -> void:
+	var half := 13.0
+	var points := PackedVector2Array([
+		center + Vector2(-half, -half), center + Vector2(half, -half),
+		center + Vector2(half, 2.0), center + Vector2(0, half + 3.0), center + Vector2(-half, 2.0),
+	])
+	draw_colored_polygon(points, SHIELD_COLOR)
+	points.append(points[0])
+	draw_polyline(points, Color(0, 0, 0, 0.8), 2.0)
+	var font := ThemeDB.fallback_font
+	var text := "+%d" % CombatState.HALF_COVER_BONUS
+	var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, 15)
+	draw_string(font, center + Vector2(-text_size.x / 2.0, 3.0), text, HORIZONTAL_ALIGNMENT_CENTER, -1, 15, SHIELD_TEXT_COLOR)
 
 
 ## Hachures diagonales dans une case : des segments x + y = constante,
