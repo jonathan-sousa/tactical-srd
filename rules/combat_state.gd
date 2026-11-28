@@ -70,7 +70,7 @@ static func create_party(p_encounter: EncounterDef, party_defs: Array[CharacterD
 	var state := CombatState.new()
 	state.encounter = p_encounter
 	# Un muret bloque le passage comme un obstacle, mais pas la vue.
-	state.pathfinder = GridPathfinder.new(p_encounter.grid_size, p_encounter.blocked_cells + p_encounter.low_walls)
+	state.pathfinder = GridPathfinder.new(p_encounter.grid_size, p_encounter.blocked_cells + p_encounter.low_walls, p_encounter.difficult_cells)
 	state.line_of_sight = LineOfSight.new(p_encounter.blocked_cells)
 	for i in party_defs.size():
 		var member := Combatant.new(party_defs[i], Combatant.Side.PLAYER, p_encounter.player_starts[i])
@@ -205,33 +205,58 @@ func combatant_at(cell: Vector2i) -> Combatant:
 	return null
 
 
-## Cases que `mover` ne peut pas traverser : celles des ennemis vivants
-## qu'il sait là. Un ennemi caché n'y figure pas : on ignore où il est, et on
-## peut le heurter en entrant dans sa case (voir `walk`).
-##
-## Écart (docs/rules-deviations.md) : le SRD permet aussi de traverser un
-## ennemi neutralisé, en terrain difficile ; on ne le propose pas.
+## Cases que `mover` ne peut pas traverser : celles des ennemis vivants et
+## conscients qu'il sait là. Un ennemi caché n'y figure pas : on ignore où il
+## est, et on peut le heurter en entrant dans sa case (voir `walk`).
 func blocking_cells(mover: Combatant) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for combatant in combatants:
-		if combatant != mover and not combatant.is_dead and combatant.side != mover.side \
-				and not is_hidden_from(combatant, mover):
+		if _is_known_enemy(mover, combatant) and not combatant.is_down():
 			cells.append(combatant.position)
 	return cells
 
 
-## Cases que `mover` traverse sans pouvoir s'y arrêter : celles de ses
-## alliés vivants (SRD « Moving Around Other Creatures »).
-func ally_cells(mover: Combatant) -> Array[Vector2i]:
+## Cases que `mover` traverse sans pouvoir s'y arrêter (SRD « Moving Around
+## Other Creatures ») : celles de ses alliés vivants, et celles des ennemis
+## neutralisés (Incapacitated : à 0 PV, inconscients).
+func pass_through_cells(mover: Combatant) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for combatant in combatants:
-		if combatant != mover and not combatant.is_dead and combatant.side == mover.side:
+		if combatant == mover or combatant.is_dead:
+			continue
+		if combatant.side == mover.side or (_is_known_enemy(mover, combatant) and combatant.is_down()):
 			cells.append(combatant.position)
 	return cells
+
+
+## Cases de créatures qui sont un terrain difficile pour `mover` : « Another
+## creature's space is Difficult Terrain for you unless that creature is
+## Tiny or your ally ». Parmi les cases qu'il peut traverser, celles des
+## ennemis neutralisés (aucune créature Tiny dans le jeu).
+func creature_difficult_cells(mover: Combatant) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for combatant in combatants:
+		if _is_known_enemy(mover, combatant) and combatant.is_down():
+			cells.append(combatant.position)
+	return cells
+
+
+func _is_known_enemy(mover: Combatant, other: Combatant) -> bool:
+	return other != mover and not other.is_dead and other.side != mover.side and not is_hidden_from(other, mover)
 
 
 func find_path(mover: Combatant, destination: Vector2i) -> Array[Vector2i]:
-	return pathfinder.find_path(mover.position, destination, blocking_cells(mover), ally_cells(mover))
+	return pathfinder.find_path(mover.position, destination, blocking_cells(mover), pass_through_cells(mover), creature_difficult_cells(mover))
+
+
+## Coût en cases de `path` pour `mover` (terrain difficile compris).
+func path_cost(mover: Combatant, path: Array[Vector2i]) -> int:
+	return pathfinder.path_cost(path, creature_difficult_cells(mover))
+
+
+## Case de terrain difficile du décor ?
+func is_difficult_terrain(cell: Vector2i) -> bool:
+	return pathfinder.is_difficult(cell)
 
 
 ## Cases où le combattant actif peut aller avec son déplacement restant.
@@ -243,7 +268,7 @@ func reachable_cells() -> Dictionary[Vector2i, int]:
 ## Cases où `mover` pourrait finir un déplacement d'au plus `budget` cases
 ## parti de `from`, avec leur coût.
 func reachable_from(mover: Combatant, from: Vector2i, budget: int) -> Dictionary[Vector2i, int]:
-	return pathfinder.reachable_cells(from, budget, blocking_cells(mover), ally_cells(mover))
+	return pathfinder.reachable_cells(from, budget, blocking_cells(mover), pass_through_cells(mover), creature_difficult_cells(mover))
 
 
 ## Allonge de l'arme en cases : 5 ft = cases adjacentes, diagonales comprises.
@@ -480,9 +505,11 @@ func apply_effect(effect: Effect) -> Array[CombatEvent]:
 ## réaction s'ouvre (voir ReactionWindow). `already_asked` : combattants
 ## déjà sollicités pour le premier pas, quand un déplacement reprend.
 ##
-## On traverse la case d'un allié sans pouvoir s'y arrêter. Arrêté de force
-## dans une telle case (heurt, mise à terre en chemin), le combattant revient
-## sur la dernière case libre de son trajet (docs/rules-deviations.md).
+## Chaque pas coûte 1 case, 2 en terrain difficile (voir GridPathfinder).
+## On traverse la case d'un allié ou d'un ennemi neutralisé sans pouvoir s'y
+## arrêter. Arrêté de force dans une telle case (heurt, mise à terre en
+## chemin), le combattant revient sur la dernière case libre de son trajet
+## (docs/rules-deviations.md).
 ## `shared` : cases d'alliés traversées depuis cette case libre, la case libre
 ## en premier, quand un déplacement reprend.
 ##
@@ -499,6 +526,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 	var unseen := is_hidden(mover)
 	# Cases quittées depuis la dernière case libre, celle-ci en premier.
 	var since_free: Array[Vector2i] = shared.duplicate()
+	var difficult := creature_difficult_cells(mover)
 	for i in path.size():
 		var blocker := _hidden_enemy_at(mover, path[i])
 		if blocker != null:
@@ -522,7 +550,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 			return events
 		since_free.append(mover.position)
 		mover.position = path[i]
-		movement_left -= 1
+		movement_left -= pathfinder.step_cost(path[i], difficult)
 		walked.append(path[i])
 		if not _shares_cell(mover):
 			since_free.clear()
@@ -579,9 +607,13 @@ func _step_back(mover: Combatant, since_free: Array[Vector2i], unseen: bool, ref
 	var back: Array[Vector2i] = since_free.duplicate()
 	back.reverse()
 	var from := mover.position
-	mover.position = back.back()
 	if refund:
-		movement_left += back.size()
+		# Cases payées depuis la case libre : celles quittées après elle, et
+		# celle où l'on est.
+		var entered: Array[Vector2i] = since_free.slice(1)
+		entered.append(from)
+		movement_left += pathfinder.path_cost(entered, creature_difficult_cells(mover))
+	mover.position = back.back()
 	return [MovedEvent.new(mover, from, back, unseen)]
 
 

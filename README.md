@@ -27,7 +27,8 @@ Le sprint 2 a peaufiné le combat 1v1 du départ (règles complètes du Guerrier
 Source : SRD 5.2.1. Chaque simplification est consignée, avec la règle officielle en regard, dans `docs/rules-deviations.md`.
 
 - **Tour de combat** : déplacement case par case, action, action bonus, réaction ; Foncer, Se désengager, Esquiver, Chercher, Se relever, Se cacher, Aider.
-- **Groupe** : chaque personnage joue à son tour d'initiative ; on traverse la case d'un allié sans pouvoir s'y arrêter ; le combat continue tant qu'un personnage n'est ni mort ni stabilisé.
+- **Déplacement** : grille à 8 directions, une diagonale coûte une case, pas de coin coupé le long d'un arbre ou d'un muret ; terrain difficile (broussailles) à deux cases ; on traverse la case d'un allié, ou celle d'un ennemi neutralisé en terrain difficile, sans pouvoir s'y arrêter.
+- **Groupe** : chaque personnage joue à son tour d'initiative ; le combat continue tant qu'un personnage n'est ni mort ni stabilisé.
 - **Attaques** : au corps à corps, à distance et lancées, portées normale et longue, désavantage avec un ennemi au contact, ligne de vue (un obstacle est un abri total), abri partiel (+2 CA derrière un muret ou une autre créature), avantage et désavantage qui s'annulent, coups critiques, attaques d'opportunité (le joueur est consulté à chaque fois).
 - **Guerrier humain niveau 1, historique Soldat** : Great Weapon Fighting, Second Wind, Weapon Mastery (épée à deux mains : Graze, fléau : Sap, javelots : Slow), Savage Attacker, Inspiration héroïque.
 - **Roublard halfelin niveau 1, historique Criminel** : Attaque sournoise (1d6), Expertise (Discrétion, Perception), Weapon Mastery (épée courte et arc court : Vex), combat à deux armes, Chance et Discrétion naturelle du Halfelin, don Alert (échange d'initiative), flèches comptées (la moitié se récupère après le combat).

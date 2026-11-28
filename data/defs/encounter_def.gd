@@ -17,6 +17,9 @@ extends Resource
 ## Murets : infranchissables, mais on voit par-dessus. Un muret entre
 ## l'attaquant et sa cible lui donne un abri partiel (+2 CA).
 @export var low_walls: Array[Vector2i] = []
+## Terrain difficile (broussailles) : on y passe, mais chaque case coûte 2
+## cases de déplacement (SRD « Difficult Terrain »). Ne gêne pas la vue.
+@export var difficult_cells: Array[Vector2i] = []
 ## Cases de départ des personnages joueurs, dans l'ordre du groupe : la
 ## première pour le premier personnage, etc.
 @export var player_starts: Array[Vector2i] = []

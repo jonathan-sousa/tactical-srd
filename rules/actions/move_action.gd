@@ -1,5 +1,5 @@
-## Déplacement vers une case, par le plus court chemin, dans la limite du
-## déplacement restant. Peut être fractionné avant et après l'attaque.
+## Déplacement vers une case, par le chemin le moins coûteux (le terrain
+## difficile coûte double), dans la limite du déplacement restant. Peut être fractionné avant et après l'attaque.
 ## Quitter l'allonge d'un ennemi peut provoquer une attaque d'opportunité.
 class_name MoveAction
 extends Action
@@ -21,7 +21,7 @@ func _validate(state: CombatState) -> StringName:
 	var path := state.find_path(actor, destination)
 	if path.is_empty():
 		return CELL_UNREACHABLE
-	if path.size() > state.movement_left:
+	if state.path_cost(actor, path) > state.movement_left:
 		return NOT_ENOUGH_MOVEMENT
 	return &""
 

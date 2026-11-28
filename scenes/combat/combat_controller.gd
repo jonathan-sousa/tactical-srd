@@ -814,7 +814,7 @@ func _on_cell_hovered(cell: Vector2i) -> void:
 		var attackers := state.opportunity_attackers(_player, path)
 		_board.path_warning = not attackers.is_empty()
 		_board.path_preview = path
-		_hint_label.text = Texts.move_hint(path.size(), attackers)
+		_hint_label.text = Texts.move_hint(state.path_cost(_player, path), attackers)
 	else:
 		_hint_label.text = Texts.reason(reason)
 	if not state.hidden_enemies_of(_player).is_empty():

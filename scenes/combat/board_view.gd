@@ -28,6 +28,8 @@ const OBSTACLE_TILES: Array[Vector2i] = [Vector2i(5, 0), Vector2i(4, 2), Vector2
 ## milieu, bout droit) et à la verticale (haut, milieu, bas).
 const FENCE_H_TILES: Array[Vector2i] = [Vector2i(8, 6), Vector2i(9, 6), Vector2i(10, 6)]
 const FENCE_V_TILES: Array[Vector2i] = [Vector2i(11, 3), Vector2i(11, 4), Vector2i(11, 5)]
+## Terrain difficile : broussailles (pousses de fougère) sur herbe touffue.
+const UNDERGROWTH_TILE := Vector2i(5, 1)
 
 const LINE_COLOR := Color(0.05, 0.1, 0.04, 0.22)
 const REACHABLE_COLOR := Color(0.3, 0.55, 0.95, 0.28)
@@ -44,6 +46,7 @@ const HOVER_COLOR := Color(1, 1, 1, 0.6)
 var grid_size: Vector2i
 var blocked_cells: Array[Vector2i] = []
 var low_walls: Array[Vector2i] = []
+var difficult_cells: Array[Vector2i] = []
 ## Cases où le combattant actif peut aller (affichées en bleu).
 var reachable: Dictionary[Vector2i, int] = {}:
 	set(value):
@@ -74,6 +77,7 @@ func setup(encounter: EncounterDef) -> void:
 	grid_size = encounter.grid_size
 	blocked_cells = encounter.blocked_cells
 	low_walls = encounter.low_walls
+	difficult_cells = encounter.difficult_cells
 	_build_tiles()
 	queue_redraw()
 
@@ -86,7 +90,7 @@ func _build_tiles() -> void:
 	var source := TileSetAtlasSource.new()
 	source.texture = TILES
 	source.texture_region_size = Vector2i(TILE_SIZE, TILE_SIZE)
-	for coords: Vector2i in GRASS_TILES + OBSTACLE_TILES + FENCE_H_TILES + FENCE_V_TILES:
+	for coords: Vector2i in GRASS_TILES + OBSTACLE_TILES + FENCE_H_TILES + FENCE_V_TILES + [UNDERGROWTH_TILE]:
 		source.create_tile(coords)
 	tile_set.add_source(source, 0)
 
@@ -97,7 +101,10 @@ func _build_tiles() -> void:
 			var cell := Vector2i(x, y)
 			var variant := _variant(cell)
 			floor_layer.set_cell(cell, 0, GRASS_TILES[0] if variant % 5 > 1 else GRASS_TILES[1 + variant % 2])
-			if blocked_cells.has(cell):
+			if difficult_cells.has(cell):
+				floor_layer.set_cell(cell, 0, GRASS_TILES[1])
+				obstacle_layer.set_cell(cell, 0, UNDERGROWTH_TILE)
+			elif blocked_cells.has(cell):
 				obstacle_layer.set_cell(cell, 0, OBSTACLE_TILES[variant % OBSTACLE_TILES.size()])
 			elif low_walls.has(cell):
 				obstacle_layer.set_cell(cell, 0, _fence_tile(cell))

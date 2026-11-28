@@ -1,16 +1,31 @@
 ## Recherche de chemin sur la grille de combat.
 ##
-## Règles (brief) : 8 directions, une diagonale coûte 1 case comme un pas
-## droit, pas de coupe de coin le long d'un obstacle. Deux sortes de cases
-## occupées : celles qu'on ne traverse pas (`blocking`, les ennemis) et
-## celles qu'on traverse sans pouvoir s'y arrêter (`no_stop`, les alliés :
-## SRD « Moving Around Other Creatures »).
+## Règles de grille du SRD (« Combat on a Grid ») :
+## - 8 directions, une diagonale coûte 1 case comme un pas droit ;
+## - entrer dans une case de terrain difficile coûte 2 cases (« Entering a
+##   Square ») ;
+## - une diagonale ne peut pas couper le coin d'un élément de décor qui
+##   remplit sa case (« Corners ») : arbre, muret. Une créature ne l'empêche
+##   pas.
 ##
-## Note Godot : AStarGrid2D est un RefCounted, il a donc sa place dans le
-## moteur de règles. Avec l'heuristique Chebyshev, la distance entre deux
-## cases voisines vaut 1 même en diagonale : c'est la règle de grille du SRD.
+## Trois sortes de cases occupées : celles qu'on ne traverse pas
+## (`blocking`, les ennemis conscients), celles qu'on traverse sans pouvoir
+## s'y arrêter (`no_stop`, les alliés et les créatures neutralisées : SRD
+## « Moving Around Other Creatures »), et parmi elles celles qui sont en plus
+## un terrain difficile (`difficult`, la case d'une créature qui n'est pas
+## notre alliée).
+##
+## Algorithme : Dijkstra, puisque les cases n'ont pas toutes le même coût.
+## La grille fait une centaine de cases : une file triée à la main suffit.
+## À coût égal, on préfère le chemin qui fait le moins de diagonales (pas de
+## zigzag), puis le premier trouvé dans l'ordre des voisins ci-dessous : le
+## résultat est toujours le même.
 class_name GridPathfinder
 extends RefCounted
+
+## Coût d'une case normale et d'une case de terrain difficile.
+const NORMAL_COST := 1
+const DIFFICULT_COST := 2
 
 ## Les huit cases voisines.
 const NEIGHBOUR_OFFSETS: Array[Vector2i] = [
@@ -19,20 +34,19 @@ const NEIGHBOUR_OFFSETS: Array[Vector2i] = [
 	Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1),
 ]
 
-var _astar := AStarGrid2D.new()
+var _size: Vector2i
+var _solid: Dictionary[Vector2i, bool] = {}
+var _difficult: Dictionary[Vector2i, bool] = {}
 
 
-func _init(grid_size: Vector2i, blocked_cells: Array[Vector2i]) -> void:
-	_astar.region = Rect2i(Vector2i.ZERO, grid_size)
-	# Diagonale autorisée seulement si les deux cases qu'elle longe sont libres.
-	_astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
-	_astar.default_compute_heuristic = AStarGrid2D.HEURISTIC_CHEBYSHEV
-	_astar.default_estimate_heuristic = AStarGrid2D.HEURISTIC_CHEBYSHEV
-	# Piège Godot : update() doit être appelé après avoir changé la région et
-	# avant de marquer des cases, sinon set_point_solid échoue.
-	_astar.update()
+## `blocked_cells` : décor infranchissable (obstacles et murets).
+## `difficult_cells` : terrain difficile (broussailles…).
+func _init(grid_size: Vector2i, blocked_cells: Array[Vector2i], difficult_cells: Array[Vector2i] = []) -> void:
+	_size = grid_size
 	for cell in blocked_cells:
-		_astar.set_point_solid(cell)
+		_solid[cell] = true
+	for cell in difficult_cells:
+		_difficult[cell] = true
 
 
 ## Distance en cases quand une diagonale coûte 1 (distance de Chebyshev).
@@ -41,78 +55,112 @@ static func chebyshev(a: Vector2i, b: Vector2i) -> int:
 
 
 func is_inside(cell: Vector2i) -> bool:
-	return _astar.is_in_boundsv(cell)
+	return cell.x >= 0 and cell.y >= 0 and cell.x < _size.x and cell.y < _size.y
 
 
+## Décor infranchissable ?
 func is_blocked(cell: Vector2i) -> bool:
-	return _astar.is_point_solid(cell)
+	return _solid.has(cell)
 
 
-## Plus court chemin de `from` à `to`, sans la case de départ. Vide si `to`
-## est hors grille, bloquée, occupée ou inaccessible. Avec un coût de 1 par
-## pas, la longueur du tableau est le coût en cases. Le chemin peut passer
-## par les cases `no_stop`, mais pas y finir.
-func find_path(from: Vector2i, to: Vector2i, blocking: Array[Vector2i], no_stop: Array[Vector2i] = []) -> Array[Vector2i]:
+## Terrain difficile du décor ? (Les créatures n'y comptent pas.)
+func is_difficult(cell: Vector2i) -> bool:
+	return _difficult.has(cell)
+
+
+## Coût pour entrer dans `cell`. `difficult` : cases de créatures qui sont
+## un terrain difficile pour celui qui se déplace. Le terrain difficile ne se
+## cumule pas : une case l'est ou ne l'est pas.
+func step_cost(cell: Vector2i, difficult: Array[Vector2i] = []) -> int:
+	return DIFFICULT_COST if is_difficult(cell) or difficult.has(cell) else NORMAL_COST
+
+
+## Coût total d'un chemin (sans la case de départ, comme `find_path`).
+func path_cost(path: Array[Vector2i], difficult: Array[Vector2i] = []) -> int:
+	var total := 0
+	for cell in path:
+		total += step_cost(cell, difficult)
+	return total
+
+
+## Chemin le moins coûteux de `from` à `to`, sans la case de départ. Vide si
+## `to` est hors grille, bloquée, occupée ou inaccessible. Le chemin peut
+## passer par les cases `no_stop`, mais pas y finir.
+func find_path(from: Vector2i, to: Vector2i, blocking: Array[Vector2i], no_stop: Array[Vector2i] = [], difficult: Array[Vector2i] = []) -> Array[Vector2i]:
 	var path: Array[Vector2i] = []
 	if not is_inside(to) or is_blocked(to) or blocking.has(to) or no_stop.has(to) or from == to:
 		return path
-
-	# Les ennemis bloquent le passage le temps du calcul seulement.
-	var marked := _mark_solid(blocking)
-	var id_path := _astar.get_id_path(from, to)
-	for cell in marked:
-		_astar.set_point_solid(cell, false)
-
-	for i in range(1, id_path.size()):
-		path.append(id_path[i])
+	var parents := _search(from, -1, blocking, difficult, to)[1] as Dictionary
+	if not parents.has(to):
+		return path
+	var cell := to
+	while cell != from:
+		path.push_front(cell)
+		cell = parents[cell]
 	return path
 
 
-## Cases atteignables en `max_steps` pas au plus, avec leur coût. La case de
-## départ n'en fait pas partie.
-##
-## Parcours en largeur : chaque pas coûte 1, la première visite d'une case
-## donne donc son plus court chemin, comme `find_path`, en un seul passage.
-## Mêmes règles de déplacement : diagonale seulement si les deux cases
-## qu'elle longe sont libres (obstacles et ennemis). Les cases `no_stop` se
-## traversent mais ne figurent pas dans le résultat.
-func reachable_cells(from: Vector2i, max_steps: int, blocking: Array[Vector2i], no_stop: Array[Vector2i] = []) -> Dictionary[Vector2i, int]:
+## Cases où l'on peut finir un déplacement d'au plus `budget` cases, avec
+## leur coût. La case de départ et les cases `no_stop` n'en font pas partie.
+func reachable_cells(from: Vector2i, budget: int, blocking: Array[Vector2i], no_stop: Array[Vector2i] = [], difficult: Array[Vector2i] = []) -> Dictionary[Vector2i, int]:
 	var reachable: Dictionary[Vector2i, int] = {}
-	if max_steps <= 0:
+	if budget <= 0:
 		return reachable
-	var costs: Dictionary[Vector2i, int] = {from: 0}
-	var frontier: Array[Vector2i] = [from]
-	while not frontier.is_empty():
-		var cell: Vector2i = frontier.pop_front()
-		var cost: int = costs[cell]
-		if cost >= max_steps:
-			continue
-		for offset in NEIGHBOUR_OFFSETS:
-			var next := cell + offset
-			if costs.has(next) or not _is_free(next, blocking):
-				continue
-			if offset.x != 0 and offset.y != 0:
-				if not _is_free(cell + Vector2i(offset.x, 0), blocking) or not _is_free(cell + Vector2i(0, offset.y), blocking):
-					continue
-			costs[next] = cost + 1
-			if not no_stop.has(next):
-				reachable[next] = cost + 1
-			frontier.append(next)
+	var costs := _search(from, budget, blocking, difficult)[0] as Dictionary
+	for cell: Vector2i in costs:
+		if cell != from and not no_stop.has(cell):
+			reachable[cell] = costs[cell]
 	return reachable
 
+
+## Dijkstra depuis `from`. `budget` < 0 : sans limite. S'arrête dès que
+## `goal` est fixé, s'il est donné. Renvoie [coûts, parents].
+func _search(from: Vector2i, budget: int, blocking: Array[Vector2i], difficult: Array[Vector2i], goal := Vector2i(-1, -1)) -> Array:
+	var costs: Dictionary[Vector2i, int] = {from: 0}
+	var diagonals: Dictionary[Vector2i, int] = {from: 0}
+	var parents: Dictionary[Vector2i, Vector2i] = {}
+	var done: Dictionary[Vector2i, bool] = {}
+	var open: Array[Vector2i] = [from]
+	while not open.is_empty():
+		# Case ouverte la moins chère ; à égalité, la première ouverte.
+		var best := 0
+		for i in range(1, open.size()):
+			if _before(open[i], open[best], costs, diagonals):
+				best = i
+		var cell: Vector2i = open[best]
+		open.remove_at(best)
+		done[cell] = true
+		if cell == goal:
+			break
+		for offset in NEIGHBOUR_OFFSETS:
+			var next := cell + offset
+			if done.has(next) or not _is_free(next, blocking):
+				continue
+			# Coins : seul le décor les bloque.
+			if offset.x != 0 and offset.y != 0:
+				if is_blocked(cell + Vector2i(offset.x, 0)) or is_blocked(cell + Vector2i(0, offset.y)):
+					continue
+			var cost: int = costs[cell] + step_cost(next, difficult)
+			var diagonal: int = diagonals[cell] + (1 if offset.x != 0 and offset.y != 0 else 0)
+			if budget >= 0 and cost > budget:
+				continue
+			if not costs.has(next):
+				open.append(next)
+			elif cost > costs[next] or (cost == costs[next] and diagonal >= diagonals[next]):
+				continue
+			costs[next] = cost
+			diagonals[next] = diagonal
+			parents[next] = cell
+	return [costs, parents]
+
+
+## `a` passe-t-elle avant `b` dans la file ? Moins chère, ou aussi chère
+## avec moins de diagonales.
+static func _before(a: Vector2i, b: Vector2i, costs: Dictionary[Vector2i, int], diagonals: Dictionary[Vector2i, int]) -> bool:
+	if costs[a] != costs[b]:
+		return costs[a] < costs[b]
+	return diagonals[a] < diagonals[b]
 
 
 func _is_free(cell: Vector2i, blocking: Array[Vector2i]) -> bool:
 	return is_inside(cell) and not is_blocked(cell) and not blocking.has(cell)
-
-
-## Marque comme infranchissables les cases libres de `cells` et renvoie
-## celles qui ont été marquées, pour les libérer ensuite sans jamais
-## toucher à un vrai obstacle.
-func _mark_solid(cells: Array[Vector2i]) -> Array[Vector2i]:
-	var marked: Array[Vector2i] = []
-	for cell in cells:
-		if is_inside(cell) and not _astar.is_point_solid(cell):
-			_astar.set_point_solid(cell, true)
-			marked.append(cell)
-	return marked
