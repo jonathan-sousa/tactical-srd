@@ -60,6 +60,9 @@ static func next_action(state: CombatState, actor: Combatant) -> Action:
 		var attack := _attack_step(state, actor, target)
 		if attack != null:
 			return attack
+	var off_hand := _off_hand_step(state, actor, target)
+	if off_hand != null:
+		return off_hand
 	var bonus := _bonus_step(state, actor)
 	if bonus != null:
 		return bonus
@@ -71,12 +74,20 @@ static func next_action(state: CombatState, actor: Combatant) -> Action:
 
 ## Réponse de l'IA à une décision en attente : elle saisit toujours
 ## l'occasion d'une attaque d'opportunité et relance toujours un jet raté.
+## Avec Alert, elle laisse passer devant elle le premier allié qui jouait
+## après elle : le Guerrier engage, le Roublard frappe ensuite à son côté.
 static func decide(state: CombatState) -> Action:
 	var decision := state.pending
 	if decision is ReactionWindow:
 		return OpportunityAttackAction.new(decision.decider)
 	if decision is InspirationWindow:
 		return UseInspirationAction.new(decision.decider)
+	if decision is InitiativeSwapWindow:
+		var rank := _initiative_rank(state, decision.decider)
+		for ally in (decision as InitiativeSwapWindow).allies:
+			if _initiative_rank(state, ally) > rank:
+				return SwapInitiativeAction.new(decision.decider, ally)
+		return DeclineSwapAction.new(decision.decider)
 	push_error("IA : décision inconnue.")
 	return null
 
@@ -212,6 +223,19 @@ static func _approach_cell(state: CombatState, actor: Combatant, target: Combata
 # --- Action bonus et repli -------------------------------------------------------
 
 
+## Après l'action Attaque avec une arme Légère : l'attaque de la main libre
+## sur la même cible, avec la première autre arme Légère possible.
+static func _off_hand_step(state: CombatState, actor: Combatant, target: Combatant) -> Action:
+	if not state.action_used or state.light_attack_weapon == null or target.is_dead:
+		return null
+	for weapon in actor.definition.weapons:
+		var attack := AttackAction.new(actor, target, weapon)
+		attack.off_hand = true
+		if attack.validate(state).is_empty():
+			return attack
+	return null
+
+
 ## Action bonus après l'attaque : se cacher si on est hors de vue, sinon se
 ## désengager avant de reculer quand un ennemi peut frapper au passage.
 static func _bonus_step(state: CombatState, actor: Combatant) -> Action:
@@ -307,6 +331,13 @@ static func _path_length_to(actor: Combatant, target: Combatant, everywhere: Dic
 		if GridPathfinder.chebyshev(cell, target.position) <= 1:
 			shortest = mini(shortest, everywhere[cell])
 	return shortest
+
+
+static func _initiative_rank(state: CombatState, combatant: Combatant) -> int:
+	for i in state.initiative.size():
+		if state.initiative[i].combatant == combatant:
+			return i
+	return -1
 
 
 static func _has_conscious_enemy(state: CombatState, actor: Combatant) -> bool:

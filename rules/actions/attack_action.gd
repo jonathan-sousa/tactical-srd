@@ -13,6 +13,10 @@ var cell: Vector2i
 ## l'aveugle : la cible est alors celui qui s'y trouve vraiment, s'il y en a.
 var target: Combatant
 var weapon: WeaponDef
+## Attaque de la main libre (propriété Light) : en action bonus, après
+## l'action Attaque avec une autre arme Légère du même tour. Réservée aux
+## personnages : un monstre suit son bloc de statistiques.
+var off_hand: bool = false
 
 
 ## Sans arme précisée, on prend l'arme de corps à corps du combattant.
@@ -36,7 +40,11 @@ func is_blind() -> bool:
 
 
 func _validate(state: CombatState) -> StringName:
-	if state.action_used:
+	if off_hand:
+		var reason := _validate_off_hand(state)
+		if not reason.is_empty():
+			return reason
+	elif state.action_used:
 		return ACTION_ALREADY_USED
 	if weapon == null or not actor.definition.weapons.has(weapon):
 		return NO_WEAPON
@@ -64,9 +72,31 @@ func _validate(state: CombatState) -> StringName:
 	return &""
 
 
+## Main libre : action bonus libre, après une attaque avec une arme Légère,
+## et avec une autre arme Légère. Deux dagues sont deux armes : il en faut
+## encore une en main, autre que celle qui a frappé (sauf si elle a été
+## lancée).
+func _validate_off_hand(state: CombatState) -> StringName:
+	if actor.definition.is_monster or state.light_attack_weapon == null:
+		return NO_OFF_HAND_ATTACK
+	if state.bonus_action_used:
+		return BONUS_ACTION_ALREADY_USED
+	if weapon == null or not weapon.has_property(WeaponDef.LIGHT):
+		return OFF_HAND_WEAPON
+	if weapon == state.light_attack_weapon and actor.quantity(weapon) < (1 if state.light_attack_thrown else 2):
+		return OFF_HAND_WEAPON
+	return &""
+
+
 func _execute(state: CombatState, dice: Dice) -> Array[CombatEvent]:
-	state.action_used = true
+	if off_hand:
+		state.bonus_action_used = true
+	else:
+		state.action_used = true
+		if weapon.has_property(WeaponDef.LIGHT):
+			state.light_attack_weapon = weapon
+			state.light_attack_thrown = state.attack_kind_at(actor, cell, weapon) == CombatState.AttackKind.RANGED
 	var victim := target if target != null else state.combatant_at(cell)
 	if victim == null:
 		return AttackSequence.strike_empty_cell(state, actor, cell, weapon)
-	return AttackSequence.begin(state, actor, victim, weapon, dice)
+	return AttackSequence.begin(state, actor, victim, weapon, dice, false, null, off_hand)

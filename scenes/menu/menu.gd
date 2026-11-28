@@ -42,7 +42,7 @@ func _ready() -> void:
 	# Note Godot : grab_focus() donne le focus clavier à un bouton ; les
 	# flèches passent ensuite d'un bouton à l'autre dans le conteneur.
 	(_new_game_button if _continue_button.disabled else _continue_button).grab_focus()
-	if Autoplay.enabled:
+	if Autoplay.drives_menus():
 		Autoplay.later(self, _autoplay)
 
 

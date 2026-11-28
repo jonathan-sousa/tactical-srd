@@ -94,6 +94,49 @@ func test_goblin_minion_matches_srd() -> void:
 	assert_array(minion.weapon_masteries).is_empty()
 
 
+func test_rogue_matches_srd() -> void:
+	var rogue := _registry.character(&"rogue_lvl1")
+	# Tableau standard + Criminel : +2 DEX, +1 CON (INT reste à 12).
+	assert_array([rogue.strength, rogue.dexterity, rogue.constitution]).contains_exactly(8, 17, 15)
+	assert_array([rogue.intelligence, rogue.wisdom, rogue.charisma]).contains_exactly(12, 13, 10)
+	assert_str(rogue.species).is_equal("Halfelin")
+	assert_str(rogue.background).is_equal("Criminel")
+	assert_int(rogue.size).is_equal(CharacterDef.Size.SMALL)
+	# Niveau 1 : 8 + modificateur de CON. Cuir : 11 + DEX.
+	assert_int(rogue.max_hp).is_equal(8 + Abilities.modifier(rogue.constitution))
+	assert_int(rogue.armor_class).is_equal(11 + Abilities.modifier(rogue.dexterity))
+	# Alert : DEX + bonus de maîtrise à l'initiative.
+	assert_int(rogue.initiative_bonus).is_equal(Abilities.modifier(rogue.dexterity) + rogue.proficiency_bonus)
+	assert_array(rogue.feats).contains_exactly([CharacterDef.ALERT])
+	assert_array(rogue.traits).contains_exactly_in_any_order([CharacterDef.HALFLING_LUCK, CharacterDef.NATURALLY_STEALTHY])
+	assert_str(rogue.sneak_attack_dice).is_equal("1d6")
+	# Expertise en Discrétion et Perception : maîtrise doublée.
+	assert_int(rogue.skill_bonus(CharacterDef.STEALTH)).is_equal(Abilities.modifier(rogue.dexterity) + 2 * rogue.proficiency_bonus)
+	assert_int(rogue.skill_bonus(CharacterDef.PERCEPTION)).is_equal(Abilities.modifier(rogue.wisdom) + 2 * rogue.proficiency_bonus)
+	# Équipement A : épée courte, arc court et 20 flèches, 2 dagues.
+	var weapon_ids: Array[StringName] = []
+	for weapon in rogue.weapons:
+		weapon_ids.append(weapon.id)
+	assert_array(weapon_ids).contains_exactly([&"shortsword", &"shortbow", &"dagger"])
+	assert_int(rogue.weapon_quantities[&"shortbow"]).is_equal(20)
+	assert_int(rogue.weapon_quantities[&"dagger"]).is_equal(2)
+	assert_array(rogue.weapon_masteries).contains_exactly_in_any_order([&"shortsword", &"shortbow"])
+	assert_bool(rogue.is_monster).is_false()
+	assert_int(rogue.second_wind_uses).is_equal(0)
+	assert_bool(rogue.heroic_inspiration).is_false()
+	var shortsword := _registry.weapon(&"shortsword")
+	assert_str(shortsword.damage_dice).is_equal("1d6")
+	assert_int(shortsword.damage_type).is_equal(DamageType.Type.PIERCING)
+	assert_array(shortsword.properties).contains_exactly_in_any_order([WeaponDef.FINESSE, WeaponDef.LIGHT])
+	assert_str(shortsword.mastery).is_equal(WeaponDef.VEX)
+
+
+func test_goblins_are_small() -> void:
+	assert_int(_registry.character(&"goblin_warrior").size).is_equal(CharacterDef.Size.SMALL)
+	assert_int(_registry.character(&"goblin_minion").size).is_equal(CharacterDef.Size.SMALL)
+	assert_int(_registry.character(&"fighter_lvl1").size).is_equal(CharacterDef.Size.MEDIUM)
+
+
 func test_fighter_is_proficient_in_perception() -> void:
 	var fighter := _registry.character(&"fighter_lvl1")
 	# SAG + 1, maîtrise + 2 (compétence choisie au niveau 1 de Guerrier).

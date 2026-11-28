@@ -9,6 +9,8 @@ var d20: int
 var roll: D20Roll
 var bonus: int
 var total: int
+## Rang échangé par Alert : le jet et le bonus sont ceux de l'autre.
+var swapped: bool = false
 
 
 func _init(p_combatant: Combatant, p_roll: D20Roll, p_bonus: int) -> void:

@@ -35,6 +35,11 @@ var movement_left: int = 0
 var action_used: bool = false
 ## Action bonus du tour déjà utilisée ?
 var bonus_action_used: bool = false
+## Arme Légère de l'action Attaque de ce tour, ou `null` : elle ouvre
+## l'attaque de la main libre en action bonus (propriété Light).
+var light_attack_weapon: WeaponDef = null
+## Cette arme Légère a-t-elle été lancée (elle a donc quitté la main) ?
+var light_attack_thrown: bool = false
 
 ## Décision en attente (réaction, relance…), ou `null`. Tant qu'elle est
 ## ouverte, seule une réponse est possible (voir PendingDecision).
@@ -134,8 +139,20 @@ func start(dice: Dice) -> Array[CombatEvent]:
 	turn_count = 1
 	_reset_turn_budget()
 	events.append(InitiativeRolledEvent.new(initiative))
+	# Alert : juste après l'initiative, échange possible avec un allié. Le
+	# premier tour attend la réponse (voir InitiativeSwapWindow).
+	var window := InitiativeSwapWindow.open(self)
+	if window != null:
+		pending = window
+		return events
 	events.append(TurnStartedEvent.new(active(), round))
 	return events
+
+
+## Premier tour du combat, après la réponse à l'échange d'Alert.
+func begin_first_turn() -> Array[CombatEvent]:
+	_reset_turn_budget()
+	return [TurnStartedEvent.new(active(), round)]
 
 
 ## Combattant dont c'est le tour.
@@ -319,18 +336,34 @@ func can_hide(combatant: Combatant) -> bool:
 ## conscients de `combatant` ?
 func is_out_of_sight_at(combatant: Combatant, cell: Vector2i) -> bool:
 	for enemy in living_enemies_of(combatant):
-		if not enemy.is_down() and line_of_sight.is_clear(enemy.position, cell):
+		if not enemy.is_down() and sees_cell_of(enemy, combatant, cell):
 			return false
 	return true
+
+
+## `observer` a-t-il une vue dégagée sur `hider` s'il était en `cell` ? Les
+## obstacles cachent tout le monde. Discrétion naturelle du Halfelin : une
+## créature vivante d'au moins une taille de plus que lui le cache aussi.
+func sees_cell_of(observer: Combatant, hider: Combatant, cell: Vector2i) -> bool:
+	if not line_of_sight.is_clear(observer.position, cell):
+		return false
+	if not hider.definition.has_trait(CharacterDef.NATURALLY_STEALTHY):
+		return true
+	var screens: Array[Vector2i] = []
+	for combatant in combatants:
+		if combatant != hider and combatant != observer and not combatant.is_dead 				and combatant.definition.size > hider.definition.size:
+			screens.append(combatant.position)
+	return not LineOfSight.crosses_any(observer.position, cell, screens)
 
 
 ## Jet de Dextérité (Discrétion) contre DD 15. En cas de réussite, le
 ## combattant est caché et son total devient le DD pour le trouver.
 func roll_hide(combatant: Combatant, dice: Dice, bonus_action: bool) -> HideAttemptedEvent:
 	var bonus := combatant.definition.skill_bonus(CharacterDef.STEALTH)
-	var d20 := dice.roll_die(20)
-	var success := d20 + bonus >= HIDE_DC
-	var event := HideAttemptedEvent.new(combatant, d20, bonus, success, bonus_action)
+	var roll := dice.roll_d20(Dice.RollMode.NORMAL, combatant.is_lucky())
+	var success := roll.natural + bonus >= HIDE_DC
+	var event := HideAttemptedEvent.new(combatant, roll.natural, bonus, success, bonus_action)
+	event.lucky = roll.luck_rerolls > 0
 	if success:
 		add_effect(Effect.new(Effect.HIDDEN, combatant, combatant, Effect.Expiry.UNTIL_REMOVED, event.total))
 	return event
@@ -361,7 +394,7 @@ func reveal_exposed(skip: Combatant = null) -> Array[CombatEvent]:
 		if hidden == skip or hidden.is_dead or not is_hidden(hidden):
 			continue
 		for enemy in living_enemies_of(hidden):
-			if not enemy.is_down() and line_of_sight.is_clear(enemy.position, hidden.position):
+			if not enemy.is_down() and sees_cell_of(enemy, hidden, hidden.position):
 				events.append_array(reveal(hidden, RevealedEvent.SEEN, enemy))
 				break
 	return events
@@ -372,7 +405,8 @@ func reveal_exposed(skip: Combatant = null) -> Array[CombatEvent]:
 ## remarque. `null` si personne ne le remarque.
 func _noticer(hidden: Combatant, cell: Vector2i) -> Combatant:
 	for enemy in living_enemies_of(hidden):
-		if not enemy.is_down() and line_of_sight.is_clear(enemy.position, cell) 				and passive_perception(enemy) >= hide_dc(hidden):
+		if not enemy.is_down() and sees_cell_of(enemy, hidden, cell) \
+				and passive_perception(enemy) >= hide_dc(hidden):
 			return enemy
 	return null
 
@@ -400,6 +434,11 @@ func living_enemies_of(combatant: Combatant) -> Array[Combatant]:
 ## au début de son tour : il faut alors des dés.
 func advance_turn(dice: Dice = null) -> Array[CombatEvent]:
 	var events := _expire_effects(active(), Effect.Expiry.END_OF_SOURCE_TURN)
+	# Ce qui dure jusqu'à la fin du prochain tour de ce combattant finira au
+	# bout de celui-là.
+	for effect in effects:
+		if effect.source == active() and effect.expiry == Effect.Expiry.END_OF_SOURCE_NEXT_TURN:
+			effect.expiry = Effect.Expiry.END_OF_SOURCE_TURN
 	# Fin du tour : un caché resté en vue est trouvé.
 	events.append_array(reveal_exposed())
 	for i in initiative.size():
@@ -592,6 +631,23 @@ func add_effect(effect: Effect) -> void:
 	effects.append(effect)
 
 
+## Ce combattant a-t-il cet effet, venu de `source` ?
+func has_effect_from(combatant: Combatant, id: StringName, source: Combatant) -> bool:
+	for effect in effects:
+		if effect.target == combatant and effect.id == id and effect.source == source:
+			return true
+	return false
+
+
+## Retire cet effet s'il vient de `source`. Renvoie vrai s'il était présent.
+func remove_effect_from(combatant: Combatant, id: StringName, source: Combatant) -> bool:
+	for i in effects.size():
+		if effects[i].target == combatant and effects[i].id == id and effects[i].source == source:
+			effects.remove_at(i)
+			return true
+	return false
+
+
 ## Retire un effet. Renvoie vrai s'il était présent.
 func remove_effect(combatant: Combatant, id: StringName) -> bool:
 	for i in effects.size():
@@ -661,3 +717,5 @@ func _reset_turn_budget() -> void:
 	movement_left = speed_in_squares(active())
 	action_used = false
 	bonus_action_used = false
+	light_attack_weapon = null
+	light_attack_thrown = false

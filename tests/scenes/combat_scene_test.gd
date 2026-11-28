@@ -530,3 +530,40 @@ func test_single_character_hides_the_party_list() -> void:
 	await _start(FIGHTER_FIRST)
 	var party_list: PartyList = _scene.get("_party_list")
 	assert_bool(party_list.visible).is_false()
+
+
+## Guerrier et Roublard, puis le gobelin de base au loin. Dés : Guerrier 2
+## (+1), Roublard 15 (+5), gobelin 1 (+2).
+func _start_fighter_and_rogue() -> void:
+	var starts: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+	var enemies: Array[Vector2i] = [Vector2i(11, 7)]
+	var ids: Array[StringName] = [&"fighter_lvl1", &"rogue_lvl1"]
+	_scene = auto_free(load(COMBAT_SCENE).instantiate())
+	_scene.set("encounter_override", Fixtures.party_encounter(Vector2i(12, 8), starts, enemies))
+	_scene.set("party_ids", ids)
+	_scene.set("dice", _fixed_dice([2, 15, 1]))
+	_scene.set("enemy_action_delay", 0.0)
+	_scene.set("end_delay", 0.0)
+	_runner = scene_runner(_scene)
+	await _settle()
+
+
+func test_alert_asks_before_the_first_turn_and_swaps_on_yes() -> void:
+	await _start_fighter_and_rogue()
+	assert_bool(_reaction_panel().visible).is_true()
+	var question: Label = _scene.get_node("%DecisionQuestionLabel")
+	assert_str(question.text).contains("Alert")
+	var party := _state().party()
+	_scene.get_node("%DecisionYesButton").emit_signal("pressed")
+	await _settle()
+	# Le Guerrier prend le 20 du Roublard et joue en premier.
+	assert_object(_state().active()).is_same(party[0])
+	assert_object(_state().initiative[0].combatant).is_same(party[0])
+
+
+func test_alert_declined_keeps_the_rogue_first() -> void:
+	await _start_fighter_and_rogue()
+	_scene.get_node("%DecisionNoButton").emit_signal("pressed")
+	await _settle()
+	assert_object(_state().active()).is_same(_state().party()[1])
+	assert_object(_scene.get("_player")).is_same(_state().party()[1])

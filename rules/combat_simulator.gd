@@ -31,6 +31,10 @@ func _init(p_state: CombatState, p_dice: Dice) -> void:
 ## Tire l'initiative (et l'embuscade éventuelle).
 func start() -> Array[CombatEvent]:
 	var started := state.start(dice)
+	# Alert : l'échange d'initiative se décide avant le premier tour.
+	while state.pending != null:
+		var decision := state.pending
+		started.append_array(_play(EnemyAI.decide(state), decision.decider))
 	events.append_array(started)
 	return started
 
@@ -67,6 +71,8 @@ func _play(action: Action, actor: Combatant) -> Array[CombatEvent]:
 			action = DeclineReactionAction.new(actor)
 		elif state.pending is InspirationWindow:
 			action = DeclineInspirationAction.new(actor)
+		elif state.pending is InitiativeSwapWindow:
+			action = DeclineSwapAction.new(actor)
 		else:
 			action = EndTurnAction.new(actor)
 	actions.append(action)

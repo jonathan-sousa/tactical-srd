@@ -116,7 +116,7 @@ func complete_step(outcome: Outcome, survivors: Array[Combatant] = []) -> Next:
 		for survivor in survivors:
 			for i in party.size():
 				if party[i].id == survivor.definition.id and survivor.hp > 0:
-					party[i] = PartyMember.of(survivor)
+					party[i] = PartyMember.after_combat(party[i], survivor)
 
 	if step.is_end():
 		current_step_id = &""

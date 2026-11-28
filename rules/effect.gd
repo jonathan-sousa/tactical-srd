@@ -28,12 +28,18 @@ const SLOWED := &"slowed"
 const HIDDEN := &"hidden"
 ## Condition À terre (Prone) : ramper ou se relever, attaques affectées.
 const PRONE := &"prone"
+## Maîtrise Vex : `source` a l'avantage à sa prochaine attaque contre ce
+## combattant, avant la fin de son prochain tour.
+const VEXED := &"vexed"
 
 enum Expiry {
 	## Au début du prochain tour de `source`.
 	START_OF_SOURCE_TURN,
 	## À la fin du tour en cours de `source`.
 	END_OF_SOURCE_TURN,
+	## À la fin du prochain tour de `source` : à la fin du tour en cours,
+	## l'effet passe à END_OF_SOURCE_TURN.
+	END_OF_SOURCE_NEXT_TURN,
 	## Jamais d'elle-même : une règle la retire (trouvé, relevé…).
 	UNTIL_REMOVED,
 }

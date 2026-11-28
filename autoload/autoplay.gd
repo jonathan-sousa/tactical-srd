@@ -101,6 +101,12 @@ func _start_replay(path: String, replay_speed: float) -> void:
 	SceneRouter.go_to.call_deferred(SceneRouter.COMBAT)
 
 
+## Le mode démo traverse-t-il les menus (écran titre, nouvelle partie) ?
+## Pas pour une escarmouche, qui ouvre directement son combat.
+func drives_menus() -> bool:
+	return enabled and encounter_id.is_empty()
+
+
 ## Une ligne dans la console, préfixée pour la repérer.
 func report(text: String) -> void:
 	print("[démo] %s" % text)

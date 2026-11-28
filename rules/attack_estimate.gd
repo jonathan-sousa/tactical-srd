@@ -20,10 +20,13 @@ var damage_max: int
 var graze_damage: int
 ## Bonus d'abri de la cible (0 ou +2), compté dans `hit_chance`.
 var cover_bonus: int
+## L'Attaque sournoise s'ajouterait sur une touche (comptée dans les dégâts).
+var sneak_attack: bool
 var advantage: AdvantageResult
 
 
-static func of(state: CombatState, attacker: Combatant, target: Combatant, weapon: WeaponDef) -> AttackEstimate:
+## `off_hand` : attaque de la main libre, sans modificateur aux dégâts.
+static func of(state: CombatState, attacker: Combatant, target: Combatant, weapon: WeaponDef, off_hand: bool = false) -> AttackEstimate:
 	var estimate := AttackEstimate.new()
 	estimate.advantage = AdvantageResolver.for_attack(state, attacker, target, weapon)
 	var mode := estimate.advantage.mode
@@ -39,6 +42,8 @@ static func of(state: CombatState, attacker: Combatant, target: Combatant, weapo
 	var count := dice.count * (2 if always_critical else 1)
 	var lowest_die := mini(AttackResolver.GREAT_WEAPON_FIGHTING_MINIMUM, dice.sides) if gwf else 1
 	var modifier := attacker.damage_modifier(weapon)
+	if off_hand:
+		modifier = mini(modifier, 0)
 	estimate.damage_min = count * lowest_die + modifier
 	estimate.damage_max = count * dice.sides + modifier
 
@@ -48,6 +53,12 @@ static func of(state: CombatState, attacker: Combatant, target: Combatant, weapo
 		var extra_count := extra.count * (2 if always_critical else 1)
 		estimate.damage_min += extra_count
 		estimate.damage_max += extra_count * extra.sides
+	estimate.sneak_attack = AttackSequence.sneak_attack_applies(state, attacker, target, weapon, mode)
+	if estimate.sneak_attack:
+		var sneak := DiceExpression.parse(attacker.definition.sneak_attack_dice)
+		var sneak_count := sneak.count * (2 if always_critical else 1)
+		estimate.damage_min += sneak_count
+		estimate.damage_max += sneak_count * sneak.sides
 	estimate.damage_min = maxi(estimate.damage_min, 0)
 	estimate.damage_max = maxi(estimate.damage_max, 0)
 

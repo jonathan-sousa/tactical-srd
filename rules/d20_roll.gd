@@ -8,6 +8,8 @@ extends RefCounted
 var mode: Dice.RollMode
 var rolls: Array[int] = []
 var natural: int
+## Dés relancés par la Chance du Halfelin (un 1 relancé, nouveau jet imposé).
+var luck_rerolls: int = 0
 
 
 func _init(p_mode: Dice.RollMode, p_rolls: Array[int], p_natural: int) -> void:

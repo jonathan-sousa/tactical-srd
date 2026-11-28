@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="CharacterDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/character_def.gd" id="1_rogue"]
+[ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="2_rogue"]
+[ext_resource type="Resource" path="res://data/weapons/shortsword.tres" id="3_rogue"]
+[ext_resource type="Resource" path="res://data/weapons/shortbow.tres" id="4_rogue"]
+[ext_resource type="Resource" path="res://data/weapons/dagger.tres" id="5_rogue"]
+[ext_resource type="Texture2D" path="res://assets/sprites/rogue.png" id="9_sprite"]
+
+[resource]
+script = ExtResource("1_rogue")
+id = &"rogue_lvl1"
+sprite = ExtResource("9_sprite")
+display_name = "Roublard"
+strength = 8
+dexterity = 17
+constitution = 15
+intelligence = 12
+wisdom = 13
+size = 1
+max_hp = 10
+armor_class = 14
+initiative_bonus = 5
+weapons = Array[ExtResource("2_rogue")]([ExtResource("3_rogue"), ExtResource("4_rogue"), ExtResource("5_rogue")])
+weapon_quantities = Dictionary[StringName, int]({
+&"dagger": 2,
+&"shortbow": 20
+})
+species = "Halfelin"
+background = "Criminel"
+feats = Array[StringName]([&"alert"])
+weapon_masteries = Array[StringName]([&"shortsword", &"shortbow"])
+traits = Array[StringName]([&"halfling_luck", &"naturally_stealthy"])
+sneak_attack_dice = "1d6"
+skill_bonuses = Dictionary[StringName, int]({
+&"perception": 5,
+&"stealth": 7
+})

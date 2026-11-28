@@ -126,3 +126,20 @@ func test_version_1_record_is_read_as_a_party_of_one() -> void:
 	assert_int(loaded.entries.size()).is_equal(1)
 	v1.erase("player_hp")
 	assert_object(CombatRecord.from_json(JSON.stringify(v1))).is_null()
+
+
+func test_rogue_choices_round_trip() -> void:
+	# Main libre et échange d'initiative (Alert) : l'allié est noté par sa case.
+	var off_hand := AttackAction.new(_fighter, _goblin, _fighter.definition.weapons[0])
+	off_hand.off_hand = true
+	assert_bool((_round_trip(off_hand) as AttackAction).off_hand).is_true()
+	var swap := _round_trip(SwapInitiativeAction.new(_fighter, _goblin)) as SwapInitiativeAction
+	assert_object(swap.ally).is_same(_goblin)
+	_round_trip(DeclineSwapAction.new(_fighter))
+
+
+func test_attack_entries_without_off_hand_still_decode() -> void:
+	var entry := {"type": CombatRecord.ATTACK, "cell": [3, 1], "weapon": "greatsword", "blind": false}
+	var attack := CombatRecord.decode(entry, _fighter, _state) as AttackAction
+	assert_object(attack).is_not_null()
+	assert_bool(attack.off_hand).is_false()

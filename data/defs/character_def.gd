@@ -13,6 +13,19 @@ const GREAT_WEAPON_FIGHTING := &"great_weapon_fighting"
 const SAVAGE_ATTACKER := &"savage_attacker"
 ## Trait du Gobelin : se désengager ou se cacher par une action bonus.
 const NIMBLE_ESCAPE := &"nimble_escape"
+## Don d'origine (historique Criminel) : maîtrise ajoutée à l'initiative
+## (comptée dans `initiative_bonus`), et échange d'initiative avec un allié
+## juste après le jet.
+const ALERT := &"alert"
+## Trait du Halfelin : un 1 sur le d20 d'un test d20 est relancé, et le
+## nouveau jet s'impose.
+const HALFLING_LUCK := &"halfling_luck"
+## Trait du Halfelin : peut se cacher derrière une créature d'au moins une
+## taille de plus que lui.
+const NATURALLY_STEALTHY := &"naturally_stealthy"
+
+## Tailles de créature (SRD « Creature Size »).
+enum Size { TINY, SMALL, MEDIUM, LARGE, HUGE, GARGANTUAN }
 
 # Compétences utilisées en combat, et la caractéristique de chacune.
 const STEALTH := &"stealth"
@@ -40,6 +53,7 @@ const SKILL_ABILITIES: Dictionary[StringName, Abilities.Ability] = {
 @export var charisma: int = 10
 
 @export_group("Combat")
+@export var size: Size = Size.MEDIUM
 @export var max_hp: int = 1
 @export var armor_class: int = 10
 ## Vitesse en pieds, comme dans le SRD (30 ft = 9 m = 6 cases).
@@ -68,6 +82,8 @@ const SKILL_ABILITIES: Dictionary[StringName, Abilities.Ability] = {
 @export var heroic_inspiration: bool = false
 ## Traits particuliers (constantes ci-dessus), surtout ceux des monstres.
 @export var traits: Array[StringName] = []
+## Attaque sournoise du Roublard (« 1d6 » au niveau 1), vide sinon.
+@export var sneak_attack_dice: String = ""
 ## Dés de dégâts ajoutés à une attaque qui a l'avantage (« plus 1d4 dégâts
 ## si le jet d'attaque avait l'avantage » du Gobelin). Vide si aucun.
 @export var advantage_damage_dice: String = ""

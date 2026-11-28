@@ -36,14 +36,27 @@ func roll_die(sides: int) -> int:
 
 
 ## Lance un d20, deux en cas d'avantage ou de désavantage.
-func roll_d20(mode: RollMode = RollMode.NORMAL) -> D20Roll:
-	var rolls: Array[int] = [roll_die(20)]
-	if mode == RollMode.NORMAL:
-		return D20Roll.new(mode, rolls, rolls[0])
-
-	rolls.append(roll_die(20))
-	var kept := maxi(rolls[0], rolls[1]) if mode == RollMode.ADVANTAGE else mini(rolls[0], rolls[1])
-	return D20Roll.new(mode, rolls, kept)
+##
+## `lucky` : Chance du Halfelin (« When you roll a 1 on the d20 of a D20
+## Test, you can reroll the die, and you must use the new roll »). Chaque dé
+## qui fait 1 est relancé une fois, et le nouveau jet s'impose.
+func roll_d20(mode: RollMode = RollMode.NORMAL, lucky: bool = false) -> D20Roll:
+	var luck_rerolls := 0
+	var rolls: Array[int] = []
+	for i in (1 if mode == RollMode.NORMAL else 2):
+		var value := roll_die(20)
+		if lucky and value == 1:
+			value = roll_die(20)
+			luck_rerolls += 1
+		rolls.append(value)
+	var kept := rolls[0]
+	if mode == RollMode.ADVANTAGE:
+		kept = maxi(rolls[0], rolls[1])
+	elif mode == RollMode.DISADVANTAGE:
+		kept = mini(rolls[0], rolls[1])
+	var roll := D20Roll.new(mode, rolls, kept)
+	roll.luck_rerolls = luck_rerolls
+	return roll
 
 
 ## Lance une expression comme `2d6+3`.
