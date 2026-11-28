@@ -160,3 +160,12 @@ func test_extra_difficult_cells_cost_two_and_can_be_crossed_without_stopping() -
 	var reachable := pathfinder.reachable_cells(Vector2i(0, 0), 6, NO_OCCUPIED, creature, creature)
 	assert_bool(reachable.has(Vector2i(1, 0))).is_false()
 	assert_int(reachable[Vector2i(2, 0)]).is_equal(3)
+
+
+func test_crawling_costs() -> void:
+	var difficult: Array[Vector2i] = [Vector2i(1, 0)]
+	var pathfinder := _difficult(Vector2i(3, 1), difficult)
+	assert_int(pathfinder.step_cost(Vector2i(2, 0), [], true)).is_equal(2)
+	assert_int(pathfinder.step_cost(Vector2i(1, 0), [], true)).is_equal(3)
+	var reachable := pathfinder.reachable_cells(Vector2i(0, 0), 5, NO_OCCUPIED, [], [], true)
+	assert_int(reachable[Vector2i(2, 0)]).is_equal(5)

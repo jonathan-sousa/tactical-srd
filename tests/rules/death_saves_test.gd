@@ -154,7 +154,8 @@ func test_natural_20_restores_1_hp_and_the_turn_is_played_prone() -> void:
 	# Il joue son tour, mais il est toujours à terre.
 	assert_int(_state.movement_left).is_equal(6)
 	assert_bool(_state.has_effect(_fighter, Effect.PRONE)).is_true()
-	assert_str(MoveAction.new(_fighter, Vector2i(0, 0)).validate(_state)).is_equal(Action.PRONE)
+	# À terre, il peut ramper (chaque case coûte le double).
+	assert_bool(_state.is_crawling(_fighter)).is_true()
 
 
 func test_three_successes_stabilize_and_end_the_fight_in_defeat() -> void:

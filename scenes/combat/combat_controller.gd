@@ -811,7 +811,9 @@ func _enemy_token_at(cell: Vector2i) -> Combatant:
 
 func _on_cell_hovered(cell: Vector2i) -> void:
 	_hovered_cell = cell
-	_clear_hover()
+	# Hors de son tour, la ligne d'aide garde son message (« Tour de
+	# l'adversaire… ») : seuls la bulle et les aperçus s'effacent.
+	_clear_hover(_is_player_turn())
 	if not _is_player_turn() or cell == BoardView.NO_CELL or _sheet.visible:
 		return
 	if _help_armed:
@@ -866,8 +868,9 @@ func _set_cursor(shape: Input.CursorShape) -> void:
 	Input.set_default_cursor_shape(shape)
 
 
-## Efface la bulle et les aperçus du survol précédent.
-func _clear_hover() -> void:
+## Efface la bulle et les aperçus du survol précédent. `clear_hint` : la
+## ligne d'aide revient au rappel des gestes (pendant son tour) ou se vide.
+func _clear_hover(clear_hint: bool = true) -> void:
 	_set_cursor(Input.CURSOR_ARROW)
 	_tooltip.hide_content()
 	_tooltip.keep_clear = Rect2()
@@ -877,7 +880,8 @@ func _clear_hover() -> void:
 	_board.threat_preview = []
 	_board.aim = []
 	_board.cover_marks = []
-	_hint_label.text = ""
+	if clear_hint:
+		_hint_label.text = Texts.TACTICAL_HINT if _is_player_turn() else ""
 
 
 ## Survol d'un ennemi (ou de sa dernière position connue s'il est caché) :
@@ -951,7 +955,9 @@ func _hover_ground(cell: Vector2i) -> void:
 	elif not info.blocks_movement:
 		_hint_label.text = Texts.reason(reason)
 	if not state.hidden_enemies_of(_player).is_empty():
-		var hints: PackedStringArray = [_hint_label.text] if not _hint_label.text.is_empty() else []
+		var hints: PackedStringArray = []
+		if not _hint_label.text.is_empty() and _hint_label.text != Texts.TACTICAL_HINT:
+			hints.append(_hint_label.text)
 		hints.append(Texts.BLIND_ATTACK_SHIFT_HINT)
 		_hint_label.text = "\n".join(hints)
 	if not lines.is_empty():

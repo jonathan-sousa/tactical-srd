@@ -222,7 +222,7 @@ static func _approach_cell(state: CombatState, actor: Combatant, target: Combata
 	var spent := 0
 	var difficult := state.creature_difficult_cells(actor)
 	for i in path.size():
-		spent += state.pathfinder.step_cost(path[i], difficult)
+		spent += state.pathfinder.step_cost(path[i], difficult, state.is_crawling(actor))
 		if spent > state.movement_left:
 			break
 		stop = i

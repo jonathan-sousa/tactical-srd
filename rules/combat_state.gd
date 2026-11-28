@@ -260,12 +260,20 @@ func _is_known_enemy(mover: Combatant, other: Combatant) -> bool:
 
 
 func find_path(mover: Combatant, destination: Vector2i) -> Array[Vector2i]:
-	return pathfinder.find_path(mover.position, destination, blocking_cells(mover), pass_through_cells(mover), creature_difficult_cells(mover))
+	return pathfinder.find_path(mover.position, destination, blocking_cells(mover), pass_through_cells(mover), creature_difficult_cells(mover), is_crawling(mover))
 
 
-## Coût en cases de `path` pour `mover` (terrain difficile compris).
+## Coût en cases de `path` pour `mover` (terrain difficile et reptation
+## compris).
 func path_cost(mover: Combatant, path: Array[Vector2i]) -> int:
-	return pathfinder.path_cost(path, creature_difficult_cells(mover))
+	return pathfinder.path_cost(path, creature_difficult_cells(mover), is_crawling(mover))
+
+
+## À terre, on ne se déplace qu'en rampant, ou en se relevant d'abord (SRD
+## « Prone » : « Your only movement options are to crawl or to spend an
+## amount of movement equal to half your Speed… to right yourself »).
+func is_crawling(mover: Combatant) -> bool:
+	return has_effect(mover, Effect.PRONE)
 
 
 ## Case de terrain difficile du décor ?
@@ -282,7 +290,7 @@ func reachable_cells() -> Dictionary[Vector2i, int]:
 ## Cases où `mover` pourrait finir un déplacement d'au plus `budget` cases
 ## parti de `from`, avec leur coût.
 func reachable_from(mover: Combatant, from: Vector2i, budget: int) -> Dictionary[Vector2i, int]:
-	return pathfinder.reachable_cells(from, budget, blocking_cells(mover), pass_through_cells(mover), creature_difficult_cells(mover))
+	return pathfinder.reachable_cells(from, budget, blocking_cells(mover), pass_through_cells(mover), creature_difficult_cells(mover), is_crawling(mover))
 
 
 ## Allonge de l'arme en cases : 5 ft = cases adjacentes, diagonales comprises.
@@ -574,7 +582,7 @@ func walk(mover: Combatant, path: Array[Vector2i], already_asked: Array[Combatan
 			return events
 		since_free.append(mover.position)
 		mover.position = path[i]
-		movement_left -= pathfinder.step_cost(path[i], difficult)
+		movement_left -= pathfinder.step_cost(path[i], difficult, is_crawling(mover))
 		walked.append(path[i])
 		if not _shares_cell(mover):
 			since_free.clear()
@@ -636,7 +644,7 @@ func _step_back(mover: Combatant, since_free: Array[Vector2i], unseen: bool, ref
 		# celle où l'on est.
 		var entered: Array[Vector2i] = since_free.slice(1)
 		entered.append(from)
-		movement_left += pathfinder.path_cost(entered, creature_difficult_cells(mover))
+		movement_left += pathfinder.path_cost(entered, creature_difficult_cells(mover), is_crawling(mover))
 	mover.position = back.back()
 	return [MovedEvent.new(mover, from, back, unseen)]
 

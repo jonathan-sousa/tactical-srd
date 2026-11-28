@@ -588,6 +588,22 @@ func test_cursor_shows_what_a_click_would_do() -> void:
 	assert_int(_scene.get("_cursor_shape")).is_equal(Input.CURSOR_ARROW)
 
 
+func test_hint_reminds_the_gestures_on_the_player_turn() -> void:
+	await _start(FIGHTER_FIRST)
+	_scene.call("_on_cell_hovered", _fighter().position + Vector2i(1, 0))
+	assert_str((_scene.get_node("%HintLabel") as Label).text).is_equal(Texts.TACTICAL_HINT)
+
+
+func test_hovering_during_the_enemy_turn_keeps_its_message() -> void:
+	# Le Gobelin commence, avec une pause avant chaque action.
+	await _start(GOBLIN_FIRST, 1.0)
+	await _runner.simulate_frames(3)
+	var hint: Label = _scene.get_node("%HintLabel")
+	assert_str(hint.text).is_equal(Texts.ENEMY_TURN)
+	_scene.call("_on_cell_hovered", Vector2i(2, 2))
+	assert_str(hint.text).is_equal(Texts.ENEMY_TURN)
+
+
 func test_hit_shows_floating_damage() -> void:
 	await _start(FIGHTER_FIRST + [15, 1, 1, 1, 1])
 	_put_goblin_next_to_fighter()
