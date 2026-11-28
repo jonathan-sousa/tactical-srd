@@ -24,3 +24,16 @@ func test_reads_the_replay_file() -> void:
 	var options := Autoplay.parse(PackedStringArray(["--replay=user://replays/last_combat.json"]))
 	assert_str(options["replay"]).is_equal("user://replays/last_combat.json")
 	assert_bool(options["enabled"]).is_false()
+
+
+func test_reads_a_skirmish_encounter_and_party() -> void:
+	var options := Autoplay.parse(PackedStringArray(["--encounter=goblin_band", "--party=fighter_lvl1,fighter_lvl1"]))
+	assert_str(options["encounter"]).is_equal("goblin_band")
+	assert_array(options["party"]).contains_exactly([&"fighter_lvl1", &"fighter_lvl1"])
+	assert_bool(options["enabled"]).is_false()
+
+
+func test_no_skirmish_by_default() -> void:
+	var options := Autoplay.parse(PackedStringArray(["--autoplay"]))
+	assert_str(options["encounter"]).is_empty()
+	assert_array(options["party"]).is_empty()

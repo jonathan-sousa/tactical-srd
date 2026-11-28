@@ -135,6 +135,11 @@ func _ready() -> void:
 		ids = []
 		for member in members:
 			ids.append(member.id)
+	elif not Autoplay.encounter_id.is_empty():
+		# Escarmouche lancée depuis la ligne de commande (voir Autoplay).
+		encounter = registry.encounter(Autoplay.encounter_id)
+		if not Autoplay.party_ids.is_empty():
+			ids = Autoplay.party_ids
 	elif step != null and step.kind == StoryStep.Kind.ENCOUNTER:
 		_story_mode = true
 		encounter = step.encounter
@@ -151,7 +156,7 @@ func _ready() -> void:
 		if _story_mode:
 			push_error("Combat : l'étape « %s » n'a pas de rencontre, ou une fiche du groupe est introuvable." % GameState.current_step_id)
 		else:
-			push_error("Combat : rencontre « %s » introuvable, sans assez de cases de départ, ou fiche introuvable parmi %s." % [encounter_id, ids])
+			push_error("Combat : rencontre « %s » introuvable, sans assez de cases de départ, ou fiche introuvable parmi %s." % [encounter_id if Autoplay.encounter_id.is_empty() else Autoplay.encounter_id, ids])
 		return
 	if not on_story_end.is_valid():
 		on_story_end = GameState.finish_step
@@ -381,7 +386,7 @@ func _resolve_decisions() -> void:
 ## décide quand le groupe en compte plusieurs.
 func _ask_player(decision: PendingDecision) -> Action:
 	var decider := decision.decider
-	var prefix := "%s : " % decider.definition.display_name if state.party().size() > 1 else ""
+	var prefix := "%s : " % decider.display_name if state.party().size() > 1 else ""
 	if decision is InspirationWindow:
 		var window := decision as InspirationWindow
 		var question := Texts.death_save_inspiration_prompt(window.death_save) if window.result == null \
@@ -656,7 +661,7 @@ func _on_combat_ended(event: CombatEndedEvent) -> void:
 	if Autoplay.enabled:
 		var standings: Array[String] = []
 		for combatant in state.combatants:
-			standings.append("%s %d / %d PV" % [combatant.definition.display_name, combatant.hp, combatant.definition.max_hp])
+			standings.append("%s %d / %d PV" % [combatant.display_name, combatant.hp, combatant.definition.max_hp])
 		Autoplay.report("Résumé : %s au round %d, %s." % [
 			(Texts.VICTORY if event.winner == Combatant.Side.PLAYER else Texts.DEFEAT).to_lower(), state.round,
 			", ".join(standings),
@@ -997,6 +1002,9 @@ func _show_result() -> void:
 	_result_label.text = Texts.VICTORY if state.winner == Combatant.Side.PLAYER else Texts.DEFEAT
 	_result_panel.show()
 	_replay_button.grab_focus()
+	if Autoplay.enabled:
+		# Escarmouche en mode démo : rien d'autre à jouer.
+		Autoplay.later(self, AudioManager.quit_game, end_delay)
 
 
 ## Dans l'histoire : victoire → étape suivante, défaite → écran de défaite.

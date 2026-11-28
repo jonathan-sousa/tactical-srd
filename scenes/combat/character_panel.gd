@@ -17,7 +17,7 @@ func refresh(combatant: Combatant, state: CombatState) -> void:
 	var definition := combatant.definition
 	var speed := state.speed_in_squares(combatant)
 	var is_turn := state.active() == combatant and not state.is_over
-	_name_label.text = definition.display_name
+	_name_label.text = combatant.display_name
 	_hp_label.text = "%s : %d / %d · %s : %d" % [Texts.HIT_POINTS, combatant.hp, definition.max_hp, Texts.ARMOR_CLASS, combatant.armor_class()]
 	var movement := state.movement_left if is_turn else speed
 	_movement_label.text = "%s : %d / %s" % [Texts.MOVEMENT, movement, Texts.squares(speed)]

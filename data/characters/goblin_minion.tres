@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="CharacterDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/character_def.gd" id="1_minion"]
+[ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="2_minion"]
+[ext_resource type="Resource" path="res://data/weapons/dagger.tres" id="3_minion"]
+[ext_resource type="Texture2D" path="res://assets/sprites/goblin_minion.png" id="9_sprite"]
+
+[resource]
+script = ExtResource("1_minion")
+id = &"goblin_minion"
+sprite = ExtResource("9_sprite")
+display_name = "Sbire gobelin"
+short_name = "Sbire"
+strength = 8
+dexterity = 15
+wisdom = 8
+charisma = 8
+max_hp = 7
+armor_class = 12
+initiative_bonus = 2
+weapons = Array[ExtResource("2_minion")]([ExtResource("3_minion")])
+weapon_quantities = Dictionary[StringName, int]({
+&"dagger": 3
+})
+is_monster = true
+skill_bonuses = Dictionary[StringName, int]({
+&"stealth": 6
+})
+traits = Array[StringName]([&"nimble_escape"])

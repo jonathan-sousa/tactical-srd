@@ -34,5 +34,5 @@ func test_font_license_ships_with_the_font() -> void:
 
 func test_every_character_has_a_sprite() -> void:
 	var registry := DataRegistry.load_from()
-	for id: StringName in [&"fighter_lvl1", &"goblin_warrior"]:
+	for id: StringName in [&"fighter_lvl1", &"goblin_warrior", &"goblin_minion"]:
 		assert_object(registry.character(id).sprite).override_failure_message("Sans sprite : %s" % id).is_not_null()

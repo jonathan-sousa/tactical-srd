@@ -73,7 +73,23 @@ static func create_party(p_encounter: EncounterDef, party_defs: Array[CharacterD
 		state.combatants.append(member)
 	for placement in p_encounter.enemies:
 		state.combatants.append(Combatant.new(placement.character, Combatant.Side.ENEMY, placement.cell))
+	state._number_namesakes()
 	return state
+
+
+# Plusieurs combattants de même fiche : on les numérote dans l'ordre de la
+# rencontre, pour les distinguer dans le journal et sur le plateau.
+func _number_namesakes() -> void:
+	var counts: Dictionary[StringName, int] = {}
+	for combatant in combatants:
+		counts[combatant.definition.id] = counts.get(combatant.definition.id, 0) + 1
+	var seen: Dictionary[StringName, int] = {}
+	for combatant in combatants:
+		var id := combatant.definition.id
+		if counts[id] > 1:
+			seen[id] = seen.get(id, 0) + 1
+			combatant.number = seen[id]
+			combatant.display_name = "%s %d" % [combatant.definition.display_name, combatant.number]
 
 
 ## Personnages joueurs, morts compris, dans l'ordre du groupe.

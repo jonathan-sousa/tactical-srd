@@ -14,6 +14,12 @@
 ## les choix du joueur dans l'ordre, dit si le résultat est le même, puis
 ## le jeu se ferme.
 ##
+## Escarmouche : une rencontre lancée directement, hors de l'histoire, avec
+## le groupe voulu (des ids de fiches, séparés par des virgules). Avec
+## `--autoplay`, l'IA joue aussi le groupe et le jeu se ferme à la fin.
+##
+##     godot --path . -- --encounter=goblin_band --party=fighter_lvl1,fighter_lvl1
+##
 ## Le Guerrier est conduit par la même IA que le Gobelin. Le journal du
 ## combat est recopié dans la console, avec un résumé à la fin. La partie du
 ## joueur n'est pas touchée : le mode démo sauvegarde dans un autre fichier.
@@ -30,6 +36,10 @@ var enabled := false
 ## Combat à rejouer (option `--replay`), ou `null`.
 var replay: CombatRecord
 var seed_value := 0
+## Escarmouche (options `--encounter` et `--party`) : rencontre et groupe,
+## vides hors escarmouche.
+var encounter_id: StringName = &""
+var party_ids: Array[StringName] = []
 var speed := 1.0
 ## Vrai une fois la partie lancée : au retour au menu, le mode démo quitte.
 var game_started := false
@@ -41,6 +51,10 @@ func _ready() -> void:
 		_start_replay(options["replay"], options["speed"])
 		return
 	enabled = options["enabled"]
+	encounter_id = options["encounter"]
+	party_ids = options["party"]
+	if not encounter_id.is_empty():
+		SceneRouter.go_to.call_deferred(SceneRouter.COMBAT)
 	if not enabled:
 		return
 	seed_value = options["seed"]
@@ -55,12 +69,18 @@ func _ready() -> void:
 
 ## Lit les arguments du mode démo. Sans `--autoplay`, le mode est éteint.
 static func parse(args: PackedStringArray) -> Dictionary:
-	var options := {"enabled": false, "seed": 0, "speed": 1.0, "replay": ""}
+	var party: Array[StringName] = []
+	var options := {"enabled": false, "seed": 0, "speed": 1.0, "replay": "", "encounter": &"", "party": party}
 	for arg in args:
 		if arg == "--autoplay":
 			options["enabled"] = true
 		elif arg.begins_with("--seed=") and arg.trim_prefix("--seed=").is_valid_int():
 			options["seed"] = arg.trim_prefix("--seed=").to_int()
+		elif arg.begins_with("--encounter="):
+			options["encounter"] = StringName(arg.trim_prefix("--encounter="))
+		elif arg.begins_with("--party="):
+			for id in arg.trim_prefix("--party=").split(",", false):
+				party.append(StringName(id))
 		elif arg.begins_with("--replay="):
 			options["replay"] = arg.trim_prefix("--replay=")
 		elif arg.begins_with("--speed=") and arg.trim_prefix("--speed=").is_valid_float():

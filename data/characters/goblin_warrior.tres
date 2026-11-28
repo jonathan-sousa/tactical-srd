@@ -11,6 +11,7 @@ script = ExtResource("1_p0yey")
 id = &"goblin_warrior"
 sprite = ExtResource("9_sprite")
 display_name = "Gobelin guerrier"
+short_name = "Gobelin"
 strength = 8
 dexterity = 15
 wisdom = 8

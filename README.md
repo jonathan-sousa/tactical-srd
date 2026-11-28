@@ -61,6 +61,16 @@ godot --path . -- --autoplay --seed=42 --speed=2
 
 Pour reproduire un comportement signalé, il suffit de donner sa graine.
 
+### Escarmouche
+
+Une rencontre peut aussi se lancer directement, hors de l'histoire, avec le groupe voulu (ids des fiches de `data/characters`, séparés par des virgules) :
+
+```sh
+godot --path . -- --encounter=goblin_band --party=fighter_lvl1,fighter_lvl1
+```
+
+Le joueur commande alors le groupe. Avec `--autoplay`, l'IA joue les deux camps et le jeu se ferme à la fin du combat.
+
 
 En ligne de commande, en mode headless :
 

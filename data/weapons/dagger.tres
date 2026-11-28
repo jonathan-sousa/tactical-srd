@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponDef" format=3]
+
+[ext_resource type="Script" path="res://data/defs/weapon_def.gd" id="1_dagger"]
+
+[resource]
+script = ExtResource("1_dagger")
+id = &"dagger"
+display_name = "Dague"
+damage_dice = "1d4"
+damage_type = 7
+ability = 1
+range_normal_feet = 20
+range_long_feet = 60
+properties = Array[StringName]([&"finesse", &"light", &"thrown"])
+mastery = &"nick"

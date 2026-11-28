@@ -264,7 +264,7 @@ static func effects_line(ids: Array[StringName]) -> String:
 
 ## Question posée au joueur quand un ennemi quitte son allonge.
 static func reaction_prompt(mover: Combatant) -> String:
-	return "%s quitte votre allonge.\nAttaque d'opportunité ?" % mover.definition.display_name
+	return "%s quitte votre allonge.\nAttaque d'opportunité ?" % mover.display_name
 
 
 ## Question posée au joueur après une attaque ratée.
@@ -351,7 +351,7 @@ static func move_hint(square_count: int, opportunity_attackers: Array[Combatant]
 	if not opportunity_attackers.is_empty():
 		var names: PackedStringArray = []
 		for attacker in opportunity_attackers:
-			names.append(attacker.definition.display_name)
+			names.append(attacker.display_name)
 		line += ". Attention : attaque d'opportunité de %s (Se désengager l'évite)." % ", ".join(names)
 	return line
 
@@ -359,7 +359,7 @@ static func move_hint(square_count: int, opportunity_attackers: Array[Combatant]
 ## Panneau de la cible : « Gobelin guerrier · PV 7 / 10 · CA 15 · Caché ».
 static func target_line(combatant: Combatant, effect_ids: Array[StringName]) -> String:
 	var parts: PackedStringArray = [
-		combatant.definition.display_name,
+		combatant.display_name,
 		"%s %d / %d" % [HIT_POINTS, combatant.hp, combatant.definition.max_hp],
 		"%s %d" % [ARMOR_CLASS, combatant.armor_class()],
 	]
@@ -376,7 +376,7 @@ static func target_line(combatant: Combatant, effect_ids: Array[StringName]) -> 
 ## terre. La flèche marque le personnage commandé.
 static func party_line(member: Combatant, commanded: bool) -> String:
 	var parts: PackedStringArray = [
-		("▶ " if commanded else "   ") + member.definition.display_name,
+		("▶ " if commanded else "   ") + member.display_name,
 		"%s %d / %d" % [HIT_POINTS, member.hp, member.definition.max_hp],
 	]
 	if member.is_dead:
@@ -398,7 +398,7 @@ static func round_header(round: int) -> String:
 ## 15 dégâts ; Graze : 3 si raté ».
 static func attack_hint(target: Combatant, weapon: WeaponDef, estimate: AttackEstimate) -> String:
 	var line := "Attaquer %s (%s) : %s de toucher, %s dégâts" % [
-		target.definition.display_name, weapon.display_name, percent(estimate.hit_chance),
+		target.display_name, weapon.display_name, percent(estimate.hit_chance),
 		_range_text(estimate.damage_min, estimate.damage_max),
 	]
 	if estimate.critical_chance >= estimate.hit_chance and estimate.hit_chance > 0.0:
@@ -432,16 +432,16 @@ static func initiative_line(entries: Array[InitiativeEntry]) -> String:
 		if entry.roll.rolls.size() > 1:
 			var why := "caché, avantage" if entry.roll.mode == Dice.RollMode.ADVANTAGE else "surpris, désavantage"
 			roll = "%d [%s ; %s]" % [entry.d20, ", ".join(entry.roll.rolls.map(str)), why]
-		parts.append("%s %d (%s %s)" % [entry.combatant.definition.display_name, entry.total, roll, signed(entry.bonus)])
+		parts.append("%s %d (%s %s)" % [entry.combatant.display_name, entry.total, roll, signed(entry.bonus)])
 	return "Initiative : %s." % ", ".join(parts)
 
 
 static func turn_line(event: TurnStartedEvent) -> String:
-	return "Tour de %s" % event.combatant.definition.display_name
+	return "Tour de %s" % event.combatant.display_name
 
 
 static func move_line(event: MovedEvent) -> String:
-	return "%s se déplace de %s." % [event.combatant.definition.display_name, squares(event.path.size())]
+	return "%s se déplace de %s." % [event.combatant.display_name, squares(event.path.size())]
 
 
 ## Ligne principale du journal : qui attaque, avec quoi, et le résultat.
@@ -463,7 +463,7 @@ static func attack_summary(result: AttackResult) -> String:
 		if result.is_critical:
 			hit = "20 naturel, coup critique" if result.d20.is_natural_20() else "coup critique (cible inconsciente au contact)"
 		outcome = "%s, %d dégâts %s" % [hit, result.damage, damage_type(result.damage_type)]
-	return "%s %s (%s) : %s" % [result.attacker.definition.display_name, verb, result.weapon.display_name, outcome]
+	return "%s %s (%s) : %s" % [result.attacker.display_name, verb, result.weapon.display_name, outcome]
 
 
 ## Détail des jets d'une attaque : « 14 + 4 = 18 contre CA 16 ; 1d6+2 : 3 + 2 ».
@@ -504,7 +504,7 @@ static func _reasons(codes: Array[StringName]) -> String:
 
 
 static func action_line(event: ActionTakenEvent) -> String:
-	var line: String = ACTION_LOG[event.action] % event.combatant.definition.display_name
+	var line: String = ACTION_LOG[event.action] % event.combatant.display_name
 	if event.bonus_action:
 		line += " (Nimble Escape, action bonus)"
 	return line
@@ -513,7 +513,7 @@ static func action_line(event: ActionTakenEvent) -> String:
 ## « Gobelin guerrier se cache (Nimble Escape). » Le total du jet reste
 ## secret tant qu'on ne l'a pas trouvé : c'est le DD pour le trouver.
 static func hide_line(event: HideAttemptedEvent) -> String:
-	var name := event.combatant.definition.display_name
+	var name := event.combatant.display_name
 	var how := " (Nimble Escape)" if event.bonus_action else ""
 	if event.success:
 		return "%s se cache%s : invisible tant qu'on ne l'a pas trouvé." % [name, how]
@@ -523,8 +523,8 @@ static func hide_line(event: HideAttemptedEvent) -> String:
 
 
 static func revealed_line(event: RevealedEvent) -> String:
-	var name := event.combatant.definition.display_name
-	var observer := event.observer.definition.display_name if event.observer != null else ""
+	var name := event.combatant.display_name
+	var observer := event.observer.display_name if event.observer != null else ""
 	match event.reason:
 		RevealedEvent.ATTACKED:
 			return "%s sort de sa cachette pour attaquer !" % name
@@ -538,22 +538,22 @@ static func revealed_line(event: RevealedEvent) -> String:
 
 
 static func search_line(event: SearchedEvent) -> String:
-	var name := event.combatant.definition.display_name
+	var name := event.combatant.display_name
 	var roll := "Perception %d %s = %d" % [event.d20, signed(event.bonus), event.total]
 	if event.found.is_empty():
 		return "%s cherche (%s) : rien." % [name, roll]
 	var found: PackedStringArray = []
 	for i in event.found.size():
-		found.append("%s (Discrétion %d)" % [event.found[i].definition.display_name, event.found_dcs[i]])
+		found.append("%s (Discrétion %d)" % [event.found[i].display_name, event.found_dcs[i]])
 	return "%s cherche (%s) et trouve %s." % [name, roll, ", ".join(found)]
 
 
 static func empty_cell_attack_line(event: AttackedEmptyCellEvent) -> String:
-	return "%s attaque à l'aveugle (%s) : il n'y a personne, raté." % [event.attacker.definition.display_name, event.weapon.display_name]
+	return "%s attaque à l'aveugle (%s) : il n'y a personne, raté." % [event.attacker.display_name, event.weapon.display_name]
 
 
 static func death_save_line(event: DeathSaveEvent) -> String:
-	var name := event.combatant.definition.display_name
+	var name := event.combatant.display_name
 	var tally := "%s, %s" % [_count(event.successes, "réussite"), _count(event.failures, "échec")]
 	if event.natural == 0:
 		var hit := "deux échecs (coup critique)" if event.critical else "un échec"
@@ -569,53 +569,53 @@ static func death_save_line(event: DeathSaveEvent) -> String:
 
 
 static func stabilized_line(event: CombatantStabilizedEvent) -> String:
-	return "Trois réussites : %s est stabilisé, mais reste inconscient." % event.combatant.definition.display_name
+	return "Trois réussites : %s est stabilisé, mais reste inconscient." % event.combatant.display_name
 
 
 static func recovered_line(event: CombatantRecoveredEvent) -> String:
-	return "Le combat terminé, ses compagnons stabilisent %s : il se relève avec 1 PV." % event.combatant.definition.display_name
+	return "Le combat terminé, ses compagnons stabilisent %s : il se relève avec 1 PV." % event.combatant.display_name
 
 
 static func died_line(event: CombatantDiedEvent) -> String:
-	return DEATH_CAUSES[event.cause] % event.combatant.definition.display_name
+	return DEATH_CAUSES[event.cause] % event.combatant.display_name
 
 
 static func effect_applied_line(event: EffectAppliedEvent) -> String:
-	return EFFECT_APPLIED_LOG[event.effect_id] % event.combatant.definition.display_name
+	return EFFECT_APPLIED_LOG[event.effect_id] % event.combatant.display_name
 
 
 ## Ligne du journal pour des dégâts sans jet propre (Graze). Les dégâts
 ## d'une attaque qui touche sont déjà sur la ligne de l'attaque.
 static func graze_line(event: DamageDealtEvent) -> String:
-	return "Graze : %s subit quand même %d dégâts %s." % [event.target.definition.display_name, event.amount, damage_type(event.damage_type)]
+	return "Graze : %s subit quand même %d dégâts %s." % [event.target.display_name, event.amount, damage_type(event.damage_type)]
 
 
 static func healed_line(event: HealedEvent) -> String:
 	return "%s reprend son souffle : +%d PV (%s), %d PV." % [
-		event.combatant.definition.display_name, event.amount, _damage_detail(event.roll), event.hp_after,
+		event.combatant.display_name, event.amount, _damage_detail(event.roll), event.hp_after,
 	]
 
 
 static func inspiration_used_line(event: InspirationUsedEvent) -> String:
 	return "%s dépense son %s : le %d devient %d." % [
-		event.combatant.definition.display_name, HEROIC_INSPIRATION.to_lower(), event.old_value, event.new_value,
+		event.combatant.display_name, HEROIC_INSPIRATION.to_lower(), event.old_value, event.new_value,
 	]
 
 
 static func effect_ended_line(event: EffectEndedEvent) -> String:
-	return EFFECT_ENDED_LOG[event.effect_id] % event.combatant.definition.display_name
+	return EFFECT_ENDED_LOG[event.effect_id] % event.combatant.display_name
 
 
 static func reaction_triggered_line(event: ReactionTriggeredEvent) -> String:
-	return "%s quitte l'allonge de %s." % [event.mover.definition.display_name, event.reactor.definition.display_name]
+	return "%s quitte l'allonge de %s." % [event.mover.display_name, event.reactor.display_name]
 
 
 static func reaction_declined_line(event: ReactionDeclinedEvent) -> String:
-	return "%s laisse passer %s." % [event.reactor.definition.display_name, event.mover.definition.display_name]
+	return "%s laisse passer %s." % [event.reactor.display_name, event.mover.display_name]
 
 
 static func downed_line(combatant: Combatant) -> String:
-	return "%s tombe à 0 PV : inconscient et à terre." % combatant.definition.display_name
+	return "%s tombe à 0 PV : inconscient et à terre." % combatant.display_name
 
 
 static func end_line(winner: Combatant.Side) -> String:

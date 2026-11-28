@@ -9,6 +9,11 @@ extends RefCounted
 enum Side { PLAYER, ENEMY }
 
 var definition: CharacterDef
+## Nom affiché : celui de la fiche, numéroté quand plusieurs combattants
+## partagent la même (« Sbire gobelin 2 », voir CombatState.create_party).
+var display_name: String
+## Numéro parmi les combattants de même fiche, 0 s'il est seul de sa sorte.
+var number: int = 0
 var side: Combatant.Side
 var hp: int
 var position: Vector2i
@@ -34,6 +39,7 @@ var death_save_failures: int = 0
 
 func _init(p_definition: CharacterDef, p_side: Combatant.Side, p_position: Vector2i = Vector2i.ZERO) -> void:
 	definition = p_definition
+	display_name = p_definition.display_name
 	side = p_side
 	position = p_position
 	hp = p_definition.max_hp
@@ -74,6 +80,12 @@ func take_damage(amount: int) -> int:
 	var lost := mini(amount, hp)
 	hp -= lost
 	return lost
+
+
+## Nom court (CharacterDef.short_name), numéroté comme `display_name`.
+func short_name() -> String:
+	var base := definition.short_name if not definition.short_name.is_empty() else definition.display_name
+	return "%s %d" % [base, number] if number > 0 else base
 
 
 ## Rend des PV sans dépasser le maximum. Renvoie les PV réellement rendus.

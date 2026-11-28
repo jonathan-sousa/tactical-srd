@@ -72,6 +72,28 @@ func test_goblin_has_its_full_stat_block() -> void:
 	assert_array(goblin.weapon_masteries).is_empty()
 
 
+func test_goblin_minion_matches_srd() -> void:
+	var minion := _registry.character(&"goblin_minion")
+	assert_array([minion.strength, minion.dexterity, minion.constitution]).contains_exactly(8, 15, 10)
+	assert_array([minion.intelligence, minion.wisdom, minion.charisma]).contains_exactly(10, 8, 8)
+	# HP 7 (2d6) : la valeur fixe du bloc de statistiques.
+	assert_int(minion.max_hp).is_equal(7)
+	assert_int(minion.armor_class).is_equal(12)
+	assert_int(minion.initiative_bonus).is_equal(2)
+	assert_int(minion.speed_feet).is_equal(30)
+	# Équipement : 3 dagues, qui se lancent.
+	assert_array(minion.weapons).has_size(1)
+	assert_str(minion.weapons[0].id).is_equal(&"dagger")
+	assert_int(minion.weapon_quantities[&"dagger"]).is_equal(3)
+	assert_int(minion.skill_bonus(CharacterDef.STEALTH)).is_equal(6)
+	assert_int(10 + minion.skill_bonus(CharacterDef.PERCEPTION)).is_equal(9)
+	assert_array(minion.traits).contains_exactly([CharacterDef.NIMBLE_ESCAPE])
+	# Pas de dé de dégâts en plus avec l'avantage, contrairement au guerrier.
+	assert_str(minion.advantage_damage_dice).is_empty()
+	assert_bool(minion.is_monster).is_true()
+	assert_array(minion.weapon_masteries).is_empty()
+
+
 func test_fighter_is_proficient_in_perception() -> void:
 	var fighter := _registry.character(&"fighter_lvl1")
 	# SAG + 1, maîtrise + 2 (compétence choisie au niveau 1 de Guerrier).
@@ -118,6 +140,16 @@ func test_weapons_match_srd() -> void:
 	# Finesse : le Gobelin utilise sa DEX (+4 au bloc de statistiques).
 	assert_int(scimitar.ability).is_equal(Abilities.Ability.DEXTERITY)
 
+	var dagger := _registry.weapon(&"dagger")
+	assert_str(dagger.damage_dice).is_equal("1d4")
+	assert_int(dagger.damage_type).is_equal(DamageType.Type.PIERCING)
+	assert_int(dagger.kind).is_equal(WeaponDef.Kind.MELEE)
+	assert_int(dagger.ability).is_equal(Abilities.Ability.DEXTERITY)
+	assert_array(dagger.properties).contains_exactly_in_any_order([WeaponDef.FINESSE, WeaponDef.LIGHT, WeaponDef.THROWN])
+	assert_int(dagger.range_normal_feet).is_equal(20)
+	assert_int(dagger.range_long_feet).is_equal(60)
+	assert_str(dagger.mastery).is_equal(WeaponDef.NICK)
+
 
 func test_attack_bonuses_match_stat_blocks() -> void:
 	var fighter := Combatant.new(_registry.character(&"fighter_lvl1"), Combatant.Side.PLAYER)
@@ -130,10 +162,14 @@ func test_attack_bonuses_match_stat_blocks() -> void:
 	# Arc court +4, 1d6+2.
 	assert_int(goblin.attack_bonus(goblin.definition.weapons[1])).is_equal(4)
 	assert_int(goblin.damage_modifier(goblin.definition.weapons[1])).is_equal(2)
+	# Sbire : dague +4, 1d4+2.
+	var minion := Combatant.new(_registry.character(&"goblin_minion"), Combatant.Side.ENEMY)
+	assert_int(minion.attack_bonus(minion.definition.weapons[0])).is_equal(4)
+	assert_int(minion.damage_modifier(minion.definition.weapons[0])).is_equal(2)
 
 
 func test_every_weapon_has_valid_damage_dice() -> void:
-	for id: StringName in [&"greatsword", &"flail", &"javelin", &"scimitar", &"shortbow"]:
+	for id: StringName in [&"greatsword", &"flail", &"javelin", &"scimitar", &"shortbow", &"dagger"]:
 		assert_object(DiceExpression.parse(_registry.weapon(id).damage_dice)) \
 			.override_failure_message("Dés invalides pour %s" % id) \
 			.is_not_null()

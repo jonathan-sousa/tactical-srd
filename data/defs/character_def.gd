@@ -25,6 +25,8 @@ const SKILL_ABILITIES: Dictionary[StringName, Abilities.Ability] = {
 ## Identifiant stable, utilisé par la sauvegarde et le registre de données.
 @export var id: StringName
 @export var display_name: String
+## Nom court pour la barre d'initiative (« Sbire »). Vide : `display_name`.
+@export var short_name: String
 ## Image du pion. Vide jusqu'aux placeholders du J3.
 @export var sprite: Texture2D
 

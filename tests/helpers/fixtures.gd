@@ -66,6 +66,20 @@ static func scimitar() -> WeaponDef:
 	return weapon
 
 
+static func dagger() -> WeaponDef:
+	var weapon := WeaponDef.new()
+	weapon.id = &"dagger"
+	weapon.display_name = "Dague"
+	weapon.damage_dice = "1d4"
+	weapon.damage_type = DamageType.Type.PIERCING
+	weapon.ability = Abilities.Ability.DEXTERITY
+	weapon.range_normal_feet = 20
+	weapon.range_long_feet = 60
+	weapon.properties = [WeaponDef.FINESSE, WeaponDef.LIGHT, WeaponDef.THROWN]
+	weapon.mastery = WeaponDef.NICK
+	return weapon
+
+
 static func fighter() -> CharacterDef:
 	var def := CharacterDef.new()
 	def.id = &"fighter_lvl1"
@@ -113,6 +127,21 @@ static func full_goblin() -> CharacterDef:
 	def.skill_bonuses = {CharacterDef.STEALTH: 6}
 	def.traits = [CharacterDef.NIMBLE_ESCAPE]
 	def.advantage_damage_dice = "1d4"
+	return def
+
+
+## Sbire gobelin, conforme à data/characters/goblin_minion.tres : 3 dagues
+## (corps à corps ou lancer), CA 12, 7 PV, Discrétion +6, Nimble Escape.
+static func minion() -> CharacterDef:
+	var def := goblin()
+	def.id = &"goblin_minion"
+	def.display_name = "Sbire gobelin"
+	def.max_hp = 7
+	def.armor_class = 12
+	def.weapons = [dagger()]
+	def.weapon_quantities = {&"dagger": 3}
+	def.skill_bonuses = {CharacterDef.STEALTH: 6}
+	def.traits = [CharacterDef.NIMBLE_ESCAPE]
 	return def
 
 
