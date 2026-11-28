@@ -1,15 +1,21 @@
-## Fiche du personnage joueur : PV et CA, déplacement restant, action,
-## action bonus, réaction, ressources (Second Wind, Inspiration) et effets.
+## Fiche du personnage joueur : PV et CA, budget du tour (pastilles action,
+## action bonus, réaction et jauge de déplacement, voir TurnBudget),
+## ressources (Second Wind, Inspiration) et effets.
 class_name CharacterPanel
 extends VBoxContainer
 
 @onready var _name_label: Label = %NameLabel
 @onready var _hp_label: Label = %HpLabel
-@onready var _movement_label: Label = %MovementLabel
-@onready var _action_label: Label = %ActionLabel
-@onready var _reaction_label: Label = %ReactionLabel
 @onready var _resources_label: Label = %ResourcesLabel
 @onready var _effects_label: Label = %EffectsLabel
+
+var budget: TurnBudget
+
+
+func _ready() -> void:
+	budget = TurnBudget.new()
+	add_child(budget)
+	move_child(budget, _hp_label.get_index() + 1)
 
 
 func refresh(combatant: Combatant, state: CombatState) -> void:
@@ -19,10 +25,7 @@ func refresh(combatant: Combatant, state: CombatState) -> void:
 	_name_label.text = combatant.display_name
 	_hp_label.text = "%s : %d / %d · %s : %d" % [Texts.HIT_POINTS, combatant.hp, definition.max_hp, Texts.ARMOR_CLASS, combatant.armor_class()]
 	var movement := state.movement_left if is_turn else speed
-	_movement_label.text = "%s : %d / %s" % [Texts.MOVEMENT, movement, Texts.squares(speed)]
-	# Action et action bonus sur une ligne, pour laisser de la place au journal.
-	_action_label.text = Texts.turn_actions_line(is_turn and state.action_used, is_turn and state.bonus_action_used)
-	_reaction_label.text = Texts.REACTION_AVAILABLE if combatant.reaction_available else Texts.REACTION_USED
+	budget.set_budget(not (is_turn and state.action_used), not (is_turn and state.bonus_action_used), combatant.reaction_available, movement, speed)
 	_resources_label.text = Texts.resources_line(combatant, combatant.sneak_attack_turn == state.turn_count)
 	if combatant.is_dying():
 		_resources_label.text = Texts.death_saves_line(combatant)

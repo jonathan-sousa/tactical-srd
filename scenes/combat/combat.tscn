@@ -96,18 +96,6 @@ theme_override_font_sizes/font_size = 24
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="MovementLabel" type="Label" parent="Hud/Root/Columns/SidePanel/Content/CharacterPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="ActionLabel" type="Label" parent="Hud/Root/Columns/SidePanel/Content/CharacterPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="ReactionLabel" type="Label" parent="Hud/Root/Columns/SidePanel/Content/CharacterPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-
 [node name="ResourcesLabel" type="Label" parent="Hud/Root/Columns/SidePanel/Content/CharacterPanel"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -122,12 +110,10 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ActionBar" type="GridContainer" parent="Hud/Root/Columns/SidePanel/Content"]
+[node name="ActionBar" type="VBoxContainer" parent="Hud/Root/Columns/SidePanel/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 6
-columns = 2
+theme_override_constants/separation = 4
 
 [node name="EndTurnButton" type="Button" parent="Hud/Root/Columns/SidePanel/Content"]
 unique_name_in_owner = true

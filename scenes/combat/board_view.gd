@@ -52,6 +52,13 @@ const AIM_COLOR := Color(1.0, 0.9, 0.55, 0.85)
 const AIM_DASH := 10.0
 const SHIELD_COLOR := Palette.GOLD
 const SHIELD_TEXT_COLOR := Color(0.16, 0.11, 0.06)
+## Aperçus d'une action survolée : portée de Foncer, cases pour se cacher,
+## combattants concernés (anneau).
+const REACH_PREVIEW_COLOR := Color(0.55, 0.8, 1.0, 0.22)
+const REACH_PREVIEW_BORDER := Color(0.6, 0.85, 1.0, 0.7)
+const HIDING_COLOR := Color(0.45, 0.3, 0.75, 0.35)
+const HIDING_BORDER := Color(0.75, 0.6, 1.0, 0.85)
+const RING_COLOR := Palette.GOLD
 ## Vue tactique : chaque case colorée selon ce qu'elle est.
 const TACTICAL_OBSTACLE_COLOR := Color(0.05, 0.05, 0.08, 0.6)
 const TACTICAL_WALL_COLOR := Color(1.0, 0.85, 0.3, 0.3)
@@ -108,6 +115,27 @@ var aim: Array[Vector2i] = []:
 var cover_marks: Array[Vector2i] = []:
 	set(value):
 		cover_marks = value
+		queue_redraw()
+
+## Aperçu de Foncer : les cases en plus que l'action rendrait atteignables.
+var reach_preview: Array[Vector2i] = []:
+	set(value):
+		reach_preview = value
+		queue_redraw()
+## Aperçu de Se cacher : cases hors de vue de tous les ennemis.
+var hiding_preview: Array[Vector2i] = []:
+	set(value):
+		hiding_preview = value
+		queue_redraw()
+## Combattants concernés par l'action survolée : un anneau sur leur case.
+var ring_cells: Array[Vector2i] = []:
+	set(value):
+		ring_cells = value
+		queue_redraw()
+## Zones de menace montrées éteintes (aperçu de Se désengager).
+var threats_faded := false:
+	set(value):
+		threats_faded = value
 		queue_redraw()
 
 ## Vue tactique (touche Alt maintenue) : nature des cases et zones de menace
@@ -243,10 +271,26 @@ func _draw() -> void:
 	if tactical:
 		_draw_tactical()
 
+	for cell in reach_preview:
+		var reach_rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
+		draw_rect(reach_rect, REACH_PREVIEW_COLOR)
+		draw_rect(reach_rect.grow(-4), REACH_PREVIEW_BORDER, false, 1.5)
+	for cell in hiding_preview:
+		var hiding_rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
+		draw_rect(hiding_rect, HIDING_COLOR)
+		draw_rect(hiding_rect.grow(-3), HIDING_BORDER, false, 2.0)
+
 	for cell in threat_preview:
 		var threat_rect := Rect2(Vector2(cell) * CELL_SIZE, Vector2.ONE * CELL_SIZE)
+		if threats_faded:
+			# Désengagé : la menace est barrée, en pointillés.
+			draw_dashed_line(threat_rect.position + Vector2(4, 4), threat_rect.end - Vector2(4, 4), THREAT_COLOR, 2.0, 6.0)
+			draw_rect(threat_rect.grow(-3), Color(THREAT_COLOR, 0.35), false, 2.0)
+			continue
 		draw_rect(threat_rect, THREAT_FILL_COLOR)
 		draw_rect(threat_rect.grow(-3), THREAT_COLOR, false, 3.0)
+	for cell in ring_cells:
+		draw_arc(cell_center(cell), CELL_SIZE * 0.45, 0.0, TAU, 48, RING_COLOR, 3.0)
 
 	for cell in path_preview:
 		if path_warning:

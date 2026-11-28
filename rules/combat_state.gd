@@ -380,6 +380,16 @@ func is_out_of_sight_at(combatant: Combatant, cell: Vector2i) -> bool:
 	return true
 
 
+## Ennemis conscients qui voient `combatant` là où il est : ceux qui
+## l'empêchent de se cacher, et contre qui Esquiver joue.
+func enemies_seeing(combatant: Combatant) -> Array[Combatant]:
+	var seeing: Array[Combatant] = []
+	for enemy in living_enemies_of(combatant):
+		if not enemy.is_down() and sees_cell_of(enemy, combatant, combatant.position):
+			seeing.append(enemy)
+	return seeing
+
+
 ## `observer` a-t-il une vue dégagée sur `hider` s'il était en `cell` ? Les
 ## obstacles cachent tout le monde. Discrétion naturelle du Halfelin : une
 ## créature vivante d'au moins une taille de plus que lui le cache aussi.

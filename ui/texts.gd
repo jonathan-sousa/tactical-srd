@@ -9,12 +9,6 @@ const END_TURN_WITH_KEY := "Fin de tour (Espace)"
 const HIT_POINTS := "PV"
 const ARMOR_CLASS := "CA"
 const MOVEMENT := "Déplacement"
-const ACTION_AVAILABLE := "Action : disponible"
-const ACTION_USED := "Action : utilisée"
-const REACTION_AVAILABLE := "Réaction : disponible"
-const REACTION_USED := "Réaction : utilisée"
-const BONUS_ACTION_AVAILABLE := "Action bonus : disponible"
-const BONUS_ACTION_USED := "Action bonus : utilisée"
 const SECOND_WIND := "Second souffle"
 const HEROIC_INSPIRATION := "Inspiration héroïque"
 const SNEAK_ATTACK := "Attaque sournoise"
@@ -316,16 +310,6 @@ static func _count(value: int, noun: String) -> String:
 	return "%d %s%s" % [value, noun, "" if value <= 1 else "s"]
 
 
-## « Action bonus : disponible ».
-static func bonus_action_line(used: bool) -> String:
-	return BONUS_ACTION_USED if used else BONUS_ACTION_AVAILABLE
-
-
-## « Action : disponible · Bonus : utilisée ».
-static func turn_actions_line(action_used: bool, bonus_used: bool) -> String:
-	return "Action : %s · Bonus : %s" % ["utilisée" if action_used else "disponible", "utilisée" if bonus_used else "disponible"]
-
-
 ## « Second souffle : 2 / 2 · Inspiration héroïque : oui ». Pour le
 ## Roublard : « Attaque sournoise : disponible ». `sneak_attack_used` : déjà
 ## servie ce tour-ci.
@@ -536,6 +520,87 @@ static func terrain_title(terrain: CellInfo.Terrain) -> String:
 
 static func terrain_rule(terrain: CellInfo.Terrain) -> String:
 	return TERRAIN_RULES[terrain]
+
+
+# --- Panneau d'actions ---------------------------------------------------------
+
+const BUDGET_ACTION := "Action"
+const BUDGET_BONUS := "Bonus"
+const BUDGET_REACTION := "Réaction"
+const SECTION_WEAPONS := "Arme (gratuit)"
+const SECTION_ACTIONS := "Action"
+const SECTION_BONUS := "Action bonus"
+const SECTION_MOVEMENT := "Déplacement"
+const COST_ACTION := "Action"
+const COST_BONUS := "Action bonus"
+const COST_MOVEMENT := "Déplacement"
+const COST_FREE := "Gratuit"
+const OFF_HAND_REMINDER := "Main libre après arme légère"
+const OFF_HAND_REMINDER_TOOLTIP := "Après une attaque avec une arme légère, cliquez à nouveau sur l'ennemi : attaque de la main libre, par une action bonus."
+const PREVIEW_HIDE_CELLS := "Cases violettes : hors de vue de tous les ennemis."
+const PREVIEW_HIDE_HERE := "Ici, personne ne te voit : tu peux te cacher."
+const PREVIEW_HELP := "Cibles possibles entourées."
+const PREVIEW_NO_THREAT := "Aucun ennemi ne te menace en ce moment."
+const PREVIEW_NO_HIDDEN := "Aucun ennemi caché."
+
+## Ce que coûte chaque action de la barre.
+const ACTION_COSTS: Dictionary[StringName, String] = {
+	StandardAction.DASH: COST_ACTION,
+	StandardAction.DISENGAGE: COST_ACTION,
+	StandardAction.DODGE: COST_ACTION,
+	SECOND_WIND_ID: COST_BONUS,
+	SearchAction.ID: COST_ACTION,
+	StandUpAction.ID: COST_MOVEMENT,
+	HideAction.ID: COST_ACTION,
+	HelpAction.ID: COST_ACTION,
+}
+
+
+## « Déplacement 4 / 6 ».
+static func budget_movement(left: int, speed: int) -> String:
+	return "%s %d / %d" % [MOVEMENT, left, speed]
+
+
+## Titre de la bulle d'un bouton : « Foncer · Action ».
+static func action_tip_title(name: String, cost: String, color: Color) -> String:
+	return "%s · %s" % [colored("[b]%s[/b]" % name, Palette.GOLD), colored(cost, color)]
+
+
+static func preview_dash(left: int, extended: int) -> String:
+	return "Portée : %s → %s." % [squares(left), squares(extended)]
+
+
+static func preview_disengage(threatening: Array[Combatant]) -> String:
+	if threatening.is_empty():
+		return PREVIEW_NO_THREAT
+	return "Plus d'attaque d'opportunité de : %s." % _names(threatening)
+
+
+static func preview_dodge(seeing: Array[Combatant]) -> String:
+	if seeing.is_empty():
+		return "Aucun ennemi ne te voit : Esquiver ne servirait à rien d'ici."
+	return "%s : %s attaquera avec le désavantage." % [_names(seeing), "chacun" if seeing.size() > 1 else "il"]
+
+
+static func preview_hide_seen(seeing: Array[Combatant]) -> String:
+	return "Ici, tu es vu par : %s." % _names(seeing)
+
+
+static func preview_search(hidden_count: int) -> String:
+	if hidden_count == 0:
+		return PREVIEW_NO_HIDDEN
+	return "%d ennemi%s caché%s." % [hidden_count, "s" if hidden_count > 1 else "", "s" if hidden_count > 1 else ""]
+
+
+static func preview_stand_up(cost_squares: int) -> String:
+	return "Coûte %s de déplacement." % squares(cost_squares)
+
+
+static func _names(combatants: Array[Combatant]) -> String:
+	var names: PackedStringArray = []
+	for combatant in combatants:
+		names.append(combatant.display_name)
+	return ", ".join(names)
 
 
 # --- Fiche au clic droit et vue tactique -----------------------------------
